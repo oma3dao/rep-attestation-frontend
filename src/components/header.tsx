@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Wallet } from "lucide-react"
@@ -27,7 +28,13 @@ export function Header() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <Link href="/" className="flex items-center">
-              <span className="text-2xl font-bold text-blue-600">OMA3</span>
+              <Image 
+                src="/oma3_logo.svg" 
+                alt="OMA3 Logo" 
+                width={120} 
+                height={40} 
+                priority
+              />
               <span className="ml-2 text-gray-600">Attestation Portal</span>
             </Link>
 

@@ -41,15 +41,13 @@ export default function HomePage() {
           Create verifiable attestations for the OMA3 App Registry. Build trust and transparency in the Web3 ecosystem
           through cryptographically signed attestations.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="flex justify-center">
           <Link href="/attest">
-            <Button size="lg" className="w-full sm:w-auto">
+            <Button 
+              size="lg" 
+              className="w-full px-8 py-6 text-xl"
+            >
               Create Attestation
-            </Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button variant="outline" size="lg" className="w-full sm:w-auto">
-              View Dashboard
             </Button>
           </Link>
         </div>
