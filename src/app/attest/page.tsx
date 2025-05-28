@@ -1,78 +1,62 @@
-import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, FileCheck, LinkIcon, TestTube, Star, ArrowRight } from "lucide-react"
+import Link from 'next/link'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ArrowRight, Shield, FileCheck, LinkIcon, Star } from 'lucide-react'
+import { getAllSchemas } from '@/lib/schemas'
+
+const iconMap = {
+  Shield,
+  FileCheck,
+  LinkIcon,
+  Star
+}
 
 export default function AttestPage() {
-  const attestationTypes = [
-    {
-      id: "certification",
-      title: "Certification",
-      description: "Create verifiable certifications for applications, including compliance and security assessments",
-      icon: Shield,
-      fields: 17,
-      color: "bg-blue-50 border-blue-200 hover:bg-blue-100",
-    },
-    {
-      id: "endorsement",
-      title: "Endorsement",
-      description: "Provide endorsements and recommendations for projects and applications",
-      icon: FileCheck,
-      fields: 8,
-      color: "bg-green-50 border-green-200 hover:bg-green-100",
-    },
-    {
-      id: "linked-identifier",
-      title: "Linked Identifier",
-      description: "Link and verify different identity systems and accounts",
-      icon: LinkIcon,
-      fields: 7,
-      color: "bg-purple-50 border-purple-200 hover:bg-purple-100",
-    },
-    {
-      id: "test-deploy",
-      title: "Test Deploy Schema",
-      description: "Document and validate test deployment configurations and results",
-      icon: TestTube,
-      fields: 7,
-      color: "bg-orange-50 border-orange-200 hover:bg-orange-100",
-    },
-    {
-      id: "user-review",
-      title: "User Review",
-      description: "Submit detailed reviews and ratings for applications and services",
-      icon: Star,
-      fields: 12,
-      color: "bg-yellow-50 border-yellow-200 hover:bg-yellow-100",
-    },
-  ]
+  const schemas = getAllSchemas()
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="text-center mb-12">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Create Attestation</h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Choose the type of attestation you want to create. Each type has specific fields and validation requirements.
-        </p>
-      </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold mb-4">Create Attestation</h1>
+          <p className="text-lg text-muted-foreground">
+            Choose the type of attestation you want to create
+          </p>
+        </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {attestationTypes.map((type) => (
-          <Link key={type.id} href={`/attest/${type.id}`}>
-            <Card className={`cursor-pointer transition-all duration-200 ${type.color}`}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <type.icon className="h-8 w-8 text-gray-700" />
-                  <ArrowRight className="h-5 w-5 text-gray-400" />
-                </div>
-                <CardTitle className="text-xl">{type.title}</CardTitle>
-                <CardDescription className="text-sm text-gray-600">{type.fields} fields required</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-700">{type.description}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        <div className="grid gap-6 md:grid-cols-2">
+          {schemas.map((schema) => {
+            const IconComponent = iconMap[schema.icon as keyof typeof iconMap]
+            
+            return (
+              <Link key={schema.id} href={`/attest/${schema.id}`}>
+                <Card className={`h-full transition-all duration-200 cursor-pointer ${schema.color}`}>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 rounded-lg bg-white/50">
+                          <IconComponent className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl">{schema.title}</CardTitle>
+                          <Badge variant="secondary" className="mt-1">
+                            {schema.fields.length} fields
+                          </Badge>
+                        </div>
+                      </div>
+                      <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription className="text-base">
+                      {schema.description}
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

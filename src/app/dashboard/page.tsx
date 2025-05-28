@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Shield, FileCheck, LinkIcon, TestTube, Star, Plus } from "lucide-react"
+import { Shield, FileCheck, LinkIcon, Star, Plus } from "lucide-react"
 import Link from "next/link"
 
 export default function DashboardPage() {
@@ -144,12 +144,6 @@ export default function DashboardPage() {
                 <Button variant="outline" className="w-full justify-start">
                   <LinkIcon className="h-4 w-4 mr-2" />
                   Linked Identifier
-                </Button>
-              </Link>
-              <Link href="/attest/test-deploy" className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Test Deploy
                 </Button>
               </Link>
             </CardContent>
