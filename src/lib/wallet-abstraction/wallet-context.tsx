@@ -34,9 +34,6 @@ export function WalletContextProvider({ config, children }: WalletProviderProps)
             }
             provider = new Web3AuthWalletProvider(config.web3auth)
             break
-          case 'thirdweb':
-            // TODO: Implement ThirdWeb provider
-            throw new Error('ThirdWeb provider not implemented yet')
           default:
             throw new Error(`Unsupported wallet provider: ${config.provider}`)
         }

@@ -40,7 +40,7 @@ export interface WalletProvider {
 
 export interface WalletConfig {
   // Provider selection
-  provider: 'web3auth' | 'thirdweb'
+  provider: 'web3auth'
   
   // Common config
   appName: string
@@ -57,19 +57,9 @@ export interface WalletConfig {
     environment: 'devnet' | 'mainnet'
     walletConnectProjectId: string
   }
-  
-  thirdweb?: {
-    clientId: string
-    appMetadata?: {
-      name: string
-      url: string
-      description: string
-      logoUrl: string
-    }
-  }
 }
 
-export type WalletProviderType = 'web3auth' | 'thirdweb'
+export type WalletProviderType = 'web3auth'
 
 export interface WalletContextType {
   // State

@@ -200,3 +200,33 @@ The app will show clear error messages about which variables are missing.
 #### Adding New Chains
 Edit `src/lib/web3auth.ts` and add chains to the `ALL_CHAINS` object with the appropriate `environment` field.
 
+#### Thirdweb
+
+1. **Add ThirdWeb Client ID** to `.env.local`:
+```bash
+NEXT_PUBLIC_THIRDWEB_CLIENT_ID=your_thirdweb_client_id
+NEXT_PUBLIC_WALLET_PROVIDER=thirdweb
+```
+
+2. **That's it!** The header automatically shows the appropriate connect button with social login options.
+
+### Getting Your ThirdWeb Client ID
+
+1. Go to [thirdweb.com](https://thirdweb.com)
+2. Create an account or sign in
+3. Go to your dashboard  
+4. Create a new project or select an existing one
+5. Copy your Client ID from the project settings
+6. Add it to your `.env.local` file
+
+### Provider Switching
+
+Switch between wallet providers by changing the environment variable:
+
+```bash
+# Use ThirdWeb (with social login)
+NEXT_PUBLIC_WALLET_PROVIDER=thirdweb
+
+# Use Web3Auth (with wallet abstraction)
+NEXT_PUBLIC_WALLET_PROVIDER=web3auth
+```

@@ -5,13 +5,9 @@ export function createWalletConfig(): WalletConfig {
   const walletProvider = process.env.NEXT_PUBLIC_WALLET_PROVIDER || 'web3auth'
   
   // Validate provider
-  if (!['web3auth', 'thirdweb'].includes(walletProvider)) {
-    console.error(`Invalid wallet provider: ${walletProvider}. Must be 'web3auth' or 'thirdweb'. Falling back to 'web3auth'.`)
+  if (walletProvider !== 'web3auth') {
+    console.error(`Invalid wallet provider: ${walletProvider}. Must be 'web3auth'. Falling back to 'web3auth'.`)
   }
-  
-  const validProvider = ['web3auth', 'thirdweb'].includes(walletProvider) 
-    ? walletProvider as 'web3auth' | 'thirdweb'
-    : 'web3auth'
 
   // Environment variables
   const web3authEnv = process.env.NEXT_PUBLIC_WEB3AUTH_ENV === 'mainnet' ? 'mainnet' : 'devnet'
@@ -48,7 +44,7 @@ export function createWalletConfig(): WalletConfig {
   }
 
   return {
-    provider: validProvider,
+    provider: 'web3auth',
     appName: 'OMA3 Attestation Portal',
     logo: '/oma3_logo.svg',
     theme: {
