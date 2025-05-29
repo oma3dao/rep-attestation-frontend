@@ -130,16 +130,17 @@ export async function getAvailableChains(): Promise<string[]> {
 const web3AuthOptions: Web3AuthOptions = {
   clientId,
   web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
-  uiConfig: {
-    appName: 'OMA3 Attestation Portal',
-    mode: 'auto', // light, dark or auto
-    logoLight: '/oma3_logo.svg',
-    logoDark: '/oma3_logo.svg',
-    defaultLanguage: 'en',
-    theme: {
-      primary: '#3B82F6', // Blue primary color
-    },
-  },
+  // Commented out to avoid premium "whitelabel" features on free plan
+  // uiConfig: {
+  //   appName: 'OMA3 Attestation Portal',
+  //   mode: 'auto', // light, dark or auto
+  //   logoLight: '/oma3_logo.svg',
+  //   logoDark: '/oma3_logo.svg',
+  //   defaultLanguage: 'en',
+  //   theme: {
+  //     primary: '#3B82F6', // Blue primary color
+  //   },
+  // },
 }
 
 export const web3AuthContextConfig: Web3AuthContextConfig = {
