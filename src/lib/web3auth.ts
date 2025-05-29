@@ -1,7 +1,7 @@
 'use client'
 
 import { type Web3AuthContextConfig } from '@web3auth/modal/react'
-import { WEB3AUTH_NETWORK, type Web3AuthOptions } from '@web3auth/modal'
+import { WEB3AUTH_NETWORK, type Web3AuthOptions, WALLET_CONNECTORS } from '@web3auth/modal'
 
 // Get environment variables
 const clientId = process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID
@@ -130,6 +130,9 @@ export async function getAvailableChains(): Promise<string[]> {
 const web3AuthOptions: Web3AuthOptions = {
   clientId,
   web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
+  // Explicitly disable premium features for free plan
+  enableLogging: false,
+  
   // Commented out to avoid premium "whitelabel" features on free plan
   // uiConfig: {
   //   appName: 'OMA3 Attestation Portal',
