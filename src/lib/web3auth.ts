@@ -129,7 +129,7 @@ export async function getAvailableChains(): Promise<string[]> {
 
 const web3AuthOptions: Web3AuthOptions = {
   clientId,
-  web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
+  web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET, // Use devnet for free testing
   // Explicitly disable premium features for free plan
   enableLogging: false,
   
