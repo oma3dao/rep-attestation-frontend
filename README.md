@@ -107,6 +107,49 @@ src/
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
+- `npm run update-schemas` - Update schemas from JSON files
+
+## Schema Management
+
+This project uses JSON schemas to generate TypeScript attestation forms. When schema definitions change, you can update them using the provided script.
+
+### Updating Schemas
+
+```bash
+# Update schemas from a directory
+npm run update-schemas /path/to/schemas/folder
+
+# Example: Update from a local schema repository
+npm run update-schemas ../attestation-schemas/schemas
+```
+
+### What the Script Does
+
+1. **Reads** all `*.json` files from the specified directory
+2. **Skips** `test-deploy.schema.json` automatically 
+3. **Transforms** JSON schemas to TypeScript UI schemas
+4. **Overwrites** `src/lib/schemas.ts` with the new definitions
+5. **Maintains** existing export structure for components
+
+### Schema File Processing
+
+| Input File | Schema ID | Status |
+|------------|-----------|---------|
+| `certification.json` | `certification` | ✅ Processed |
+| `endorsement.schema.json` | `endorsement` | ✅ Processed |
+| `test-deploy.schema.json` | - | ⏭️ Skipped |
+| `user-review.json` | `user-review` | ✅ Processed |
+
+### UI Metadata
+
+The script automatically adds UI-specific metadata for known schemas:
+
+- **Icons** and **colors** for visual consistency
+- **Smart placeholders** based on field names and types
+- **Type transformations** (e.g., `boolean` → `enum` with Yes/No options)
+- **Validation rules** for URI, integer, and datetime fields
+
+For unknown schemas, default metadata is generated from the JSON schema title and description.
 
 ## Contributing
 

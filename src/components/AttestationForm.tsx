@@ -21,6 +21,10 @@ export function AttestationForm({ schema }: AttestationFormProps) {
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Group fields by required status
+  const requiredFields = schema.fields.filter(field => field.required)
+  const optionalFields = schema.fields.filter(field => !field.required)
+
   const handleFieldChange = (fieldName: string, value: string | string[]) => {
     setFormData(prev => ({
       ...prev,
@@ -146,7 +150,15 @@ export function AttestationForm({ schema }: AttestationFormProps) {
           
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {schema.fields.map((field) => (
+              {requiredFields.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Required Fields
+                  </h3>
+                </div>
+              )}
+              
+              {requiredFields.map((field) => (
                 <FieldRenderer
                   key={field.name}
                   field={field}
@@ -155,6 +167,26 @@ export function AttestationForm({ schema }: AttestationFormProps) {
                   error={errors[field.name]}
                 />
               ))}
+              
+              {optionalFields.length > 0 && (
+                <>
+                  <div className="border-t pt-6 mt-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Optional Fields
+                    </h3>
+                  </div>
+                  
+                  {optionalFields.map((field) => (
+                    <FieldRenderer
+                      key={field.name}
+                      field={field}
+                      value={formData[field.name] || (field.type === 'array' ? [] : '')}
+                      onChange={(value) => handleFieldChange(field.name, value)}
+                      error={errors[field.name]}
+                    />
+                  ))}
+                </>
+              )}
               
               <div className="flex gap-4 pt-6">
                 <Button
