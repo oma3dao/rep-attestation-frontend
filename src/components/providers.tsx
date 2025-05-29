@@ -1,17 +1,18 @@
 'use client'
 
-import { Web3AuthProvider } from '@web3auth/modal/react'
-import { web3AuthContextConfig } from '@/lib/web3auth'
 import { ReactNode } from 'react'
+import { WalletContextProvider, createWalletConfig } from '@/lib/wallet-abstraction'
 
 interface ProvidersProps {
   children: ReactNode
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const walletConfig = createWalletConfig()
+  
   return (
-    <Web3AuthProvider config={web3AuthContextConfig}>
+    <WalletContextProvider config={walletConfig}>
       {children}
-    </Web3AuthProvider>
+    </WalletContextProvider>
   )
-} 
+}

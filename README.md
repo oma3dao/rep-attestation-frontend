@@ -35,7 +35,7 @@ cd rep-attestation-frontend
 npm install
 ```
 
-3. Set up environment variables (see [Wallet Integration Setup](#wallet-integration-setup) below)
+3. Set up environment variables (see [Environment Setup Guide](#environment-setup-guide) below)
 
 4. Run the development server:
 ```bash
@@ -111,4 +111,92 @@ src/
 ## Contributing
 
 Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+---
+
+## Environment Setup Guide
+
+This project uses separate toggles for two different concerns:
+
+1. **Web3Auth Environment** (devnet vs mainnet) - Controls Web3Auth service billing
+2. **Blockchain Networks** (testnet vs mainnet) - Controls which chains users connect to *(TODO: Not implemented yet)*
+
+### Quick Setup
+
+#### 1. Create `.env.local` file with these variables:
+
+```bash
+# Web3Auth Service Configuration
+# ==============================
+
+# Development Environment (devnet) - FREE TESTING
+NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_DEVNET=your_devnet_client_id_here
+
+# Production Environment (mainnet) - PAID FEATURES  
+NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_MAINNET=your_mainnet_client_id_here
+
+# Web3Auth Environment Toggle (defaults to devnet if not set)
+# NEXT_PUBLIC_WEB3AUTH_ENV=devnet   # Use devnet (free)
+# NEXT_PUBLIC_WEB3AUTH_ENV=mainnet  # Use mainnet (paid)
+
+# WalletConnect Configuration
+# ===========================
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id_here
+```
+
+#### 2. Get Your Client IDs
+
+1. **Web3Auth Devnet (FREE)**: 
+   - Go to https://dashboard.web3auth.io
+   - Create a new project
+   - Select **Devnet** environment
+   - Copy the Client ID → use for `NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_DEVNET`
+
+2. **Web3Auth Mainnet (PAID)**: 
+   - Go to https://dashboard.web3auth.io
+   - Create a new project 
+   - Select **Mainnet** environment
+   - Copy the Client ID → use for `NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_MAINNET`
+
+3. **WalletConnect**:
+   - Go to https://cloud.walletconnect.com
+   - Create a project
+   - Copy Project ID → use for `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+
+### Configuration Details
+
+#### Web3Auth Environment
+Controls which Web3Auth infrastructure to use:
+
+- **devnet** (default): Free testing, full features available
+- **mainnet**: Paid service, required for production
+
+#### Blockchain Networks  
+*(Currently defaults to testnet chains only)*
+
+- **Current**: BSC Testnet, Sepolia
+- **TODO**: Add toggle to switch to BSC Mainnet, Ethereum Mainnet
+
+### Environment Switching
+
+#### Web3Auth Service
+- **Default**: Uses **devnet** (free)
+- **To use mainnet**: Set `NEXT_PUBLIC_WEB3AUTH_ENV=mainnet` (requires paid plan)
+
+#### Blockchain Networks
+- **Current**: Always uses testnet chains
+- **Future**: Will add `NEXT_PUBLIC_BLOCKCHAIN_ENV` toggle
+
+### Troubleshooting
+
+#### "Premium Plan Required" Error
+- Make sure you're using **devnet**: Don't set `NEXT_PUBLIC_WEB3AUTH_ENV=mainnet`
+- Check your Web3Auth project is configured for **devnet**
+- Verify you're using the correct devnet client ID
+
+#### Missing Environment Variables
+The app will show clear error messages about which variables are missing.
+
+#### Adding New Chains
+Edit `src/lib/web3auth.ts` and add chains to the `ALL_CHAINS` object with the appropriate `environment` field.
 

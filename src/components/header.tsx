@@ -3,16 +3,13 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { useWeb3Auth, useWeb3AuthConnect, useWeb3AuthDisconnect, useWeb3AuthUser } from "@web3auth/modal/react"
+import { useWallet } from "@/lib/wallet-abstraction"
 import { Button } from "@/components/ui/button"
 import { ChainSwitcher } from "@/components/chain-switcher"
 
 export function Header() {
   const pathname = usePathname()
-  const { isConnected } = useWeb3Auth()
-  const { connect } = useWeb3AuthConnect()
-  const { disconnect } = useWeb3AuthDisconnect()
-  const { userInfo } = useWeb3AuthUser()
+  const { isConnected, user, connect, disconnect, isConnecting } = useWallet()
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -33,10 +30,11 @@ export function Header() {
   }
 
   const getButtonText = () => {
+    if (isConnecting) return "Connecting..."
     if (isConnected) {
       // Show user info if available, otherwise just "Disconnect"
-      if (userInfo?.email) return userInfo.email
-      if (userInfo?.name) return userInfo.name
+      if (user?.email) return user.email
+      if (user?.name) return user.name
       return "Disconnect"
     }
     return "Connect Wallet"
@@ -77,6 +75,7 @@ export function Header() {
             <ChainSwitcher />
             <Button 
               onClick={handleAuth}
+              disabled={isConnecting}
               variant={isConnected ? "outline" : "default"}
               size="lg"
               className="min-w-[120px]"
