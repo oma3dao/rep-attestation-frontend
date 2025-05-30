@@ -3,7 +3,7 @@
 /**
  * Schema Update Script
  * 
- * Reads JSON schema files from a folder and updates src/lib/schemas.ts
+ * Reads JSON schema files from a folder and updates src/config/schemas.ts
  * 
  * Usage:
  *   node scripts/update-schemas.js /path/to/schemas/folder
@@ -66,48 +66,57 @@ function transformToUISchema(jsonSchema, schemaId) {
  * Transform JSON Schema properties to FormField format
  */
 function transformFields(properties, required = []) {
-  return Object.entries(properties).map(([name, prop]) => {
-    // Map JSON Schema types to UI field types
-    const typeMapping = {
-      'string': prop.format === 'uri' ? 'uri' : 
-                prop.format === 'date-time' ? 'datetime' : 'string',
-      'integer': 'integer',
-      'number': 'integer',
-      'array': 'array',
-      'boolean': 'enum' // Convert boolean to enum with Yes/No options
-    }
+  return Object.entries(properties)
+    .filter(([name, prop]) => {
+      // Skip fields marked with x-oma3-skip-reason
+      if (prop['x-oma3-skip-reason']) {
+        console.log(`Skipping field '${name}' - reason: ${prop['x-oma3-skip-reason']}`)
+        return false
+      }
+      return true
+    })
+    .map(([name, prop]) => {
+      // Map JSON Schema types to UI field types
+      const typeMapping = {
+        'string': prop.format === 'uri' ? 'uri' : 
+                  prop.format === 'date-time' ? 'datetime' : 'string',
+        'integer': 'integer',
+        'number': 'integer',
+        'array': 'array',
+        'boolean': 'enum' // Convert boolean to enum with Yes/No options
+      }
 
-    const field = {
-      name,
-      type: typeMapping[prop.type] || 'string',
-      label: prop.title || formatLabel(name),
-      description: prop.description,
-      required: required.includes(name),
-      placeholder: prop.examples?.[0] || generatePlaceholder(name, prop)
-    }
+      const field = {
+        name,
+        type: typeMapping[prop.type] || 'string',
+        label: prop.title || formatLabel(name),
+        description: prop.description,
+        required: required.includes(name),
+        placeholder: prop.examples?.[0] || generatePlaceholder(name, prop)
+      }
 
-    // Add type-specific properties
-    if (prop.enum) {
-      field.type = 'enum'
-      field.options = prop.enum
-    }
+      // Add type-specific properties
+      if (prop.enum) {
+        field.type = 'enum'
+        field.options = prop.enum
+      }
 
-    if (prop.type === 'boolean') {
-      field.type = 'enum'
-      field.options = ['Yes', 'No']
-    }
+      if (prop.type === 'boolean') {
+        field.type = 'enum'
+        field.options = ['Yes', 'No']
+      }
 
-    if (prop.type === 'integer' || prop.type === 'number') {
-      if (prop.minimum !== undefined) field.min = prop.minimum
-      if (prop.maximum !== undefined) field.max = prop.maximum
-    }
+      if (prop.type === 'integer' || prop.type === 'number') {
+        if (prop.minimum !== undefined) field.min = prop.minimum
+        if (prop.maximum !== undefined) field.max = prop.maximum
+      }
 
-    if (prop.format) {
-      field.format = prop.format
-    }
+      if (prop.format) {
+        field.format = prop.format
+      }
 
-    return field
-  })
+      return field
+    })
 }
 
 /**
@@ -182,9 +191,63 @@ async function readSchemasFromDirectory(directoryPath) {
 }
 
 /**
+ * Read deployment data from the tools project
+ */
+async function readDeploymentData() {
+  const deploymentPath = path.resolve('../rep-attestation-tools-evm-solidity/generated')
+  const deployments = {}
+  
+  try {
+    console.log(`📡 Reading deployment data from: ${deploymentPath}`)
+    const files = await fs.readdir(deploymentPath)
+    
+    for (const file of files) {
+      let schemaId, chainId, chainName
+      
+      if (file.endsWith('.deployed.bastest.json')) {
+        schemaId = file.replace('.deployed.bastest.json', '')
+        chainId = 97
+        chainName = 'BSC Testnet'
+      } else if (file.endsWith('.deployed.bas.json')) {
+        schemaId = file.replace('.deployed.bas.json', '')
+        chainId = 56
+        chainName = 'BSC Mainnet'
+      } else {
+        continue
+      }
+      
+      try {
+        const filePath = path.join(deploymentPath, file)
+        const content = await fs.readFile(filePath, 'utf8')
+        const deploymentData = JSON.parse(content)
+        
+        if (!deployments[schemaId]) {
+          deployments[schemaId] = {}
+        }
+        
+        deployments[schemaId][chainId] = {
+          schemaUID: deploymentData.schemaUID,
+          blockNumber: deploymentData.blockNumber,
+          chainId
+        }
+        
+        console.log(`📋 Loaded deployment: ${file} → ${schemaId} (${chainName})`)
+      } catch (error) {
+        console.error(`❌ Failed to load deployment ${file}:`, error.message)
+      }
+    }
+    
+    return deployments
+  } catch (error) {
+    console.warn(`⚠️  Could not read deployment data: ${error.message}`)
+    return {}
+  }
+}
+
+/**
  * Generate the schemas.ts file
  */
-async function generateSchemasFile(schemas) {
+async function generateSchemasFile(schemas, deployments = {}) {
   const uiSchemas = Object.entries(schemas).map(([id, schema]) => 
     transformToUISchema(schema, id)
   )
@@ -222,21 +285,45 @@ export interface AttestationSchema {
   icon: string
   color: string
   fields: FormField[]
+  deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
+  deployedBlocks?: Record<number, number> // chainId -> deployment block number
 }
 
 // Field definitions
 ${fieldArrays.map(item => item.fieldsCode).join('\n\n')}
 
 // Schema definitions
-${fieldArrays.map(item => `
-export const ${item.schema.id}Schema: AttestationSchema = {
-  id: '${item.schema.id}',
-  title: '${item.schema.title}',
-  description: '${item.schema.description}',
-  icon: '${item.schema.icon}',
-  color: '${item.schema.color}',
-  fields: ${item.fieldsVarName}
-}`).join('\n')}
+${fieldArrays.map(item => {
+  const schemaDeployments = deployments[item.schema.id] || {}
+  
+  // BSC Testnet (97)
+  const testnetDeployment = schemaDeployments[97]
+  const testnetUID = testnetDeployment ? testnetDeployment.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+  const testnetBlock = testnetDeployment ? testnetDeployment.blockNumber : 0
+  
+  // BSC Mainnet (56)  
+  const mainnetDeployment = schemaDeployments[56]
+  const mainnetUID = mainnetDeployment ? mainnetDeployment.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+  const mainnetBlock = mainnetDeployment ? mainnetDeployment.blockNumber : 0
+
+  const schemaExport = `export const ${item.schema.id}Schema: AttestationSchema = {
+    id: '${item.schema.id}',
+    title: '${item.schema.title}',
+    description: '${item.schema.description}',
+    icon: '${item.schema.icon}',
+    color: '${item.schema.color}',
+    fields: ${item.fieldsVarName},
+    deployedUIDs: {
+      97: '${testnetUID}', // BSC Testnet
+      56: '${mainnetUID}'  // BSC Mainnet
+    },
+    deployedBlocks: {
+      97: ${testnetBlock}, // BSC Testnet
+      56: ${mainnetBlock}  // BSC Mainnet
+    }
+  }`
+  return schemaExport
+}).join('\n')}
 
 // Export all schemas
 const allSchemas: AttestationSchema[] = [
@@ -256,7 +343,7 @@ export function getAllSchemas(): AttestationSchema[] {
 }
 `
 
-  const outputPath = path.resolve('src/lib/schemas.ts')
+  const outputPath = path.resolve('src/config/schemas.ts')
   await fs.writeFile(outputPath, content, 'utf8')
   console.log(`✅ Generated schema file: ${outputPath}`)
 }
@@ -285,11 +372,24 @@ async function main() {
       return
     }
     
-    await generateSchemasFile(schemas)
+    const deployments = await readDeploymentData()
+    
+    await generateSchemasFile(schemas, deployments)
     
     console.log(`✅ Schema update completed successfully!`)
     console.log(`📊 Processed ${Object.keys(schemas).length} schemas:`)
     Object.keys(schemas).forEach(id => console.log(`   - ${id}`))
+    
+    if (Object.keys(deployments).length > 0) {
+      console.log(`🚀 Loaded deployments:`)
+      Object.entries(deployments).forEach(([schemaId, chains]) => {
+        console.log(`   - ${schemaId}:`)
+        Object.entries(chains).forEach(([chainId, deployment]) => {
+          const chainName = chainId === '97' ? 'BSC Testnet' : 'BSC Mainnet'
+          console.log(`     ${chainName}: ${deployment.schemaUID} (block ${deployment.blockNumber})`)
+        })
+      })
+    }
     
   } catch (error) {
     console.error('❌ Schema update failed:', error.message)

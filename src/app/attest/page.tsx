@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, Shield, FileCheck, LinkIcon, Star } from 'lucide-react'
-import { getAllSchemas } from '@/lib/schemas'
+import { getAllSchemas } from '@/config/schemas'
 
 const iconMap = {
   Shield,

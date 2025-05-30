@@ -1,6 +1,6 @@
 'use client'
 
-import { FormField } from '@/lib/schemas'
+import { FormField } from '@/config/schemas'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'

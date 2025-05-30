@@ -89,6 +89,8 @@ export interface AttestationSchema {
   icon: string
   color: string
   fields: FormField[]
+  deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
+  deployedBlocks?: Record<number, number> // chainId -> deployment block number
 }
 
 // Certification Schema
@@ -554,7 +556,15 @@ export const attestationSchemas: Record<string, AttestationSchema> = {
     description: 'Create verifiable certifications for applications, including compliance and security assessments',
     icon: 'Shield',
     color: 'bg-blue-50 border-blue-200 hover:bg-blue-100',
-    fields: certificationFields
+    fields: certificationFields,
+    deployedUIDs: {
+      97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
+      56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet - TODO: Replace with actual UID
+    },
+    deployedBlocks: {
+      97: 52415269, // BSC Testnet - TODO: Replace with actual deployment block
+      56: 0  // BSC Mainnet - TODO: Replace with actual deployment block
+    }
   },
   endorsement: {
     id: 'endorsement',
@@ -562,7 +572,15 @@ export const attestationSchemas: Record<string, AttestationSchema> = {
     description: 'Provide endorsements and recommendations for projects and applications',
     icon: 'FileCheck',
     color: 'bg-green-50 border-green-200 hover:bg-green-100',
-    fields: endorsementFields
+    fields: endorsementFields,
+    deployedUIDs: {
+      97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
+      56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet - TODO: Replace with actual UID
+    },
+    deployedBlocks: {
+      97: 52288891, // BSC Testnet - TODO: Replace with actual deployment block
+      56: 0  // BSC Mainnet - TODO: Replace with actual deployment block
+    }
   },
   'linked-identifier': {
     id: 'linked-identifier',
@@ -570,7 +588,15 @@ export const attestationSchemas: Record<string, AttestationSchema> = {
     description: 'Link and verify different identity systems and accounts',
     icon: 'LinkIcon',
     color: 'bg-purple-50 border-purple-200 hover:bg-purple-100',
-    fields: linkedIdentifierFields
+    fields: linkedIdentifierFields,
+    deployedUIDs: {
+      97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
+      56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet - TODO: Replace with actual UID
+    },
+    deployedBlocks: {
+      97: 52415311, // BSC Testnet - TODO: Replace with actual deployment block
+      56: 0  // BSC Mainnet - TODO: Replace with actual deployment block
+    }
   },
   'user-review': {
     id: 'user-review',
@@ -578,7 +604,15 @@ export const attestationSchemas: Record<string, AttestationSchema> = {
     description: 'Submit detailed reviews and ratings for applications and services',
     icon: 'Star',
     color: 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100',
-    fields: userReviewFields
+    fields: userReviewFields,
+    deployedUIDs: {
+      97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
+      56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet - TODO: Replace with actual UID
+    },
+    deployedBlocks: {
+      97: 52291400, // BSC Testnet - TODO: Replace with actual deployment block
+      56: 0  // BSC Mainnet - TODO: Replace with actual deployment block
+    }
   }
 }
 
@@ -595,4 +629,16 @@ export function getSchemaIds(): string[] {
 // Helper function to get all schemas as array
 export function getAllSchemas(): AttestationSchema[] {
   return Object.values(attestationSchemas)
+}
+
+// Helper function to get deployed UID for a schema on a specific chain
+export function getDeployedUID(schemaId: string, chainId: number): string | undefined {
+  const schema = getSchema(schemaId)
+  return schema?.deployedUIDs?.[chainId]
+}
+
+// Helper function to get deployment block for a schema on a specific chain
+export function getDeploymentBlock(schemaId: string, chainId: number): number | undefined {
+  const schema = getSchema(schemaId)
+  return schema?.deployedBlocks?.[chainId]
 } 

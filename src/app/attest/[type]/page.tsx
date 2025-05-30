@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getSchema } from '@/lib/schemas'
+import { getSchema } from '@/config/schemas'
 import { AttestationForm } from '@/components/AttestationForm'
 
 interface AttestationPageProps {
@@ -21,10 +21,10 @@ export default async function AttestationPage({ params }: AttestationPageProps) 
 
 // Generate static params for all available schema types
 export async function generateStaticParams() {
-  const { getSchemaIds } = await import('@/lib/schemas')
+  const { getSchemaIds } = await import('@/config/schemas')
   const schemaIds = getSchemaIds()
   
-  return schemaIds.map((type) => ({
+  return schemaIds.map((type: string) => ({
     type,
   }))
 } 

@@ -94,8 +94,9 @@ src/
 │   ├── AttestationForm.tsx
 │   ├── FieldRenderer.tsx
 │   └── header.tsx
+├── config/                # Configuration files
+│   └── schemas.ts        # Attestation schema definitions
 ├── lib/                   # Utility functions and configurations
-│   ├── schemas.ts        # Attestation schema definitions
 │   ├── wagmi.ts          # Wallet configuration
 │   └── useWallet.ts      # Wallet hooks
 └── styles/               # Global styles
@@ -128,7 +129,7 @@ npm run update-schemas ../attestation-schemas/schemas
 1. **Reads** all `*.json` files from the specified directory
 2. **Skips** `test-deploy.schema.json` automatically 
 3. **Transforms** JSON schemas to TypeScript UI schemas
-4. **Overwrites** `src/lib/schemas.ts` with the new definitions
+4. **Overwrites** `src/config/schemas.ts` with the new definitions
 5. **Maintains** existing export structure for components
 
 ### Schema File Processing

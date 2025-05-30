@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AttestationSchema } from '@/lib/schemas'
+import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -93,21 +93,68 @@ export function AttestationForm({ schema }: AttestationFormProps) {
     setIsSubmitting(true)
     
     try {
-      // TODO: Implement actual submission logic in Phase 5
-      console.log('Submitting attestation:', {
-        schema: schema.id,
-        data: formData
+      // Ensure all schema fields are present with empty strings for optional fields
+      // This maintains compatibility with BAS indexers and search functionality
+      const completeData: Record<string, any> = {}
+      
+      schema.fields.forEach(field => {
+        const value = formData[field.name]
+        if (value !== undefined && value !== null && value !== '') {
+          completeData[field.name] = value
+        } else {
+          // Use empty string for missing optional fields to maintain search compatibility
+          completeData[field.name] = field.type === 'array' ? [] : ''
+        }
       })
       
-      // Simulate API call
+      // Extract subject field for recipient
+      const subjectField = schema.fields.find(field => 
+        field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
+      )
+      
+      if (!subjectField) {
+        throw new Error('No subject field found in schema')
+      }
+      
+      const subjectValue = completeData[subjectField.name] as string
+      if (!subjectValue) {
+        throw new Error('Subject field is required')
+      }
+      
+      // Convert to CAIP-2 format if needed
+      let recipient = subjectValue
+      if (!recipient.startsWith('eip155:')) {
+        // Assume it's an Ethereum address and convert to CAIP-2
+        if (recipient.startsWith('0x') && recipient.length === 42) {
+          recipient = `eip155:1:${recipient}` // Default to Ethereum mainnet
+        } else {
+          throw new Error('Invalid recipient address format')
+        }
+      }
+      
+      console.log('Submitting attestation:', {
+        schema: schema.id,
+        recipient,
+        data: completeData
+      })
+      
+      // TODO: Use BAS client here
+      // const { createAttestation } = useBASClient()
+      // const result = await createAttestation({
+      //   schemaId: schema.id,
+      //   recipient,
+      //   data: completeData // Use completeData
+      // })
+      
+      // Simulate API call for now
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      // TODO: Show success message and redirect
       alert('Attestation submitted successfully!')
       
     } catch (error) {
       console.error('Submission error:', error)
-      alert('Failed to submit attestation. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      alert(`Failed to submit attestation: ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }

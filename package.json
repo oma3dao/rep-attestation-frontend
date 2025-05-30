@@ -26,6 +26,7 @@
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@tanstack/react-query": "^5.79.0",
     "@web3auth/base": "^9.7.0",
     "@web3auth/default-evm-adapter": "^9.7.0",
     "@web3auth/ethereum-provider": "^9.7.0",
@@ -40,7 +41,8 @@
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "thirdweb": "^5.101.1",
-    "viem": "^2.30.0",
+    "viem": "^2.30.5",
+    "wagmi": "^2.15.4",
     "zod": "^3.25.28"
   },
   "devDependencies": {
