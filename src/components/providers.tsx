@@ -1,21 +1,22 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { WalletContextProvider, createWalletConfig } from '@/lib/wallet-abstraction'
 import { ThirdwebProvider } from 'thirdweb/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 interface ProvidersProps {
   children: ReactNode
 }
 
+// Create a client for react-query
+const queryClient = new QueryClient()
+
 export function Providers({ children }: ProvidersProps) {
-  const walletConfig = createWalletConfig()
-  
   return (
-    <ThirdwebProvider>
-      <WalletContextProvider config={walletConfig}>
+    <QueryClientProvider client={queryClient}>
+      <ThirdwebProvider>
         {children}
-      </WalletContextProvider>
-    </ThirdwebProvider>
+      </ThirdwebProvider>
+    </QueryClientProvider>
   )
 }

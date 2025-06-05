@@ -1,4 +1,5 @@
-import { BSC_TESTNET, BSC_MAINNET } from './chains'
+import { bsc, bscTestnet } from 'thirdweb/chains'
+// import { customChain } from '@/lib/thirdweb'
 
 // Attestation service configuration
 export interface AttestationServiceConfig {
@@ -20,10 +21,14 @@ export const BAS_CONFIG: AttestationServiceConfig = {
   description: 'Decentralized attestation service built on BNB Smart Chain',
   website: 'https://docs.bnbchain.org/bas/',
   docs: 'https://docs.bnbchain.org/bas/developer-guide/',
-  supportedChains: [BSC_TESTNET.id, BSC_MAINNET.id],
+  supportedChains: [bscTestnet.id, bsc.id],
+  // When custom chain is ready, add support:
+  // supportedChains: [bscTestnet.id, bsc.id, customChain.id],
   contracts: {
-    [BSC_TESTNET.id]: '0x6c2270298b1e6046898e8367e0ca270fecdbd14e', // BAS testnet contract
-    [BSC_MAINNET.id]: '0x0000000000000000000000000000000000000000' // TODO: Add mainnet contract
+    [bscTestnet.id]: '0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD', // Official BAS testnet contract
+    [bsc.id]: '0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC' // Official BAS mainnet contract
+    // When custom chain is ready, add contract:
+    // [customChain.id]: '0x0000000000000000000000000000000000000000' // TODO: Deploy to custom chain
   },
   features: [
     'On-chain attestations',
@@ -33,14 +38,40 @@ export const BAS_CONFIG: AttestationServiceConfig = {
     'BNB Smart Chain native'
   ],
   estimatedGasCost: {
-    [BSC_TESTNET.id]: BigInt('100000'), // ~0.0002 BNB at 2 gwei
-    [BSC_MAINNET.id]: BigInt('100000')
+    [bscTestnet.id]: BigInt('100000'), // ~0.0002 BNB at 2 gwei
+    [bsc.id]: BigInt('100000')
+    // When custom chain is ready, add gas cost:
+    // [customChain.id]: BigInt('50000') // Adjust based on custom chain gas costs
   }
 }
+
+// Custom Chain Attestation Service (commented out - uncomment when needed)
+// export const CUSTOM_ATTESTATION_CONFIG: AttestationServiceConfig = {
+//   id: 'custom-attest',
+//   name: 'Custom Chain Attestation Service',
+//   description: 'Attestation service for custom blockchain network',
+//   website: 'https://custom-chain.com/attestation',
+//   docs: 'https://docs.custom-chain.com/attestation',
+//   supportedChains: [customChain.id],
+//   contracts: {
+//     [customChain.id]: '0x0000000000000000000000000000000000000000' // TODO: Deploy contract
+//   },
+//   features: [
+//     'On-chain attestations',
+//     'Custom schema support',
+//     'Low latency',
+//     'Custom features'
+//   ],
+//   estimatedGasCost: {
+//     [customChain.id]: BigInt('30000') // Adjust based on actual costs
+//   }
+// }
 
 // All available attestation services
 export const ATTESTATION_SERVICES: Record<string, AttestationServiceConfig> = {
   [BAS_CONFIG.id]: BAS_CONFIG
+  // When custom service is ready, add it:
+  // [CUSTOM_ATTESTATION_CONFIG.id]: CUSTOM_ATTESTATION_CONFIG
   // TODO: Add EAS and other services
 }
 

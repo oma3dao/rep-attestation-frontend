@@ -1,15 +1,8 @@
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, Shield, FileCheck, LinkIcon, Star } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { getAllSchemas } from '@/config/schemas'
-
-const iconMap = {
-  Shield,
-  FileCheck,
-  LinkIcon,
-  Star
-}
 
 export default function AttestPage() {
   const schemas = getAllSchemas()
@@ -26,17 +19,12 @@ export default function AttestPage() {
 
         <div className="grid gap-6 md:grid-cols-2">
           {schemas.map((schema) => {
-            const IconComponent = iconMap[schema.icon as keyof typeof iconMap]
-            
             return (
               <Link key={schema.id} href={`/attest/${schema.id}`}>
-                <Card className={`h-full transition-all duration-200 cursor-pointer ${schema.color}`}>
+                <Card className="h-full transition-all duration-200 cursor-pointer bg-blue-50 border-blue-200 hover:bg-blue-100">
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="p-2 rounded-lg bg-white/50">
-                          <IconComponent className="h-6 w-6" />
-                        </div>
                         <div>
                           <CardTitle className="text-xl">{schema.title}</CardTitle>
                           <Badge variant="secondary" className="mt-1">

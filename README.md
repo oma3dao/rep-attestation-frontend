@@ -48,38 +48,36 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ### Environment Variables
 
-Create a `.env.local` file in the root directory with the following variables:
+Create a `.env.local` file in the root directory with the following variable:
 
 ```bash
-# WalletConnect Project ID (required)
-# Get from https://cloud.walletconnect.com
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
-
-# Optional: Web3Auth Client ID for additional social login features
-NEXT_PUBLIC_WEB3AUTH_CLIENT_ID=your_web3auth_client_id_here
+# ThirdWeb Configuration (required)
+# Get from https://thirdweb.com/dashboard
+NEXT_PUBLIC_THIRDWEB_CLIENT_ID=your_thirdweb_client_id
 ```
 
-### Getting a WalletConnect Project ID
+### Getting a ThirdWeb Client ID
 
-1. Go to [WalletConnect Cloud](https://cloud.walletconnect.com)
-2. Create a new project
-3. Select "App" as the project type
-4. Copy the Project ID from the project settings
+1. Go to [ThirdWeb Dashboard](https://thirdweb.com/dashboard)
+2. Create an account or sign in
+3. Create a new project or select an existing one
+4. Copy your Client ID from the project settings
 5. Add it to your `.env.local` file
 
 ### Features Enabled
 
-- **Social Login**: Google, X (Twitter), GitHub, Discord, Apple
-- **Email Login**: Direct email authentication
+- **Social Login**: Google, Facebook, Apple, Discord, and more
+- **Email Login**: Direct email authentication with OTP
 - **Wallet Connect**: MetaMask, Coinbase Wallet, WalletConnect mobile wallets
-- **Custom L2 Support**: Ready for OMA3 L2 integration
+- **Built-in Chain Switching**: Automatic network switching for supported chains
+- **Multi-chain Support**: BSC, Ethereum, and ready for custom L2 integration
 
 ### Usage
 
 The wallet integration provides:
-- Single button that opens modal with all login options
-- Unified state management via WAGMI hooks
-- Automatic network switching for custom L2
+- Single `ConnectButton` with all login options in a modal
+- ThirdWeb's unified state management hooks
+- Automatic network switching for supported chains
 - Graceful fallbacks for unsupported wallets
 
 ## Project Structure
@@ -88,17 +86,22 @@ The wallet integration provides:
 src/
 ├── app/                    # Next.js app router pages
 │   ├── attest/            # Attestation creation pages
-│   └── dashboard/         # User dashboard
+│   ├── dashboard/         # User dashboard
+│   └── client.ts         # ThirdWeb client configuration
 ├── components/            # Reusable React components
 │   ├── ui/               # shadcn/ui components
 │   ├── AttestationForm.tsx
 │   ├── FieldRenderer.tsx
-│   └── header.tsx
+│   ├── header.tsx
+│   └── providers.tsx     # ThirdWeb provider setup
 ├── config/                # Configuration files
-│   └── schemas.ts        # Attestation schema definitions
+│   ├── schemas.ts        # Attestation schema definitions
+│   └── attestation-services.ts # BAS and other service configs
 ├── lib/                   # Utility functions and configurations
-│   ├── wagmi.ts          # Wallet configuration
-│   └── useWallet.ts      # Wallet hooks
+│   ├── blockchain.ts     # Wallet hooks and chain management
+│   ├── bas.ts           # Binance Attestation Service client
+│   ├── service.ts       # High-level attestation service layer
+│   └── schemas.ts       # Schema processing and utilities
 └── styles/               # Global styles
 ```
 
@@ -158,119 +161,34 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of cond
 
 ---
 
-## Environment Setup Guide
+## Additional Configuration
 
-This project uses separate toggles for two different concerns:
+### Blockchain Networks
 
-1. **Web3Auth Environment** (devnet vs mainnet) - Controls Web3Auth service billing
-2. **Blockchain Networks** (testnet vs mainnet) - Controls which chains users connect to *(TODO: Not implemented yet)*
+The application currently supports:
+- **BSC Testnet** (default) - For development and testing
+- **BSC Mainnet** - For production use
+- **Ethereum Sepolia** - Ethereum testnet
+- **Ethereum Mainnet** - Ethereum mainnet
 
-### Quick Setup
+### Attestation Services
 
-#### 1. Create `.env.local` file with these variables:
-
-```bash
-# Web3Auth Service Configuration
-# ==============================
-
-# Development Environment (devnet) - FREE TESTING
-NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_DEVNET=your_devnet_client_id_here
-
-# Production Environment (mainnet) - PAID FEATURES  
-NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_MAINNET=your_mainnet_client_id_here
-
-# Web3Auth Environment Toggle (defaults to devnet if not set)
-# NEXT_PUBLIC_WEB3AUTH_ENV=devnet   # Use devnet (free)
-# NEXT_PUBLIC_WEB3AUTH_ENV=mainnet  # Use mainnet (paid)
-
-# WalletConnect Configuration
-# ===========================
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id_here
-```
-
-#### 2. Get Your Client IDs
-
-1. **Web3Auth Devnet (FREE)**: 
-   - Go to https://dashboard.web3auth.io
-   - Create a new project
-   - Select **Devnet** environment
-   - Copy the Client ID → use for `NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_DEVNET`
-
-2. **Web3Auth Mainnet (PAID)**: 
-   - Go to https://dashboard.web3auth.io
-   - Create a new project 
-   - Select **Mainnet** environment
-   - Copy the Client ID → use for `NEXT_PUBLIC_WEB3AUTH_CLIENT_ID_MAINNET`
-
-3. **WalletConnect**:
-   - Go to https://cloud.walletconnect.com
-   - Create a project
-   - Copy Project ID → use for `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-
-### Configuration Details
-
-#### Web3Auth Environment
-Controls which Web3Auth infrastructure to use:
-
-- **devnet** (default): Free testing, full features available
-- **mainnet**: Paid service, required for production
-
-#### Blockchain Networks  
-*(Currently defaults to testnet chains only)*
-
-- **Current**: BSC Testnet, Sepolia
-- **TODO**: Add toggle to switch to BSC Mainnet, Ethereum Mainnet
-
-### Environment Switching
-
-#### Web3Auth Service
-- **Default**: Uses **devnet** (free)
-- **To use mainnet**: Set `NEXT_PUBLIC_WEB3AUTH_ENV=mainnet` (requires paid plan)
-
-#### Blockchain Networks
-- **Current**: Always uses testnet chains
-- **Future**: Will add `NEXT_PUBLIC_BLOCKCHAIN_ENV` toggle
+Currently integrated:
+- **BAS (Binance Attestation Service)** - Available on BSC networks
+- **Future**: EAS (Ethereum Attestation Service) and custom attestation services
 
 ### Troubleshooting
 
-#### "Premium Plan Required" Error
-- Make sure you're using **devnet**: Don't set `NEXT_PUBLIC_WEB3AUTH_ENV=mainnet`
-- Check your Web3Auth project is configured for **devnet**
-- Verify you're using the correct devnet client ID
+#### "No client ID provided" Error
+- Make sure you have `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` in your `.env.local` file
+- Verify the client ID is correct and active in your ThirdWeb dashboard
 
-#### Missing Environment Variables
-The app will show clear error messages about which variables are missing.
+#### Wallet Connection Issues
+- Try refreshing the page
+- Clear browser cache and cookies
+- Ensure you're on a supported network (BSC or Ethereum)
 
-#### Adding New Chains
-Edit `src/lib/web3auth.ts` and add chains to the `ALL_CHAINS` object with the appropriate `environment` field.
-
-#### Thirdweb
-
-1. **Add ThirdWeb Client ID** to `.env.local`:
-```bash
-NEXT_PUBLIC_THIRDWEB_CLIENT_ID=your_thirdweb_client_id
-NEXT_PUBLIC_WALLET_PROVIDER=thirdweb
-```
-
-2. **That's it!** The header automatically shows the appropriate connect button with social login options.
-
-### Getting Your ThirdWeb Client ID
-
-1. Go to [thirdweb.com](https://thirdweb.com)
-2. Create an account or sign in
-3. Go to your dashboard  
-4. Create a new project or select an existing one
-5. Copy your Client ID from the project settings
-6. Add it to your `.env.local` file
-
-### Provider Switching
-
-Switch between wallet providers by changing the environment variable:
-
-```bash
-# Use ThirdWeb (with social login)
-NEXT_PUBLIC_WALLET_PROVIDER=thirdweb
-
-# Use Web3Auth (with wallet abstraction)
-NEXT_PUBLIC_WALLET_PROVIDER=web3auth
-```
+#### Transaction Failures
+- Check you have sufficient gas tokens (BNB for BSC, ETH for Ethereum)
+- Verify you're connected to the correct network
+- Check that the attestation schema is deployed on the current network

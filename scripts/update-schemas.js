@@ -13,59 +13,46 @@
 const fs = require('fs').promises
 const path = require('path')
 
-// UI-specific metadata (stays in frontend)
-const UI_METADATA = {
-  certification: {
-    icon: '🏆',
-    color: 'bg-blue-500',
-    title: 'Product Certification',
-    description: 'Certify compliance with standards and regulations'
-  },
-  endorsement: {
-    icon: '👍',
-    color: 'bg-green-500', 
-    title: 'Professional Endorsement',
-    description: 'Endorse skills, qualifications, or achievements'
-  },
-  'linked-identifier': {
-    icon: '🔗',
-    color: 'bg-purple-500',
-    title: 'Identity Verification', 
-    description: 'Link and verify digital identities'
-  },
-  'user-review': {
-    icon: '⭐',
-    color: 'bg-yellow-500',
-    title: 'User Review',
-    description: 'Share experiences and feedback'
-  }
+/**
+ * Escape string for JavaScript code generation
+ */
+function escapeString(str) {
+  if (typeof str !== 'string') return str
+  return str
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/'/g, "\\'")    // Escape single quotes
+    .replace(/"/g, '\\"')    // Escape double quotes
+    .replace(/\n/g, '\\n')   // Escape newlines
+    .replace(/\r/g, '\\r')   // Escape carriage returns
+    .replace(/\t/g, '\\t')   // Escape tabs
 }
 
 /**
  * Transform JSON Schema to UI Schema
  */
 function transformToUISchema(jsonSchema, schemaId) {
-  const uiMeta = UI_METADATA[schemaId] || {
-    icon: '📄',
-    color: 'bg-gray-500',
-    title: jsonSchema.title || formatLabel(schemaId),
-    description: jsonSchema.description || 'No description available'
+  // Require title - it's essential for UI
+  if (!jsonSchema.title) {
+    throw new Error(`Schema '${schemaId}' is missing required 'title' property. Schema titles are used in form headings and must be provided.`)
+  }
+
+  // Require description - it's essential for UI
+  if (!jsonSchema.description) {
+    throw new Error(`Schema '${schemaId}' is missing required 'description' property. Schema descriptions are used in form instructions and must be provided.`)
   }
 
   return {
     id: schemaId,
-    title: uiMeta.title,
-    description: uiMeta.description,
-    icon: uiMeta.icon,
-    color: uiMeta.color,
-    fields: transformFields(jsonSchema.properties || {}, jsonSchema.required || [])
+    title: jsonSchema.title,
+    description: jsonSchema.description,
+    fields: transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId)
   }
 }
 
 /**
  * Transform JSON Schema properties to FormField format
  */
-function transformFields(properties, required = []) {
+function transformFields(properties, required = [], schemaId = '') {
   return Object.entries(properties)
     .filter(([name, prop]) => {
       // Skip fields marked with x-oma3-skip-reason
@@ -76,6 +63,11 @@ function transformFields(properties, required = []) {
       return true
     })
     .map(([name, prop]) => {
+      // Require title for form fields - it's essential for UI labels
+      if (!prop.title) {
+        throw new Error(`Field '${name}' in schema '${schemaId}' is missing required 'title' property. Field titles are used as form labels and must be provided.`)
+      }
+
       // Map JSON Schema types to UI field types
       const typeMapping = {
         'string': prop.format === 'uri' ? 'uri' : 
@@ -89,7 +81,7 @@ function transformFields(properties, required = []) {
       const field = {
         name,
         type: typeMapping[prop.type] || 'string',
-        label: prop.title || formatLabel(name),
+        label: prop.title,
         description: prop.description,
         required: required.includes(name),
         placeholder: prop.examples?.[0] || generatePlaceholder(name, prop)
@@ -120,18 +112,6 @@ function transformFields(properties, required = []) {
 }
 
 /**
- * Format field name to readable label
- */
-function formatLabel(name) {
-  return name
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
-    .replace(/\b\w/g, str => str.toUpperCase())
-    .replace(/-/g, ' ')
-    .replace(/_/g, ' ')
-}
-
-/**
  * Generate placeholder text based on field name and properties
  */
 function generatePlaceholder(name, prop) {
@@ -147,7 +127,7 @@ function generatePlaceholder(name, prop) {
   if (prop.type === 'integer') {
     return '0'
   }
-  return `Enter ${formatLabel(name).toLowerCase()}`
+  return `Enter ${name.toLowerCase()}`
 }
 
 /**
@@ -193,8 +173,8 @@ async function readSchemasFromDirectory(directoryPath) {
 /**
  * Read deployment data from the tools project
  */
-async function readDeploymentData() {
-  const deploymentPath = path.resolve('../rep-attestation-tools-evm-solidity/generated')
+async function readDeploymentData(rootPath) {
+  const deploymentPath = path.join(rootPath, 'generated')
   const deployments = {}
   
   try {
@@ -213,7 +193,7 @@ async function readDeploymentData() {
         chainId = 56
         chainName = 'BSC Mainnet'
       } else {
-        continue
+        continue // Skip non-deployment files
       }
       
       try {
@@ -221,27 +201,40 @@ async function readDeploymentData() {
         const content = await fs.readFile(filePath, 'utf8')
         const deploymentData = JSON.parse(content)
         
-        if (!deployments[schemaId]) {
-          deployments[schemaId] = {}
+        // Convert PascalCase filename to kebab-case to match schema IDs
+        // e.g., "Certification" -> "certification", "Linked-Identifier" -> "linked-identifier"
+        const normalizedSchemaId = schemaId
+          .replace(/([A-Z])/g, (match, letter, index) => {
+            // Insert hyphen before uppercase letters (except first character)
+            // But don't add hyphen if there's already a hyphen before it
+            if (index > 0 && schemaId[index - 1] !== '-') {
+              return '-' + letter.toLowerCase()
+            }
+            return letter.toLowerCase()
+          })
+        
+        // Initialize schema deployments if not exists
+        if (!deployments[normalizedSchemaId]) {
+          deployments[normalizedSchemaId] = {}
         }
         
-        deployments[schemaId][chainId] = {
-          schemaUID: deploymentData.schemaUID,
+        deployments[normalizedSchemaId][chainId] = {
+          schemaUID: deploymentData.uid, // Property is 'uid' not 'schemaUID'
           blockNumber: deploymentData.blockNumber,
-          chainId
+          chainName
         }
         
-        console.log(`📋 Loaded deployment: ${file} → ${schemaId} (${chainName})`)
-      } catch (error) {
-        console.error(`❌ Failed to load deployment ${file}:`, error.message)
+        console.log(`   ✅ ${schemaId} -> ${normalizedSchemaId} (${chainName}): ${deploymentData.uid}`)
+      } catch (fileError) {
+        console.warn(`   ⚠️  Failed to read ${file}:`, fileError.message)
       }
     }
-    
-    return deployments
   } catch (error) {
-    console.warn(`⚠️  Could not read deployment data: ${error.message}`)
-    return {}
+    console.warn(`⚠️  Could not read deployment directory: ${error.message}`)
+    console.log(`   This is okay - will use placeholder values`)
   }
+  
+  return deployments
 }
 
 /**
@@ -254,12 +247,51 @@ async function generateSchemasFile(schemas, deployments = {}) {
 
   // Generate field arrays for each schema
   const fieldArrays = uiSchemas.map(schema => {
-    const fieldsVarName = `${schema.id}Fields`
+    // Convert kebab-case to camelCase for variable names
+    const camelCaseId = schema.id.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase())
+    const fieldsVarName = `${camelCaseId}Fields`
     const fieldsCode = `const ${fieldsVarName}: FormField[] = ${JSON.stringify(schema.fields, null, 2)}`
     return { schema, fieldsVarName, fieldsCode }
   })
 
-  const content = `// This file is auto-generated by scripts/update-schemas.js
+  // Generate TypeScript export for each schema
+  const schemaExports = fieldArrays.map(item => {
+    const deployment = deployments[item.schema.id]
+    const testnetData = deployment?.[97]
+    const mainnetData = deployment?.[56]
+    
+    const testnetUID = testnetData ? testnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const testnetBlock = testnetData ? testnetData.blockNumber : 0
+    const mainnetUID = mainnetData ? mainnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const mainnetBlock = mainnetData ? mainnetData.blockNumber : 0
+
+    // Convert kebab-case to camelCase for variable names
+    const varName = item.schema.id.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase())
+
+    const schemaExport = [
+      `export const ${varName}Schema: AttestationSchema = {`,
+      `  id: '${escapeString(item.schema.id)}',`,
+      `  title: '${escapeString(item.schema.title)}',`,
+      `  description: '${escapeString(item.schema.description)}',`,
+      `  fields: ${item.fieldsVarName},`,
+      `  deployedUIDs: {`,
+      `    97: '${escapeString(testnetUID)}', // BSC Testnet`,
+      `    56: '${escapeString(mainnetUID)}'  // BSC Mainnet`,
+      `  },`,
+      `  deployedBlocks: {`,
+      `    97: ${testnetBlock}, // BSC Testnet`,
+      `    56: ${mainnetBlock}  // BSC Mainnet`,
+      `  }`,
+      `};`
+    ].join('\n')
+    
+    return {
+      varName,
+      export: schemaExport
+    }
+  })
+
+  const fileContent = `// This file is auto-generated by scripts/update-schemas.js
 // Do not edit manually - your changes will be overwritten
 
 // Schema definitions for attestation forms
@@ -282,8 +314,6 @@ export interface AttestationSchema {
   id: string
   title: string
   description: string
-  icon: string
-  color: string
   fields: FormField[]
   deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
@@ -293,41 +323,11 @@ export interface AttestationSchema {
 ${fieldArrays.map(item => item.fieldsCode).join('\n\n')}
 
 // Schema definitions
-${fieldArrays.map(item => {
-  const schemaDeployments = deployments[item.schema.id] || {}
-  
-  // BSC Testnet (97)
-  const testnetDeployment = schemaDeployments[97]
-  const testnetUID = testnetDeployment ? testnetDeployment.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
-  const testnetBlock = testnetDeployment ? testnetDeployment.blockNumber : 0
-  
-  // BSC Mainnet (56)  
-  const mainnetDeployment = schemaDeployments[56]
-  const mainnetUID = mainnetDeployment ? mainnetDeployment.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
-  const mainnetBlock = mainnetDeployment ? mainnetDeployment.blockNumber : 0
-
-  const schemaExport = `export const ${item.schema.id}Schema: AttestationSchema = {
-    id: '${item.schema.id}',
-    title: '${item.schema.title}',
-    description: '${item.schema.description}',
-    icon: '${item.schema.icon}',
-    color: '${item.schema.color}',
-    fields: ${item.fieldsVarName},
-    deployedUIDs: {
-      97: '${testnetUID}', // BSC Testnet
-      56: '${mainnetUID}'  // BSC Mainnet
-    },
-    deployedBlocks: {
-      97: ${testnetBlock}, // BSC Testnet
-      56: ${mainnetBlock}  // BSC Mainnet
-    }
-  }`
-  return schemaExport
-}).join('\n')}
+${schemaExports.map(item => item.export).join('\n\n')}
 
 // Export all schemas
 const allSchemas: AttestationSchema[] = [
-${fieldArrays.map(item => `  ${item.schema.id}Schema`).join(',\n')}
+  ${schemaExports.map(item => `${item.varName}Schema`).join(',\n  ')}
 ]
 
 export function getSchema(id: string): AttestationSchema | undefined {
@@ -344,35 +344,37 @@ export function getAllSchemas(): AttestationSchema[] {
 `
 
   const outputPath = path.resolve('src/config/schemas.ts')
-  await fs.writeFile(outputPath, content, 'utf8')
+  await fs.writeFile(outputPath, fileContent, 'utf8')
   console.log(`✅ Generated schema file: ${outputPath}`)
 }
 
 /**
- * Main execution
+ * Main function
  */
 async function main() {
   const args = process.argv.slice(2)
   
-  if (args.length === 0) {
-    console.error('❌ Error: Please provide a directory path')
-    console.error('Usage: node scripts/update-schemas.js /path/to/schemas')
+  if (args.length !== 1) {
+    console.error('❌ Error: Please provide the root path to the tools project')
+    console.error('Usage: node scripts/update-schemas.js /path/to/rep-attestation-tools-evm-solidity')
     process.exit(1)
   }
-  
-  const directoryPath = args[0]
-  
+
+  const rootPath = path.resolve(args[0])
+  const schemasPath = path.join(rootPath, 'schemas-json')
+
   try {
-    console.log(`🚀 Starting schema update from: ${directoryPath}`)
+    console.log(`🚀 Starting schema update from tools project: ${rootPath}`)
+    console.log(`📁 Reading schemas from: ${schemasPath}`)
     
-    const schemas = await readSchemasFromDirectory(directoryPath)
+    const schemas = await readSchemasFromDirectory(schemasPath)
     
     if (Object.keys(schemas).length === 0) {
       console.warn('⚠️  No schemas found to process')
       return
     }
     
-    const deployments = await readDeploymentData()
+    const deployments = await readDeploymentData(rootPath)
     
     await generateSchemasFile(schemas, deployments)
     
@@ -392,7 +394,7 @@ async function main() {
     }
     
   } catch (error) {
-    console.error('❌ Schema update failed:', error.message)
+    console.error(`❌ Schema update failed: ${error.message}`)
     process.exit(1)
   }
 }

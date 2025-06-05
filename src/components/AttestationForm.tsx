@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
+import { useAttestation } from '@/lib/service'
 
 interface AttestationFormProps {
   schema: AttestationSchema
@@ -19,7 +20,16 @@ type FormErrors = Record<string, string>
 export function AttestationForm({ schema }: AttestationFormProps) {
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Get attestation service - this handles all service selection and wallet management
+  const { 
+    submitAttestation, 
+    isSubmitting, 
+    isConnected, 
+    isNetworkSupported,
+    lastError,
+    clearError 
+  } = useAttestation()
 
   // Group fields by required status
   const requiredFields = schema.fields.filter(field => field.required)
@@ -37,6 +47,11 @@ export function AttestationForm({ schema }: AttestationFormProps) {
         ...prev,
         [fieldName]: ''
       }))
+    }
+    
+    // Clear service error when user makes changes
+    if (lastError) {
+      clearError()
     }
   }
 
@@ -90,8 +105,6 @@ export function AttestationForm({ schema }: AttestationFormProps) {
       return
     }
     
-    setIsSubmitting(true)
-    
     try {
       // Ensure all schema fields are present with empty strings for optional fields
       // This maintains compatibility with BAS indexers and search functionality
@@ -121,15 +134,35 @@ export function AttestationForm({ schema }: AttestationFormProps) {
         throw new Error('Subject field is required')
       }
       
-      // Convert to CAIP-2 format if needed
-      let recipient = subjectValue
-      if (!recipient.startsWith('eip155:')) {
-        // Assume it's an Ethereum address and convert to CAIP-2
+      // Validate that recipient is in DID format (no automatic conversion)
+      const recipient = subjectValue
+      
+      // Check if it's a valid DID format
+      if (!recipient.startsWith('did:')) {
+        // If it's an Ethereum address, tell user to convert it
         if (recipient.startsWith('0x') && recipient.length === 42) {
-          recipient = `eip155:1:${recipient}` // Default to Ethereum mainnet
-        } else {
-          throw new Error('Invalid recipient address format')
+          throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
         }
+        // If it's a CAIP-10 address, tell user to convert it
+        else if (recipient.startsWith('eip155:')) {
+          throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
+        }
+        // If it looks like an email or domain, suggest using proper DID format
+        else if (recipient.includes('@') || recipient.includes('.')) {
+          throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
+        }
+        // For other identifier formats, require DID format
+        else if (recipient.trim().length > 0) {
+          throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", or "did:ethr:0x..."`)
+        }
+        else {
+          throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", or "did:ethr:0x..."`)
+        }
+      }
+      
+      // Basic DID format validation
+      if (recipient.length < 7 || !recipient.includes(':')) {
+        throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
       }
       
       console.log('Submitting attestation:', {
@@ -138,27 +171,30 @@ export function AttestationForm({ schema }: AttestationFormProps) {
         data: completeData
       })
       
-      // TODO: Use BAS client here
-      // const { createAttestation } = useBASClient()
-      // const result = await createAttestation({
-      //   schemaId: schema.id,
-      //   recipient,
-      //   data: completeData // Use completeData
-      // })
+      // Use the service layer to submit attestation
+      const result = await submitAttestation({
+        schemaId: schema.id,
+        recipient,
+        data: completeData
+      })
       
-      // Simulate API call for now
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      console.log('Attestation created successfully:', result)
       
-      alert('Attestation submitted successfully!')
+      // Show success message with transaction details
+      alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
+      
+      // Reset form after successful submission
+      setFormData({})
       
     } catch (error) {
       console.error('Submission error:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       alert(`Failed to submit attestation: ${errorMessage}`)
-    } finally {
-      setIsSubmitting(false)
     }
   }
+
+  // Determine if submit should be enabled
+  const canSubmit = isConnected && isNetworkSupported
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -238,13 +274,23 @@ export function AttestationForm({ schema }: AttestationFormProps) {
               <div className="flex gap-4 pt-6">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !canSubmit}
                   className="flex items-center gap-2"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                       Submitting...
+                    </>
+                  ) : !isConnected ? (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Connect Wallet to Submit
+                    </>
+                  ) : !isNetworkSupported ? (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Switch to Supported Network
                     </>
                   ) : (
                     <>
@@ -258,6 +304,21 @@ export function AttestationForm({ schema }: AttestationFormProps) {
                   <Link href="/attest">Cancel</Link>
                 </Button>
               </div>
+
+              {/* Wallet Connection Status */}
+              {!canSubmit && (
+                <div className="mt-4 p-4 border rounded-lg bg-muted/50">
+                  <h4 className="font-medium mb-2">Connection Required</h4>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    {!isConnected && (
+                      <p>• Please connect your wallet using the button in the header</p>
+                    )}
+                    {isConnected && !isNetworkSupported && (
+                      <p>• Please switch to a supported network for attestations</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
