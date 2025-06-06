@@ -3,19 +3,39 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { useActiveAccount } from "thirdweb/react"
-import { ConnectButton } from "thirdweb/react"
+import { useActiveAccount, useActiveWallet, useActiveWalletChain, useSwitchActiveWalletChain } from "thirdweb/react"
+import React, { useEffect, useState } from "react"
 import { client } from "@/app/client"
-import { sepolia, mainnet, bsc, bscTestnet } from "thirdweb/chains"
+import { SUPPORTED_CHAINS, DEFAULT_CHAIN } from "@/config/chains"
+import { useWallet } from "@/lib/blockchain"
+
+// Lazy load the ThirdwebConnectButton to prevent early wallet access
+const ThirdwebConnectButton = React.lazy(() => 
+  import("thirdweb/react").then(mod => ({ default: mod.ConnectButton }))
+)
 
 export function Header() {
   const pathname = usePathname()
   
   // Primary wallet system (ThirdWeb)
   const account = useActiveAccount()
+  const wallet = useActiveWallet()
+  const activeChain = useActiveWalletChain()
+  const switchChain = useSwitchActiveWalletChain()
+  const [showSwitchWarning, setShowSwitchWarning] = useState(false)
   
-  // Define supported chains for wallet provider
-  const supportedChains = [bscTestnet, bsc, sepolia, mainnet]
+  // Use config for supported and default chains
+  const supportedChains = SUPPORTED_CHAINS
+  const defaultChain = DEFAULT_CHAIN
+
+  // Use Wallet logic
+  const { isConnected, isChainSupported, chain } = useWallet()
+
+  // Attempt auto-switch for browser wallets on connect
+  useEffect(() => {
+    // (Optional) If you want to auto-switch for browser wallets, you can add logic here
+    // For now, just remove isWalletConnect logic and rely on isChainSupported for warnings
+  }, [])
 
   const navItems = [
     { href: "/", label: "Home" },
@@ -55,26 +75,42 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Wallet ConnectButton with built-in network switching */}
-            <ConnectButton 
-              client={client}
-              chains={supportedChains}
-              appMetadata={{
-                name: "OMA3 Attestation Portal",
-                url: "https://attestation.oma3.org",
-                description: "Create and manage attestations for the OMA3 ecosystem",
-                logoUrl: "/oma3_logo.svg"
-              }}
-              theme="light"
-              connectButton={{
-                style: {
-                  backgroundColor: "#3b82f6",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px"
-                }
-              }}
-            />
+            {/* Network mismatch warning using useWallet logic */}
+            {isConnected && !isChainSupported && (
+              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-100 border border-orange-300 rounded-md">
+                <span className="text-orange-800 text-sm font-medium">
+                  Wrong Network
+                </span>
+                <span className="text-orange-600 text-xs">
+                  Please disconnect your wallet, switch to {defaultChain.name} in your wallet, and then reconnect.  
+                </span>
+              </div>
+            )}
+            <React.Suspense fallback={<button className="bg-blue-600 text-white rounded-md px-4 py-2">Connect Wallet</button>}>
+              <ThirdwebConnectButton
+                client={client}
+                appMetadata={{
+                  name: "OMA3 Attestation Portal",
+                  url: "https://attestation.oma3.org",
+                  description: "Create and manage attestations for the OMA3 ecosystem",
+                  logoUrl: "/oma3_logo.svg"
+                }}
+                autoConnect={{ timeout: 15000 }}
+                chains={SUPPORTED_CHAINS}
+                connectButton={{
+                  style: {
+                    backgroundColor: "#3b82f6",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px"
+                  }
+                }}
+                connectModal={{
+                  size: "wide",
+                  showThirdwebBranding: false
+                }}
+              />
+            </React.Suspense>
           </div>
         </div>
       </div>

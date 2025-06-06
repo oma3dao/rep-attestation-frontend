@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
+import { useToast } from '@/components/ui/toast'
 
 interface AttestationFormProps {
   schema: AttestationSchema
@@ -30,6 +31,25 @@ export function AttestationForm({ schema }: AttestationFormProps) {
     lastError,
     clearError 
   } = useAttestation()
+
+  // Toast for wallet approval
+  const { showToast, ToastContainer, dismissToast } = useToast()
+  const prevIsSubmitting = useRef(false)
+  const approvalToastId = useRef<string | null>(null)
+  useEffect(() => {
+    if (isSubmitting && !prevIsSubmitting.current) {
+      approvalToastId.current = showToast('Please check your wallet and approve the transaction.', 'info', 60000)
+    }
+    prevIsSubmitting.current = isSubmitting
+  }, [isSubmitting, showToast])
+
+  // Dismiss toast on success or error
+  useEffect(() => {
+    if (!isSubmitting && approvalToastId.current) {
+      dismissToast(approvalToastId.current)
+      approvalToastId.current = null
+    }
+  }, [isSubmitting, dismissToast])
 
   // Group fields by required status
   const requiredFields = schema.fields.filter(field => field.required)
@@ -199,6 +219,7 @@ export function AttestationForm({ schema }: AttestationFormProps) {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
+        <ToastContainer position="center" />
         {/* Header */}
         <div className="mb-8">
           <Link 

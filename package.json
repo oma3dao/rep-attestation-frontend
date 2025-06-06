@@ -4,6 +4,9 @@
   "description": "Frontend for making attestations related to the App Registry.",
   "scripts": {
     "dev": "next dev",
+    "dev:turbo": "next dev --turbo",
+    "dev:clean": "pkill -f 'next dev' ; npm run dev",
+    "kill:dev": "pkill -f 'next dev' || true",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
