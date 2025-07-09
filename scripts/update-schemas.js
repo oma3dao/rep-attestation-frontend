@@ -402,4 +402,11 @@ async function main() {
 // Run if called directly
 if (require.main === module) {
   main()
+}
+
+// Export transformation functions for testing
+module.exports = {
+  transformToUISchema,
+  transformFields,
+  // ... you can add more exports as needed
 } 

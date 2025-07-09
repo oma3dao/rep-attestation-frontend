@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
@@ -13,14 +14,47 @@ import { useToast } from '@/components/ui/toast'
 
 interface AttestationFormProps {
   schema: AttestationSchema
+  validateForm?: (formData: Record<string, any>) => Record<string, string>
 }
 
 type FormData = Record<string, string | string[]>
 type FormErrors = Record<string, string>
 
-export function AttestationForm({ schema }: AttestationFormProps) {
+export function validateField(field: any, value: any): string | undefined {
+  if (field.required) {
+    if (!value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)) {
+      return `${field.label} is required`;
+    }
+  }
+  if (value && typeof value === 'string') {
+    if (field.type === 'uri' && value.trim()) {
+      try {
+        new URL(value);
+      } catch {
+        return 'Please enter a valid URL';
+      }
+    }
+    if (field.type === 'integer') {
+      const num = parseInt(value);
+      if (isNaN(num)) {
+        return 'Please enter a valid number';
+      } else {
+        if (field.min !== undefined && num < field.min) {
+          return `Value must be at least ${field.min}`;
+        }
+        if (field.max !== undefined && num > field.max) {
+          return `Value must be at most ${field.max}`;
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+export function AttestationForm({ schema, validateForm }: AttestationFormProps) {
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
+  const [generalError, setGeneralError] = useState<string | null>(null)
 
   // Get attestation service - this handles all service selection and wallet management
   const { 
@@ -75,53 +109,36 @@ export function AttestationForm({ schema }: AttestationFormProps) {
     }
   }
 
-  const validateForm = (): boolean => {
+  const validateFormInternal = (): boolean => {
+    if (validateForm) {
+      const newErrors = validateForm(formData)
+      setErrors(newErrors)
+      // Debug log
+      // eslint-disable-next-line no-console
+      console.log('validateForm newErrors:', newErrors)
+      return Object.keys(newErrors).length === 0
+    }
     const newErrors: FormErrors = {}
     
     schema.fields.forEach(field => {
       const value = formData[field.name]
       
-      if (field.required) {
-        if (!value || (typeof value === 'string' && !value.trim()) || 
-            (Array.isArray(value) && value.length === 0)) {
-          newErrors[field.name] = `${field.label} is required`
-        }
-      }
-      
-      // Type-specific validation
-      if (value && typeof value === 'string') {
-        if (field.type === 'uri' && value.trim()) {
-          try {
-            new URL(value)
-          } catch {
-            newErrors[field.name] = 'Please enter a valid URL'
-          }
-        }
-        
-        if (field.type === 'integer') {
-          const num = parseInt(value)
-          if (isNaN(num)) {
-            newErrors[field.name] = 'Please enter a valid number'
-          } else {
-            if (field.min !== undefined && num < field.min) {
-              newErrors[field.name] = `Value must be at least ${field.min}`
-            }
-            if (field.max !== undefined && num > field.max) {
-              newErrors[field.name] = `Value must be at most ${field.max}`
-            }
-          }
-        }
+      const error = validateField(field, value)
+      if (error) {
+        newErrors[field.name] = error
       }
     })
-    
+    // Debug log
+    // eslint-disable-next-line no-console
+    console.log('validateForm newErrors:', newErrors)
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!validateForm()) {
+    setGeneralError(null)
+    if (!validateFormInternal()) {
       return
     }
     
@@ -207,9 +224,9 @@ export function AttestationForm({ schema }: AttestationFormProps) {
       setFormData({})
       
     } catch (error) {
-      console.error('Submission error:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      alert(`Failed to submit attestation: ${errorMessage}`)
+      setGeneralError(errorMessage)
+      console.error('Submission error:', error)
     }
   }
 
@@ -220,6 +237,11 @@ export function AttestationForm({ schema }: AttestationFormProps) {
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
         <ToastContainer position="center" />
+        {(generalError || lastError) && (
+          <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4" data-testid="form-error">
+            {generalError || lastError}
+          </div>
+        )}
         {/* Header */}
         <div className="mb-8">
           <Link 

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { notFound } from 'next/navigation'
 import { getSchema } from '@/config/schemas'
 import { AttestationForm } from '@/components/AttestationForm'
