@@ -67,7 +67,7 @@
  */
 
 // Schema definitions for attestation forms
-export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri'
+export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'text'
 
 export interface FormField {
   name: string

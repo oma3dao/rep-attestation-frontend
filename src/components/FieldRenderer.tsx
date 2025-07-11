@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { FormField } from '@/config/schemas'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -181,7 +182,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
         <p className="text-sm text-muted-foreground">{field.description}</p>
       )}
       {renderField()}
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-red-500" data-testid="field-error">{error}</p>}
     </div>
   )
 } 
