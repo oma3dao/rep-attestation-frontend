@@ -263,7 +263,7 @@ export function useBASClient() {
     const recipientAddress = extractAddressFromDID(data.recipient);
 
     // Add detailed logging
-    console.log('[BAS] Submitting attestation:', {
+    if (process.env.NODE_ENV === 'test') console.log('[BAS] Submitting attestation:', {
       schemaId: data.schemaId,
       deployedUID,
       recipient: data.recipient,
@@ -277,7 +277,7 @@ export function useBASClient() {
     });
 
     try {
-      console.log('[BAS] Calling bas.attest...');
+      if (process.env.NODE_ENV === 'test') console.log('[BAS] Calling bas.attest...');
       const tx = await bas.attest({
         schema: deployedUID,
         data: {
@@ -288,11 +288,11 @@ export function useBASClient() {
           data: encodedData,
         },
       });
-      console.log('[BAS] bas.attest returned tx:', tx);
+      if (process.env.NODE_ENV === 'test') console.log('[BAS] bas.attest returned tx:', tx);
 
-      console.log('[BAS] Waiting for transaction to be mined (tx.wait)...');
+      if (process.env.NODE_ENV === 'test') console.log('[BAS] Waiting for transaction to be mined (tx.wait)...');
       const transactionHash = await tx.wait();
-      console.log('[BAS] Transaction mined. Hash:', transactionHash);
+      if (process.env.NODE_ENV === 'test') console.log('[BAS] Transaction mined. Hash:', transactionHash);
 
       // Return result (simplified)
       return {
@@ -302,7 +302,7 @@ export function useBASClient() {
         gasUsed: BigInt(0),
       };
     } catch (err) {
-      console.error('[BAS] Error during attestation submission:', err);
+      if (process.env.NODE_ENV === 'test') console.error('[BAS] Error during attestation submission:', err);
       throw err;
     }
   };

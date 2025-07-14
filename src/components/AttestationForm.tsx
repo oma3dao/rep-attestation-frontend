@@ -115,7 +115,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       setErrors(newErrors)
       // Debug log
       // eslint-disable-next-line no-console
-      console.log('validateForm newErrors:', newErrors)
+      if (process.env.NODE_ENV === 'test') console.log('validateForm newErrors:', newErrors)
       return Object.keys(newErrors).length === 0
     }
     const newErrors: FormErrors = {}
@@ -130,7 +130,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     })
     // Debug log
     // eslint-disable-next-line no-console
-    console.log('validateForm newErrors:', newErrors)
+    if (process.env.NODE_ENV === 'test') console.log('validateForm newErrors:', newErrors)
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -202,7 +202,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
       }
       
-      console.log('Submitting attestation:', {
+      if (process.env.NODE_ENV === 'test') console.log('Submitting attestation:', {
         schema: schema.id,
         recipient,
         data: completeData
@@ -215,7 +215,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         data: completeData
       })
       
-      console.log('Attestation created successfully:', result)
+      if (process.env.NODE_ENV === 'test') console.log('Attestation created successfully:', result)
       
       // Show success message with transaction details
       alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
@@ -226,7 +226,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       setGeneralError(errorMessage)
-      console.error('Submission error:', error)
+      if (process.env.NODE_ENV === 'test') console.error('Submission error:', error)
     }
   }
 

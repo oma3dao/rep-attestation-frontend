@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Frontend for making attestations related to the App Registry.",
   "scripts": {
+    "preinstall": "npx npm-force-resolutions",
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "dev:clean": "pkill -f 'next dev' ; npm run dev",
@@ -10,7 +11,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
     "update-schemas": "node scripts/update-schemas.js"
+  },
+  "resolutions": {
+    "lodash.set": "4.3.2"
   },
   "repository": {
     "type": "git",
@@ -25,6 +32,7 @@
   "homepage": "https://github.com/oma3dao/rep-attestation-frontend#readme",
   "dependencies": {
     "@bnb-attestation-service/bas-sdk": "^0.1.0-beta.19",
+    "@bnb-chain/greenfield-js-sdk": "^2.2.2",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.5",
@@ -35,7 +43,7 @@
     "clsx": "^2.1.1",
     "ethers": "^6.14.3",
     "lucide-react": "^0.511.0",
-    "next": "15.3.2",
+    "next": "15.3.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.3.0",
@@ -44,9 +52,6 @@
     "zod": "^3.25.28"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.27.2",
-    "@babel/preset-react": "^7.27.1",
-    "@babel/preset-typescript": "^7.27.1",
     "@eslint/eslintrc": "^3",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -54,10 +59,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.6.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
     "identity-obj-proxy": "^3.0.0",
+    "jsdom": "^26.1.0",
+    "npm-force-resolutions": "^0.0.10",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
