@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import { FormField } from '../../src/components/form-field';
+import { FormField } from '@/components/form-field';
 
 describe('FormField', () => {
   it('renders a text input by default', () => {

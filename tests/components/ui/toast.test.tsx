@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
-import { useToast } from '../../../src/components/ui/toast';
+import { useToast } from '@/components/ui/toast';
 import React from 'react';
 import { vi } from 'vitest';
 

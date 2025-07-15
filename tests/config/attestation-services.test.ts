@@ -8,7 +8,7 @@ import {
   getContractAddress,
   getAllServiceIds,
   type AttestationServiceConfig
-} from '../../src/config/attestation-services';
+} from '@/config/attestation-services';
 
 describe('attestation-services config', () => {
   describe('BAS_CONFIG', () => {

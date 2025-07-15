@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import React, { createRef } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../../src/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 
 describe('Card component suite', () => {
   it('renders Card with children', () => {

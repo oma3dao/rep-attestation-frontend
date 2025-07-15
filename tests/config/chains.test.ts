@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SUPPORTED_CHAINS, DEFAULT_CHAIN } from '../../src/config/chains';
+import { SUPPORTED_CHAINS, DEFAULT_CHAIN } from '@/config/chains';
 
 describe('chains config', () => {
   it('exports SUPPORTED_CHAINS as an array with known chains', () => {

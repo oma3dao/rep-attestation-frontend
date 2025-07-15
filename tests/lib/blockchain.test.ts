@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react'
 import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest'
-import { useWallet } from '../../src/lib/blockchain'
+import { useWallet } from '@/lib/blockchain'
 import * as thirdwebReact from 'thirdweb/react'
 
 // Mock thirdweb/react and thirdweb/chains at the top level

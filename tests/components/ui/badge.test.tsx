@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import React from 'react';
-import { Badge } from '../../../src/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 
 describe('Badge component', () => {
   it('renders with default props', () => {

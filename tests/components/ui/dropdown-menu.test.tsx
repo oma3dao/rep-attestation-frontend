@@ -15,7 +15,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from '../../../src/components/ui/dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 
 describe('DropdownMenu (Radix UI)', () => {
   it('renders trigger and does not show content by default', () => {

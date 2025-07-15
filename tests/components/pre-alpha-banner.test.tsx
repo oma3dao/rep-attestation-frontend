@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PreAlphaBanner } from '../../src/components/pre-alpha-banner';
+import { PreAlphaBanner } from '@/components/pre-alpha-banner';
 
 // Mock sessionStorage
 const mockSessionStorage = {

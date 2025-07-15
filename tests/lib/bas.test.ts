@@ -35,8 +35,8 @@ vi.mock('@bnb-attestation-service/bas-sdk', () => {
 import * as walletModule from '@/lib/blockchain';
 import * as thirdwebHooks from 'thirdweb/react';
 import * as attestationServices from '@/config/attestation-services';
-import { useBASClient } from '../../src/lib/bas';
-import { BASClient } from '../../src/lib/bas';
+import { useBASClient } from '@/lib/bas';
+import { BASClient } from '@/lib/bas';
 import * as schemasModule from '@/config/schemas';
 
 // Mock thirdweb/react and thirdweb/chains to avoid BigInt/Math errors in dependencies

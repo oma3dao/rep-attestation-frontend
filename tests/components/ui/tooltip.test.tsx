@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { expect } from 'vitest';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '../../../src/components/ui/tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 describe('Tooltip', () => {
   it('renders trigger and content', () => {
