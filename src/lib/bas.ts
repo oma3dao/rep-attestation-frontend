@@ -15,6 +15,7 @@ import { useWallet } from '@/lib/blockchain'
 import { extractAddressFromDID } from '@/lib/utils'
 import { getSchema } from '@/config/schemas'
 import { ethers6Adapter } from 'thirdweb/adapters/ethers6'
+import logger from '@/lib/logger';
 
 // BAS Contract ABI (simplified for core functions)
 const BAS_ABI = [
@@ -263,7 +264,7 @@ export function useBASClient() {
     const recipientAddress = extractAddressFromDID(data.recipient);
 
     // Add detailed logging
-    if (process.env.NODE_ENV === 'test') console.log('[BAS] Submitting attestation:', {
+    logger.log('[BAS] Submitting attestation:', {
       schemaId: data.schemaId,
       deployedUID,
       recipient: data.recipient,
@@ -277,7 +278,7 @@ export function useBASClient() {
     });
 
     try {
-      if (process.env.NODE_ENV === 'test') console.log('[BAS] Calling bas.attest...');
+      logger.log('[BAS] Calling bas.attest...');
       const tx = await bas.attest({
         schema: deployedUID,
         data: {
@@ -288,11 +289,11 @@ export function useBASClient() {
           data: encodedData,
         },
       });
-      if (process.env.NODE_ENV === 'test') console.log('[BAS] bas.attest returned tx:', tx);
+      logger.log('[BAS] bas.attest returned tx:', tx);
 
-      if (process.env.NODE_ENV === 'test') console.log('[BAS] Waiting for transaction to be mined (tx.wait)...');
+      logger.log('[BAS] Waiting for transaction to be mined (tx.wait)...');
       const transactionHash = await tx.wait();
-      if (process.env.NODE_ENV === 'test') console.log('[BAS] Transaction mined. Hash:', transactionHash);
+      logger.log('[BAS] Transaction mined. Hash:', transactionHash);
 
       // Return result (simplified)
       return {
@@ -302,7 +303,7 @@ export function useBASClient() {
         gasUsed: BigInt(0),
       };
     } catch (err) {
-      if (process.env.NODE_ENV === 'test') console.error('[BAS] Error during attestation submission:', err);
+      logger.error('[BAS] Error during attestation submission:', err);
       throw err;
     }
   };
