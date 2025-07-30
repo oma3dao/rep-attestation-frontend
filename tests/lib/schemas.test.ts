@@ -1,4 +1,4 @@
-// Use Vitest globals
+import { attestationSchemas, getSchema, getSchemaIds, getAllSchemas } from "@/lib/schemas";
 
 // Mock attestationSchemas for isolated testing
 const mockSchemas: Record<string, { id: string; title: string; description: string; fields: any[] }> = {
@@ -16,8 +16,6 @@ function mockGetSchemaIds() {
 function mockGetAllSchemas() {
   return Object.values(mockSchemas);
 }
-
-import { attestationSchemas, getSchema, getSchemaIds, getAllSchemas } from "../../src/lib/schemas";
 
 describe('schemas helpers', () => {
   it('getSchema returns correct schema for valid id', () => {
