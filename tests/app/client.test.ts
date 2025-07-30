@@ -21,15 +21,21 @@ describe('client', () => {
     expect(typeof client).toBe('object');
   });
 
-  it('should throw error when no client ID is provided', async () => {
+  it('should create client with placeholder when no client ID is provided (build time)', async () => {
     delete process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
     
-    await expect(import('@/app/client')).rejects.toThrow('No client ID provided');
+    // Should not throw during import (server-side/build time)
+    const { client } = await import('@/app/client');
+    expect(client).toBeDefined();
+    expect(typeof client).toBe('object');
   });
 
-  it('should throw error when client ID is empty', async () => {
+  it('should create client with placeholder when client ID is empty (build time)', async () => {
     process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID = '';
     
-    await expect(import('@/app/client')).rejects.toThrow('No client ID provided');
+    // Should not throw during import (server-side/build time)  
+    const { client } = await import('@/app/client');
+    expect(client).toBeDefined();
+    expect(typeof client).toBe('object');
   });
 }); 
