@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi } from 'vitest';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -14,7 +15,7 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from './dropdown-menu';
+} from '@/components/ui/dropdown-menu';
 
 describe('DropdownMenu (Radix UI)', () => {
   it('renders trigger and does not show content by default', () => {
@@ -143,13 +144,19 @@ describe('DropdownMenu (Radix UI)', () => {
     );
     await userEvent.click(screen.getByText('Open Menu'));
     const item1 = await screen.findByText('Item 1');
-    item1.focus();
-    await userEvent.keyboard('{ArrowDown}');
+    await act(async () => {
+      item1.focus();
+      await userEvent.keyboard('{ArrowDown}');
+    });
     const item2 = await screen.findByText('Item 2');
     expect(document.activeElement).toBe(item2);
-    await userEvent.keyboard('{ArrowUp}');
+    await act(async () => {
+      await userEvent.keyboard('{ArrowUp}');
+    });
     expect(document.activeElement).toBe(item1);
-    await userEvent.keyboard('{Escape}');
+    await act(async () => {
+      await userEvent.keyboard('{Escape}');
+    });
     expect(screen.queryByText('Item 1')).not.toBeInTheDocument();
   });
 
@@ -213,10 +220,14 @@ describe('DropdownMenu (Radix UI)', () => {
     );
     await userEvent.click(screen.getByText('Open Menu'));
     const subTrigger = await screen.findByText('More');
-    subTrigger.focus();
-    await userEvent.keyboard('{Enter}');
+    await act(async () => {
+      subTrigger.focus();
+      await userEvent.keyboard('{Enter}');
+    });
     expect(await screen.findByText('Subitem 1')).toBeInTheDocument();
-    await userEvent.keyboard('{Escape}');
+    await act(async () => {
+      await userEvent.keyboard('{Escape}');
+    });
     expect(screen.queryByText('Subitem 1')).not.toBeInTheDocument();
   });
 }); 

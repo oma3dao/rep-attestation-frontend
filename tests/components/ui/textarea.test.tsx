@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import React, { createRef } from 'react';
-import { Textarea } from './textarea';
+import { Textarea } from '@/components/ui/textarea';
 
 describe('Textarea', () => {
   it('renders with default props', () => {

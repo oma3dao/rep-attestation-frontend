@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import { Select, SelectTrigger, SelectContent, SelectItem } from './select';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
 
 describe('Select', () => {
   it('renders with options', () => {

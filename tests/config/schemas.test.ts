@@ -10,7 +10,7 @@ import {
   type AttestationSchema,
   type FormField,
   type FieldType
-} from './schemas';
+} from '@/config/schemas';
 
 describe('schemas config', () => {
   describe('schema exports', () => {

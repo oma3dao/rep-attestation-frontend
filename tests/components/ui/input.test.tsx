@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import React, { createRef } from 'react';
 import { vi } from 'vitest';
-import { Input } from './input';
+import { Input } from '@/components/ui/input';
 
 describe('Input component', () => {
   it('renders with default props', () => {

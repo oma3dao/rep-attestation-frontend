@@ -35,8 +35,8 @@ vi.mock('@bnb-attestation-service/bas-sdk', () => {
 import * as walletModule from '@/lib/blockchain';
 import * as thirdwebHooks from 'thirdweb/react';
 import * as attestationServices from '@/config/attestation-services';
-import { useBASClient } from './bas';
-import { BASClient } from './bas';
+import { useBASClient } from '@/lib/bas';
+import { BASClient } from '@/lib/bas';
 import * as schemasModule from '@/config/schemas';
 
 // Mock thirdweb/react and thirdweb/chains to avoid BigInt/Math errors in dependencies
@@ -865,15 +865,15 @@ describe('convertToBASData edge cases', () => {
 })
 
 describe('BASClient class', () => {
-  it('throws for all methods', () => {
+  it('throws for all methods', async () => {
     const client = new BASClient()
     
-    expect(() => client.createAttestation({} as any)).rejects.toThrow('BAS client must be used within React component with hooks')
-    expect(() => client.revokeAttestation('test')).rejects.toThrow('BAS client must be used within React component with hooks')
-    expect(() => client.getAttestation('test')).rejects.toThrow('BAS client must be used within React component with hooks')
-    expect(() => client.registerSchema({})).rejects.toThrow('BAS client must be used within React component with hooks')
-    expect(() => client.getSchema('test')).rejects.toThrow('BAS client must be used within React component with hooks')
-    expect(() => client.estimateGas({} as any)).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.createAttestation({} as any)).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.revokeAttestation('test')).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.getAttestation('test')).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.registerSchema({})).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.getSchema('test')).rejects.toThrow('BAS client must be used within React component with hooks')
+    await expect(client.estimateGas({} as any)).rejects.toThrow('BAS client must be used within React component with hooks')
     expect(() => client.isConnected()).toThrow('BAS client must be used within React component with hooks')
     expect(() => client.getCurrentChain()).toThrow('BAS client must be used within React component with hooks')
   })

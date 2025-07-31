@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import React, { createRef } from 'react';
 import { vi } from 'vitest';
-import { Button } from './button';
+import { Button } from '@/components/ui/button';
 
 describe('Button component', () => {
   it('renders with default props', () => {

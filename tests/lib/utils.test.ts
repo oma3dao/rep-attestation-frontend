@@ -1,7 +1,7 @@
 // Unit test for extractAddressFromDID utility function
 // Covers: parsing various DID/address formats and error handling
 
-import { extractAddressFromDID, cn } from './utils';
+import { extractAddressFromDID, cn } from '@/lib/utils';
 
 describe('extractAddressFromDID utility', () => {
   it('extracts address from DID:PKH', () => {

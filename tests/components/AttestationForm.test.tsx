@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, expect, describe, it, beforeEach } from 'vitest';
-import { AttestationForm } from './AttestationForm';
+import { AttestationForm } from '@/components/AttestationForm';
 import type { AttestationSchema, FieldType } from '@/config/schemas';
 import * as schemasModule from '@/config/schemas';
 import { useWallet } from '@/lib/blockchain';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import { Header } from './header';
+import { Header } from '@/components/header';
 import { act } from 'react'
 
 vi.mock('next/navigation', () => ({

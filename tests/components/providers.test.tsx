@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import { Providers } from './providers';
+import { Providers } from '@/components/providers';
 
 vi.mock('thirdweb/react', () => ({
   ThirdwebProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="thirdweb-provider">{children}</div>,

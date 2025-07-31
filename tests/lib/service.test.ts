@@ -6,9 +6,9 @@ import { vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 import * as attestationServices from '@/config/attestation-services';
-import * as walletModule from './blockchain';
-import * as basModule from './bas';
-import { useAttestation } from './service';
+import * as walletModule from '@/lib/blockchain';
+import * as basModule from '@/lib/bas';
+import { useAttestation } from '@/lib/service';
 
 // Mock @/app/client to provide a dummy clientId
 vi.mock('@/app/client', () => ({ default: { clientId: 'dummy-client-id' } }));

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { FieldRenderer } from './FieldRenderer';
+import { FieldRenderer } from '@/components/FieldRenderer';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
