@@ -2,7 +2,7 @@
 // Do not edit manually - your changes will be overwritten
 
 // Schema definitions for attestation forms
-export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'text'
+export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri'
 
 export interface FormField {
   name: string
@@ -259,8 +259,8 @@ const linkedIdentifierFields: FormField[] = [
     "name": "linkedIdType",
     "type": "string",
     "label": "Linked ID Type",
-    "description": "Type or namespace of the linkedId being asserted.",
-    "required": true,
+    "description": "Type or namespace of the linkedId being asserted. Examples: did:web (for websites), did:key (for keys), email, twitter, github, facebook, discord, telegram, lens, farcaster, or any other well-known identifier type.",
+    "required": false,
     "placeholder": "Enter linkedidtype"
   },
   {
@@ -305,6 +305,83 @@ const linkedIdentifierFields: FormField[] = [
     "description": "Optional classification of the attestation for filtering and indexing purposes.",
     "required": false,
     "placeholder": "Enter attestationtype"
+  }
+]
+
+const userReviewResponseFields: FormField[] = [
+  {
+    "name": "subject",
+    "type": "string",
+    "label": "Subject ID",
+    "description": "Address of the original reviewer being responded to.",
+    "required": true,
+    "placeholder": "Enter subject"
+  },
+  {
+    "name": "responseBody",
+    "type": "string",
+    "label": "Response",
+    "description": "Free-form text containing the response to the review.",
+    "required": true,
+    "placeholder": "Enter responsebody"
+  },
+  {
+    "name": "datePublished",
+    "type": "datetime",
+    "label": "Date Published",
+    "description": "Timestamp when the response was written or published, in ISO 8601 format.",
+    "required": false,
+    "placeholder": "2024-01-01T00:00:00Z",
+    "format": "date-time"
+  },
+  {
+    "name": "anchoredDataURL",
+    "type": "uri",
+    "label": "Anchored Data URL",
+    "description": "URI pointing to offchain response content (e.g., IPFS, Cloudinary, Arweave).",
+    "required": false,
+    "placeholder": "https://example.com",
+    "format": "uri"
+  },
+  {
+    "name": "anchoredDataAlgorithm",
+    "type": "string",
+    "label": "Anchored Data Hash Algorithm",
+    "description": "Hashing algorithm used for 'anchoredDataHash' (e.g., 'sha3-256').",
+    "required": false,
+    "placeholder": "Enter anchoreddataalgorithm"
+  },
+  {
+    "name": "anchoredDataHash",
+    "type": "string",
+    "label": "Anchored Data Hash",
+    "description": "Cryptographic hash of the content located at 'anchoredDataURL'.",
+    "required": false,
+    "placeholder": "Enter anchoreddatahash"
+  },
+  {
+    "name": "attestationType",
+    "type": "string",
+    "label": "Attestation Type",
+    "description": "Type identifier for this attestation (e.g., 'UserReviewResponse').",
+    "required": false,
+    "placeholder": "Enter attestationtype"
+  },
+  {
+    "name": "issuedAt",
+    "type": "integer",
+    "label": "Issued Date",
+    "description": "Unix timestamp (in seconds) for when the response was submitted.",
+    "required": false,
+    "placeholder": "0"
+  },
+  {
+    "name": "expiresAt",
+    "type": "integer",
+    "label": "Expiration Date",
+    "description": "Optional expiration timestamp for the attestation.",
+    "required": false,
+    "placeholder": "0"
   }
 ]
 
@@ -473,6 +550,21 @@ export const linkedIdentifierSchema: AttestationSchema = {
   }
 };
 
+export const userReviewResponseSchema: AttestationSchema = {
+  id: 'user-review-response',
+  title: 'UserReviewResponse',
+  description: 'A response from an app owner or representative to a UserReview attestation. Uses refUID to reference the original review.',
+  fields: userReviewResponseFields,
+  deployedUIDs: {
+    97: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // BSC Testnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+  },
+  deployedBlocks: {
+    97: 68597701, // BSC Testnet
+    56: 0  // BSC Mainnet
+  }
+};
+
 export const userReviewSchema: AttestationSchema = {
   id: 'user-review',
   title: 'UserReview',
@@ -493,6 +585,7 @@ const allSchemas: AttestationSchema[] = [
   certificationSchema,
   endorsementSchema,
   linkedIdentifierSchema,
+  userReviewResponseSchema,
   userReviewSchema
 ]
 
