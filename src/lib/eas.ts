@@ -1,50 +1,33 @@
 /*
- * BAS (Binance Attestation Service) Client
+ * EAS (Ethereum Attestation Service) Client for OMAchain
  * 
- * Official BAS SDK implementation with proper ABI encoding
+ * Official EAS SDK implementation
  */
 
 import { useActiveAccount, useActiveWallet, useActiveWalletChain } from 'thirdweb/react'
-import { bscTestnet, bsc } from 'thirdweb/chains'
 import { prepareContractCall, sendTransaction, getContract } from 'thirdweb'
-import { SchemaEncoder, BAS } from '@bnb-attestation-service/bas-sdk'
+import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk'
 import { client } from '@/app/client'
 import type { AttestationServiceClient, AttestationData, AttestationResult } from './types'
-import { BAS_CONFIG, getContractAddress } from '@/config/attestation-services'
+import { EAS_CONFIG, getContractAddress } from '@/config/attestation-services'
 import { useWallet } from '@/lib/blockchain'
 import { extractAddressFromDID } from '@/lib/utils'
 import { getSchema } from '@/config/schemas'
 import { ethers6Adapter } from 'thirdweb/adapters/ethers6'
 import logger from '@/lib/logger'
 import { didToIndexAddress, computeDidHash } from '@/lib/did-index'
-
-// BAS Contract ABI (simplified for core functions)
-const BAS_ABI = [
-  {
-    type: 'function',
-    name: 'attest',
-    inputs: [
-      { name: 'schema', type: 'bytes32' },
-      { name: 'recipient', type: 'address' },
-      { name: 'data', type: 'bytes' },
-      { name: 'expirationTime', type: 'uint64' },
-      { name: 'revocable', type: 'bool' }
-    ],
-    outputs: [{ name: '', type: 'bytes32' }],
-    stateMutability: 'payable'
-  }
-] as const
+import { omachainTestnet } from '@/config/chains'
 
 /**
- * Convert our schema fields to BAS schema string for encoding
+ * Convert our schema fields to EAS schema string for encoding
  * @param schema - Our schema definition
- * @returns BAS schema string
+ * @returns EAS schema string
  */
-function createBASSchemaString(schema: any): string {
+function createEASSchemaString(schema: any): string {
   const fieldStrings = schema.fields.map((field: any) => {
     let type = field.type
-    
-    // Convert our types to BAS/Solidity types
+
+    // Convert our types to EAS/Solidity types
     switch (field.type) {
       case 'integer':
         type = field.max && field.max <= 255 ? 'uint8' : 'uint256'
@@ -56,7 +39,7 @@ function createBASSchemaString(schema: any): string {
         type = 'string'
         break
       case 'array':
-        type = 'string[]' // Assume string array, could be made more specific
+        type = 'string[]' // Assume string array
         break
       case 'enum':
         type = 'string'
@@ -66,25 +49,25 @@ function createBASSchemaString(schema: any): string {
         type = 'string'
         break
     }
-    
+
     return `${type} ${field.name}`
   })
-  
-  return fieldStrings.join(',')
+
+  return fieldStrings.join(', ')
 }
 
 /**
- * Convert attestation data to BAS encoding format
+ * Convert attestation data to EAS encoding format
  * @param schema - Schema definition
  * @param data - Attestation data
  * @returns Array of encoded values for SchemaEncoder
  */
-function convertToBASData(schema: any, data: Record<string, any>): Array<{name: string, value: any, type: string}> {
+function convertToEASData(schema: any, data: Record<string, any>): Array<{ name: string, value: any, type: string }> {
   return schema.fields.map((field: any) => {
     let value = data[field.name] || ''
     let type = field.type
-    
-    // Convert our types to BAS/Solidity types and format values
+
+    // Convert our types to EAS/Solidity types and format values
     switch (field.type) {
       case 'integer':
         type = field.max && field.max <= 255 ? 'uint8' : 'uint256'
@@ -119,7 +102,7 @@ function convertToBASData(schema: any, data: Record<string, any>): Array<{name: 
         }
         break
     }
-    
+
     return {
       name: field.name,
       value,
@@ -128,9 +111,9 @@ function convertToBASData(schema: any, data: Record<string, any>): Array<{name: 
   })
 }
 
-// Restore extractExpirationTime helper
+// Extract expiration time helper
 const extractExpirationTime = (data: Record<string, any>): bigint => {
-  const expirationFields = ['expireAt', 'expirationTime', 'expires', 'validUntil']
+  const expirationFields = ['expireAt', 'expirationTime', 'expires', 'validUntil', 'expiresAt']
   for (const field of expirationFields) {
     if (data[field]) {
       const value = data[field]
@@ -147,56 +130,56 @@ const extractExpirationTime = (data: Record<string, any>): bigint => {
   return BigInt(0)
 }
 
-export class BASClient implements AttestationServiceClient {
+export class EASClient implements AttestationServiceClient {
   constructor() {
     // Constructor logic moved to individual methods using hooks
   }
 
   async createAttestation(data: AttestationData): Promise<AttestationResult> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   async revokeAttestation(attestationId: string): Promise<string> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   async getAttestation(attestationId: string): Promise<any> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   async registerSchema(schema: any): Promise<string> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   async getSchema(schemaId: string): Promise<any> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   async estimateGas(data: AttestationData): Promise<bigint> {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   isConnected(): boolean {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 
   getCurrentChain(): number | undefined {
-    throw new Error('BAS client must be used within React component with hooks')
+    throw new Error('EAS client must be used within React component with hooks')
   }
 }
 
-// Hook-based BAS client for use in React components
-export function useBASClient() {
+// Hook-based EAS client for use in React components
+export function useEASClient() {
   // Get wallet state from current wallet provider
   const { isConnected, address, chainId, isChainSupported } = useWallet()
   const account = useActiveAccount()
   const wallet = useActiveWallet()
-  const chain = useActiveWalletChain() || bscTestnet
-  
+  const chain = useActiveWalletChain() || omachainTestnet
+
   // Use wallet provider's chain ID
-  const currentChainId = chainId || bscTestnet.id // Default to BSC testnet
-  const contractAddress = getContractAddress('bas', currentChainId)
-  
+  const currentChainId = chainId || omachainTestnet.id // Default to OMAchain testnet
+  const contractAddress = getContractAddress('eas', currentChainId)
+
   // Check if we can operate
   const shouldEnable = !!contractAddress && isConnected && account
 
@@ -204,32 +187,32 @@ export function useBASClient() {
   if (!shouldEnable) {
     return {
       createAttestation: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       },
       isConnected: false,
       isChainSupported: false,
       estimateGas: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       },
       getAttestation: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       },
       revokeAttestation: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       },
       registerSchema: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       },
       getSchema: async () => {
-        throw new Error(`BAS not supported on chain ${currentChainId}`)
+        throw new Error(`EAS not supported on chain ${currentChainId}`)
       }
     }
   }
 
-  // New: BAS SDK contract address for BNB testnet
-  const BASContractAddress = "0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD";
+  // EAS contract address for OMAchain testnet
+  const EASContractAddress = contractAddress!
 
-  // New: createAttestation using BAS SDK
+  // createAttestation using EAS SDK
   const createAttestation = async (data: AttestationData): Promise<AttestationResult> => {
     if (!isConnected || !address || !wallet || !account) {
       throw new Error('Wallet not connected or account unavailable')
@@ -240,12 +223,12 @@ export function useBASClient() {
     if (!schema) {
       throw new Error(`Schema ${data.schemaId} not found`)
     }
-    const deployedUID = schema.deployedUIDs?.[chainId]
+    const deployedUID = schema.deployedUIDs?.[currentChainId]
     if (!deployedUID) {
-      throw new Error(`Schema ${data.schemaId} not deployed on chain ${chainId}`)
+      throw new Error(`Schema ${data.schemaId} not deployed on chain ${currentChainId}`)
     }
     if (deployedUID === '0x0000000000000000000000000000000000000000000000000000000000000000') {
-      throw new Error(`Schema ${data.schemaId} deployment UID not set for chain ${chainId}. Please update schemas.ts with the actual deployed UID.`)
+      throw new Error(`Schema ${data.schemaId} deployment UID not set for chain ${currentChainId}. Please update schemas.ts with the actual deployed UID.`)
     }
 
     // Get a native ethers.js Signer using the thirdweb adapter
@@ -258,12 +241,12 @@ export function useBASClient() {
       throw new Error('Failed to obtain ethers.js signer from thirdweb adapter')
     }
 
-    // Initialize BAS SDK and connect signer
-    const bas = new BAS(BASContractAddress);
-    bas.connect(signer);
+    // Initialize EAS SDK and connect signer
+    const eas = new EAS(EASContractAddress);
+    eas.connect(signer);
 
     // Encode attestation data
-    const schemaString = createBASSchemaString(schema);
+    const schemaString = createEASSchemaString(schema);
     const encoder = new SchemaEncoder(schemaString);
 
     // Auto-compute subjectDidHash if subject is a DID and verification is requested
@@ -273,15 +256,15 @@ export function useBASClient() {
       const hasHashField = schema.fields.some((f: any) => f.name === 'subjectDidHash');
       if (hasHashField) {
         enhancedData.subjectDidHash = computeDidHash(enhancedData.subject);
-        logger.log('[BAS] Auto-computed subjectDidHash for verification:', {
+        logger.log('[EAS] Auto-computed subjectDidHash for verification:', {
           subject: enhancedData.subject,
           subjectDidHash: enhancedData.subjectDidHash
         });
       }
     }
 
-    const basData = convertToBASData(schema, enhancedData);
-    const encodedData = encoder.encodeData(basData);
+    const easData = convertToEASData(schema, enhancedData);
+    const encodedData = encoder.encodeData(easData);
     const expirationTime = extractExpirationTime(data.data);
     const revocable = false;
 
@@ -291,7 +274,7 @@ export function useBASClient() {
     let didIndex: string;
     if (data.data.subject && typeof data.data.subject === 'string' && data.data.subject.startsWith('did:')) {
       didIndex = didToIndexAddress(data.data.subject);
-      logger.log('[BAS] Using DID Index Address for subject:', {
+      logger.log('[EAS] Using DID Index Address for subject:', {
         subjectDID: data.data.subject,
         didIndex,
         didHash: computeDidHash(data.data.subject)
@@ -299,14 +282,14 @@ export function useBASClient() {
     } else {
       // Fallback to extracting address from recipient field
       didIndex = extractAddressFromDID(data.recipient);
-      logger.log('[BAS] Using extracted address from recipient:', {
+      logger.log('[EAS] Using extracted address from recipient:', {
         recipient: data.recipient,
         didIndex
       });
     }
 
     // Add detailed logging
-    logger.log('[BAS] Submitting attestation:', {
+    logger.log('[EAS] Submitting attestation:', {
       schemaId: data.schemaId,
       deployedUID,
       recipient: data.recipient,
@@ -314,14 +297,14 @@ export function useBASClient() {
       expirationTime,
       revocable,
       encodedData,
-      basData,
+      easData,
       schemaString,
       data: data.data,
     });
 
     try {
-      logger.log('[BAS] Calling bas.attest...');
-      const tx = await bas.attest({
+      logger.log('[EAS] Calling eas.attest...');
+      const tx = await eas.attest({
         schema: deployedUID,
         data: {
           recipient: didIndex,
@@ -331,21 +314,21 @@ export function useBASClient() {
           data: encodedData,
         },
       });
-      logger.log('[BAS] bas.attest returned tx:', tx);
+      logger.log('[EAS] eas.attest returned tx:', tx);
 
-      logger.log('[BAS] Waiting for transaction to be mined (tx.wait)...');
-      const transactionHash = await tx.wait();
-      logger.log('[BAS] Transaction mined. Hash:', transactionHash);
+      logger.log('[EAS] Waiting for transaction to be mined (tx.wait)...');
+      const newAttestationUID = await tx.wait();
+      logger.log('[EAS] Transaction mined. Attestation UID:', newAttestationUID);
 
-      // Return result (simplified)
+      // Return result
       return {
-        transactionHash,
-        attestationId: 'pending',
-        blockNumber: 0,
+        transactionHash: tx.tx.hash || 'unknown',
+        attestationId: newAttestationUID,
+        blockNumber: 0, // EAS SDK doesn't return block number directly
         gasUsed: BigInt(0),
       };
     } catch (err) {
-      logger.error('[BAS] Error during attestation submission:', err);
+      logger.error('[EAS] Error during attestation submission:', err);
       throw err;
     }
   };
@@ -371,6 +354,6 @@ export function useBASClient() {
     getCurrentChain: () => currentChainId,
     isChainSupported,
     contractAddress,
-    supportedChains: BAS_CONFIG.supportedChains
+    supportedChains: EAS_CONFIG.supportedChains
   }
-} 
+}

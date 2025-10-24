@@ -67,12 +67,35 @@ export const BAS_CONFIG: AttestationServiceConfig = {
 //   }
 // }
 
+// EAS (Ethereum Attestation Service) Configuration for OMAchain
+export const EAS_CONFIG: AttestationServiceConfig = {
+  id: 'eas',
+  name: 'Ethereum Attestation Service',
+  description: 'Decentralized attestation service on OMAchain',
+  website: 'https://attest.org/',
+  docs: 'https://docs.attest.org/',
+  supportedChains: [66238, 6623], // OMAchain testnet and mainnet
+  contracts: {
+    66238: '0xDc120C00E62822329A4d8C7808f5a43C9CbfC1f8', // EAS contract on OMAchain testnet
+    6623: '0x0000000000000000000000000000000000000000' // TODO: Update when mainnet is available
+  },
+  features: [
+    'On-chain attestations',
+    'Schema registry',
+    'Revocation support',
+    'Composable attestations',
+    'OMAchain native'
+  ],
+  estimatedGasCost: {
+    66238: BigInt('100000'), // Adjust based on actual costs
+    6623: BigInt('100000')
+  }
+}
+
 // All available attestation services
 export const ATTESTATION_SERVICES: Record<string, AttestationServiceConfig> = {
+  [EAS_CONFIG.id]: EAS_CONFIG,
   [BAS_CONFIG.id]: BAS_CONFIG
-  // When custom service is ready, add it:
-  // [CUSTOM_ATTESTATION_CONFIG.id]: CUSTOM_ATTESTATION_CONFIG
-  // TODO: Add EAS and other services
 }
 
 // Helper functions

@@ -511,10 +511,14 @@ export const certificationSchema: AttestationSchema = {
   description: 'A flat schema for certifying that a subject has met the requirements of a defined certification program. Anchors immutable program data and supports optional subject and assessor metadata.',
   fields: certificationFields,
   deployedUIDs: {
+    66238: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
+    66238: 137, // OMAchain Testnet
+    6623: 0, // OMAchain Mainnet (TODO)
     97: 52415269, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -526,10 +530,14 @@ export const endorsementSchema: AttestationSchema = {
   description: 'A lightweight attestation indicating support, trust, or approval for a DID-identified subject. The \'attestationType\' field may be used to distinguish informal endorsements from formal approvals.',
   fields: endorsementFields,
   deployedUIDs: {
+    66238: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
+    66238: 136, // OMAchain Testnet
+    6623: 0, // OMAchain Mainnet (TODO)
     97: 52288891, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -541,10 +549,14 @@ export const linkedIdentifierSchema: AttestationSchema = {
   description: 'An attestation where the attester (a trusted third party) asserts that the subject controls the linked identifier, effectively attesting that two identities are owned by the same entity.',
   fields: linkedIdentifierFields,
   deployedUIDs: {
+    66238: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
+    66238: 138, // OMAchain Testnet
+    6623: 0, // OMAchain Mainnet (TODO)
     97: 52415311, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -556,10 +568,14 @@ export const userReviewResponseSchema: AttestationSchema = {
   description: 'A response from an app owner or representative to a UserReview attestation. Uses refUID to reference the original review.',
   fields: userReviewResponseFields,
   deployedUIDs: {
+    66238: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
+    66238: 140, // OMAchain Testnet
+    6623: 0, // OMAchain Mainnet (TODO)
     97: 68597701, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -571,10 +587,14 @@ export const userReviewSchema: AttestationSchema = {
   description: 'A flat schema for structured 1–5 star reviews of tokenized applications or digital services. Designed for onchain attestation and offchain anchoring.',
   fields: userReviewFields,
   deployedUIDs: {
+    66238: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
+    66238: 139, // OMAchain Testnet
+    6623: 0, // OMAchain Mainnet (TODO)
     97: 52291400, // BSC Testnet
     56: 0  // BSC Mainnet
   }

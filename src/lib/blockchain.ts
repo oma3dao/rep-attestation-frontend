@@ -1,5 +1,6 @@
 import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
 import { bsc, bscTestnet, sepolia, mainnet } from 'thirdweb/chains'
+import { omachainTestnet, omachainMainnet } from '@/config/chains'
 
 /**
  * Pure ThirdWeb wallet integration
@@ -9,6 +10,11 @@ export function useWallet() {
   const account = useActiveAccount()
   const chain = useActiveWalletChain()
   
+  // Check if current chain is supported by EAS
+  const isEASChain = (chainId?: number): boolean => {
+    return chainId === omachainTestnet.id || chainId === omachainMainnet.id
+  }
+  
   // Check if current chain is supported by BAS
   const isBASChain = (chainId?: number): boolean => {
     return chainId === bscTestnet.id || chainId === bsc.id
@@ -16,12 +22,11 @@ export function useWallet() {
   
   // Check if current chain supports any attestation service
   const isAttestationChain = (chainId?: number): boolean => {
-    // Currently only BAS chains support attestations
-    return isBASChain(chainId)
+    return isEASChain(chainId) || isBASChain(chainId)
   }
   
-  // Use current chain or default to BSC testnet
-  const chainId = chain?.id || bscTestnet.id
+  // Use current chain or default to OMAchain testnet
+  const chainId = chain?.id || omachainTestnet.id
   
   return {
     // Wallet connection state
@@ -30,7 +35,7 @@ export function useWallet() {
     
     // Chain state  
     chainId,
-    isChainSupported: isBASChain(chainId),
+    isChainSupported: isAttestationChain(chainId),
     isAttestationSupported: isAttestationChain(chainId),
     
     // Account and chain objects
@@ -38,6 +43,6 @@ export function useWallet() {
     chain,
     
     // Utilities
-    supportedChainIds: [bscTestnet.id, bsc.id, sepolia.id, mainnet.id]
+    supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bsc.id, sepolia.id, mainnet.id]
   }
 } 

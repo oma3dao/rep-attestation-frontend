@@ -1,12 +1,12 @@
 const logger = {
   log: (...args: any[]) => {
-    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+    if (process.env.NEXT_PUBLIC_DEBUG_ADAPTER === 'true' || process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line no-console
       console.log(...args);
     }
   },
   warn: (...args: any[]) => {
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NEXT_PUBLIC_DEBUG_ADAPTER === 'true' || process.env.NODE_ENV === 'development') {
       // eslint-disable-next-line no-console
       console.warn(...args);
     }

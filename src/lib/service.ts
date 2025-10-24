@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useBASClient } from './bas'
+import { useEASClient } from './eas'
 import { useWallet } from './blockchain'
 import type { AttestationData, AttestationResult } from './types'
 import { ATTESTATION_SERVICES, getServicesForChain, getAttestationService } from '@/config/attestation-services'
@@ -32,12 +33,12 @@ function isServiceAvailable(serviceId: ServiceType): boolean {
   const service = getAttestationService(serviceId)
   if (!service) return false
   
-  // For now, only BAS is available - others will be enabled when implemented
+  // Both EAS and BAS are now available
   switch (serviceId) {
+    case 'eas':
+      return true
     case 'bas':
       return true
-    // case 'eas':
-    //   return true // Will be true when EAS is implemented
     default:
       return false
   }
@@ -54,6 +55,7 @@ export function useAttestation() {
   
   // Get service clients
   const basClient = useBASClient()
+  const easClient = useEASClient()
   
   // Submit attestation to the appropriate service
   const submitAttestation = async (
@@ -84,13 +86,13 @@ export function useAttestation() {
       
       // Route to appropriate service
       switch (serviceType) {
+        case 'eas':
+          result = await easClient.createAttestation(data)
+          break
+        
         case 'bas':
           result = await basClient.createAttestation(data)
           break
-        
-        // case 'eas':
-        //   result = await easClient.createAttestation(data)
-        //   break
         
         default:
           throw new Error(`Unsupported attestation service: ${serviceType}`)
