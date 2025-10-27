@@ -68,6 +68,26 @@ function transformFields(properties, required = [], schemaId = '') {
         throw new Error(`Field '${name}' in schema '${schemaId}' is missing required 'title' property. Field titles are used as form labels and must be provided.`)
       }
 
+      // Handle object types with nested properties
+      if (prop.type === 'object' && prop.properties) {
+        console.log(`   📦 Processing object field '${name}' with ${Object.keys(prop.properties).length} sub-fields`)
+        const objectField = {
+          name,
+          type: 'object',
+          label: prop.title,
+          description: prop.description,
+          required: required.includes(name),
+          subFields: transformFields(prop.properties, prop.required || [], schemaId)
+        }
+        
+        // Add nested flag if present
+        if (prop['x-oma3-nested'] !== undefined) {
+          objectField.nested = prop['x-oma3-nested']
+        }
+        
+        return objectField
+      }
+
       // Map JSON Schema types to UI field types
       const typeMapping = {
         'string': prop.format === 'uri' ? 'uri' : 
@@ -85,6 +105,21 @@ function transformFields(properties, required = [], schemaId = '') {
         description: prop.description,
         required: required.includes(name),
         placeholder: prop.examples?.[0] || generatePlaceholder(name, prop)
+      }
+
+      // Add default value if present
+      if (prop.default !== undefined) {
+        field.default = prop.default
+      }
+
+      // Add auto-default marker if present
+      if (prop['x-oma3-default']) {
+        field.autoDefault = prop['x-oma3-default']
+      }
+
+      // Add subtype if present
+      if (prop['x-oma3-subtype']) {
+        field.subtype = prop['x-oma3-subtype']
       }
 
       // Add type-specific properties
@@ -295,7 +330,7 @@ async function generateSchemasFile(schemas, deployments = {}) {
 // Do not edit manually - your changes will be overwritten
 
 // Schema definitions for attestation forms
-export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri'
+export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object'
 
 export interface FormField {
   name: string
@@ -308,6 +343,11 @@ export interface FormField {
   format?: string // for validation (uri, date-time, etc.)
   min?: number // for integer fields
   max?: number // for integer fields
+  subFields?: FormField[] // for object fields with nested properties
+  default?: any // default value for the field
+  autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
+  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields)
+  nested?: boolean // for object fields: true = render with container/heading, false/omitted = render flat
 }
 
 export interface AttestationSchema {

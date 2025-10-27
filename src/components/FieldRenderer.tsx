@@ -5,6 +5,9 @@ import { FormField } from '@/config/schemas'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { SubjectIdInput } from '@/components/SubjectIdInput'
+import { ObjectFieldRenderer } from '@/components/ObjectFieldRenderer'
+import { TimestampInput } from '@/components/TimestampInput'
 import { useState } from 'react'
 
 interface FieldRendererProps {
@@ -17,6 +20,45 @@ interface FieldRendererProps {
 export function FieldRenderer({ field, value, onChange, error }: FieldRendererProps) {
   const [arrayInput, setArrayInput] = useState('')
 
+  // Compute effective value once (for simple scalar types only)
+  const effectiveValue = (() => {
+    // If value is explicitly set (including empty string), use it
+    // Empty string means user cleared the field
+    if (value !== undefined && value !== null) {
+      // For timestamp fields, don't apply defaults if value is empty string (user cleared it)
+      if (field.subtype === 'timestamp' && value === '') {
+        return ''
+      }
+      // For other fields, return value if not empty
+      if (value !== '') {
+        return value
+      }
+    }
+
+    // Only apply defaults to simple scalar types when value is undefined/null
+    if (['string', 'integer', 'enum', 'uri', 'datetime'].includes(field.type)) {
+      // Auto-generate defaults based on type
+      if (field.autoDefault === 'current-timestamp') {
+        return Math.floor(Date.now() / 1000)  // Unix timestamp in seconds
+      }
+      if (field.autoDefault === 'current-datetime') {
+        return new Date().toISOString()  // ISO 8601 datetime: "2025-10-27T15:30:00.000Z"
+      }
+      if (field.autoDefault === 'current-date') {
+        return new Date().toISOString().split('T')[0]  // ISO 8601 date: "2025-10-27"
+      }
+
+      // Use static default if provided
+      if (field.default !== undefined) {
+        return field.default
+      }
+    }
+
+    // For complex types or no default, return original value
+    return value !== undefined ? value : (field.type === 'array' ? [] : '')
+  })()
+
+  // Array handlers
   const handleArrayAdd = () => {
     if (arrayInput.trim()) {
       const currentArray = Array.isArray(value) ? value : []
@@ -32,78 +74,125 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
     }
   }
 
-  const renderField = () => {
+  // Special case: Object fields handle their own rendering
+  // - Nested objects (nested: true) render with their own label/container
+  // - Flat objects (nested: false/omitted) render sub-fields without container
+  // Either way, return early without FieldRenderer's wrapper
+  if (field.type === 'object') {
+    return (
+      <ObjectFieldRenderer
+        field={field}
+        value={value}
+        onChange={onChange}
+        error={error}
+      />
+    )
+  }
+
+  // Determine which field element to render
+  let fieldElement
+
+  // Special case: Subject field - always use original value, no defaults
+  if (field.name === 'subject') {
+    fieldElement = (
+      <SubjectIdInput
+        value={typeof value === 'string' ? value : ''}
+        onChange={(did) => onChange(did || '')}
+        error={error}
+      />
+    )
+  }
+  // Regular field types
+  else {
     switch (field.type) {
       case 'string':
         if (field.name === 'reviewBody' || field.name === 'description') {
-          return (
+          fieldElement = (
             <Textarea
               id={field.name}
               placeholder={field.placeholder}
-              value={typeof value === 'string' ? value : ''}
+              value={typeof effectiveValue === 'string' ? effectiveValue : ''}
               onChange={(e) => onChange(e.target.value)}
               className={error ? 'border-red-500' : ''}
               rows={4}
             />
           )
+        } else {
+          fieldElement = (
+            <Input
+              id={field.name}
+              type="text"
+              placeholder={field.placeholder}
+              value={typeof effectiveValue === 'string' ? effectiveValue : ''}
+              onChange={(e) => onChange(e.target.value)}
+              className={error ? 'border-red-500' : ''}
+            />
+          )
         }
-        return (
-          <Input
-            id={field.name}
-            type="text"
-            placeholder={field.placeholder}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            className={error ? 'border-red-500' : ''}
-          />
-        )
+        break
 
       case 'integer':
-        return (
-          <Input
-            id={field.name}
-            type="number"
-            placeholder={field.placeholder}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            className={error ? 'border-red-500' : ''}
-            min={field.min}
-            max={field.max}
-          />
-        )
+        // Handle timestamp subtype with datetime picker
+        if (field.subtype === 'timestamp') {
+          fieldElement = (
+            <TimestampInput
+              value={effectiveValue as number | string | undefined}
+              onChange={onChange}
+              error={error}
+              required={field.required}
+              hasAutoDefault={!!field.autoDefault}
+            />
+          )
+        } else {
+          // Regular integer input
+          fieldElement = (
+            <Input
+              id={field.name}
+              type="number"
+              placeholder={field.placeholder}
+              value={typeof effectiveValue === 'string' || typeof effectiveValue === 'number' ? effectiveValue : ''}
+              onChange={(e) => onChange(e.target.value)}
+              className={error ? 'border-red-500' : ''}
+              min={field.min}
+              max={field.max}
+            />
+          )
+        }
+        break
 
       case 'datetime':
-        return (
+        fieldElement = (
           <Input
             id={field.name}
             type="datetime-local"
-            value={typeof value === 'string' ? value : ''}
+            value={typeof effectiveValue === 'string' ? effectiveValue : ''}
             onChange={(e) => onChange(e.target.value)}
             className={error ? 'border-red-500' : ''}
           />
         )
+        break
 
       case 'uri':
-        return (
+        fieldElement = (
           <Input
             id={field.name}
             type="url"
             placeholder={field.placeholder || 'https://example.com'}
-            value={typeof value === 'string' ? value : ''}
+            value={typeof effectiveValue === 'string' ? effectiveValue : ''}
             onChange={(e) => onChange(e.target.value)}
             className={error ? 'border-red-500' : ''}
           />
         )
+        break
 
       case 'enum':
-        return (
+        fieldElement = (
           <select
             id={field.name}
-            value={typeof value === 'string' ? value : ''}
+            value={typeof effectiveValue === 'string' ? effectiveValue : ''}
             onChange={(e) => onChange(e.target.value)}
-            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-              error ? 'border-red-500' : ''
-            }`}
+            className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500' : ''
+              }`}
           >
             <option value="">{`Select ${field.label.toLowerCase()}`}</option>
             {field.options?.map((option) => (
@@ -113,17 +202,18 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
             ))}
           </select>
         )
+        break
 
-      case 'array':
+      case 'array': {
         const arrayValue = Array.isArray(value) ? value : []
-        return (
+        fieldElement = (
           <div className="space-y-2">
             <div className="flex gap-2">
               <Input
                 placeholder={field.placeholder || 'Add item...'}
                 value={arrayInput}
                 onChange={(e) => setArrayInput(e.target.value)}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
                     handleArrayAdd()
@@ -157,9 +247,11 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
             )}
           </div>
         )
+        break
+      }
 
       default:
-        return (
+        fieldElement = (
           <Input
             id={field.name}
             type="text"
@@ -172,6 +264,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
     }
   }
 
+  // Single wrapper for ALL field types - no duplication
   return (
     <div className="space-y-2">
       <Label htmlFor={field.name} className="text-sm font-medium">
@@ -181,7 +274,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
       {field.description && (
         <p className="text-sm text-muted-foreground">{field.description}</p>
       )}
-      {renderField()}
+      {fieldElement}
       {error && <p className="text-sm text-red-500" data-testid="field-error">{error}</p>}
     </div>
   )

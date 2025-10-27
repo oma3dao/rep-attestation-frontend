@@ -2,7 +2,7 @@
 // Do not edit manually - your changes will be overwritten
 
 // Schema definitions for attestation forms
-export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri'
+export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object'
 
 export interface FormField {
   name: string
@@ -15,6 +15,11 @@ export interface FormField {
   format?: string // for validation (uri, date-time, etc.)
   min?: number // for integer fields
   max?: number // for integer fields
+  subFields?: FormField[] // for object fields with nested properties
+  default?: any // default value for the field
+  autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
+  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields)
+  nested?: boolean // for object fields: true = render with container/heading, false/omitted = render flat
 }
 
 export interface AttestationSchema {
@@ -180,28 +185,30 @@ const endorsementFields: FormField[] = [
     "placeholder": "Enter subject"
   },
   {
-    "name": "purpose",
+    "name": "payloadVersion",
     "type": "string",
-    "label": "Purpose",
-    "description": "Optional short string indicating the reason or context of the endorsement or approval.",
+    "label": "Payload Version",
+    "description": "Semver describing the shape of 'payload' (additive changes may bump this without a new schema UID).",
     "required": false,
-    "placeholder": "Enter purpose"
+    "placeholder": "Enter payloadversion",
+    "default": "1.0.0"
   },
   {
-    "name": "version",
-    "type": "string",
-    "label": "Subject Version",
-    "description": "Optional semantic version of the subject being endorsed.",
+    "name": "payloadSpecURI",
+    "type": "uri",
+    "label": "Payload Specification URI",
+    "description": "URI to the human/machine-readable spec for the current payloadVersion (e.g., IPFS/HTTPS).",
     "required": false,
-    "placeholder": "Enter version"
+    "placeholder": "https://example.com",
+    "format": "uri"
   },
   {
-    "name": "attestationType",
+    "name": "payload",
     "type": "string",
-    "label": "Attestation Type",
-    "description": "Distinguishes attestation purpose. Use 'Endorsement' for informal support or 'Approval' for formal recognition.",
+    "label": "Endorsement Payload",
+    "description": "Endorsement details (schema-agnostic; no predefined keys).",
     "required": false,
-    "placeholder": "Enter attestationtype"
+    "placeholder": "Enter payload"
   },
   {
     "name": "policyURI",
@@ -213,12 +220,22 @@ const endorsementFields: FormField[] = [
     "format": "uri"
   },
   {
+    "name": "issuedAt",
+    "type": "integer",
+    "label": "Issued Date",
+    "description": "Unix timestamp (in seconds) when the attestation was issued.",
+    "required": false,
+    "placeholder": "0",
+    "min": 0
+  },
+  {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
     "description": "Optional Unix timestamp when the endorsement or approval becomes effective.",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "min": 0
   },
   {
     "name": "expiresAt",
@@ -226,15 +243,17 @@ const endorsementFields: FormField[] = [
     "label": "Expiration Date",
     "description": "Optional Unix timestamp after which the endorsement or approval expires.",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "min": 0
   },
   {
-    "name": "issuedAt",
-    "type": "integer",
-    "label": "Issued Date",
-    "description": "Optional Unix timestamp for when the attestation was issued.",
+    "name": "attestationType",
+    "type": "string",
+    "label": "Attestation Type",
+    "description": "Type identifier for this attestation (e.g., 'SecurityAssessment').",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "Enter attestationtype",
+    "default": "SecurityAssessment"
   }
 ]
 
@@ -305,6 +324,134 @@ const linkedIdentifierFields: FormField[] = [
     "description": "Optional classification of the attestation for filtering and indexing purposes.",
     "required": false,
     "placeholder": "Enter attestationtype"
+  }
+]
+
+const securityAssessmentFields: FormField[] = [
+  {
+    "name": "subject",
+    "type": "string",
+    "label": "Subject ID",
+    "description": "ID of the assessed application/contract/service. Select an ID type below and enter the proper identity.",
+    "required": true,
+    "placeholder": "Enter subject"
+  },
+  {
+    "name": "payload",
+    "type": "object",
+    "label": "Assessment Payload",
+    "description": "Assessment details. Evolvable without changing the envelope. When stored on-chain via EAS, this object is JSON-stringified.",
+    "required": true,
+    "subFields": [
+      {
+        "name": "assessmentKind",
+        "type": "enum",
+        "label": "Assessment Kind",
+        "description": "High-level category of the assessment.",
+        "required": true,
+        "placeholder": "Enter assessmentkind",
+        "options": [
+          "pentest",
+          "security-audit",
+          "code-review",
+          "vulnerability-scan"
+        ]
+      },
+      {
+        "name": "methodURI",
+        "type": "uri",
+        "label": "Methodology URI",
+        "description": "Methodology / SOP documentation.",
+        "required": false,
+        "placeholder": "https://example.com",
+        "format": "uri"
+      },
+      {
+        "name": "reportURI",
+        "type": "uri",
+        "label": "Report URI",
+        "description": "Human-readable report location (may be mutable).",
+        "required": false,
+        "placeholder": "https://example.com",
+        "format": "uri"
+      },
+      {
+        "name": "reportDigest",
+        "type": "object",
+        "label": "Report Digest",
+        "description": "Content digest of the report for integrity verification.",
+        "required": false,
+        "subFields": [
+          {
+            "name": "algo",
+            "type": "enum",
+            "label": "Report Hash Algorithm",
+            "description": "Hash algorithm used for report digest computation. Per OMATrust spec, only keccak256 and sha256 are supported.",
+            "required": false,
+            "placeholder": "Enter algo",
+            "default": "keccak256",
+            "options": [
+              "keccak256",
+              "sha256"
+            ]
+          },
+          {
+            "name": "hex",
+            "type": "string",
+            "label": "Report Hash Value",
+            "description": "0x-prefixed hex digest of the canonical report bytes.",
+            "required": false,
+            "placeholder": "Enter hex"
+          }
+        ]
+      },
+      {
+        "name": "outcome",
+        "type": "enum",
+        "label": "Assessment Outcome",
+        "description": "Overall outcome of the assessment.",
+        "required": false,
+        "placeholder": "Enter outcome",
+        "options": [
+          "pass",
+          "pass-with-findings",
+          "fail",
+          "informational"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "issuedAt",
+    "type": "integer",
+    "label": "Issued Date",
+    "description": "Unix timestamp (in seconds) when the attestation was issued. Default is the current time.",
+    "required": true,
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
+  },
+  {
+    "name": "effectiveAt",
+    "type": "integer",
+    "label": "Effective Date",
+    "description": "Optional Unix timestamp (in seconds) when the assessment becomes effective. Default is the current time.",
+    "required": false,
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
+  },
+  {
+    "name": "expiresAt",
+    "type": "integer",
+    "label": "Expiration Date",
+    "description": "Unix timestamp (in seconds) after which the assessment expires. Leave empty if the assessment does not expire.",
+    "required": false,
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "min": 0
   }
 ]
 
@@ -511,14 +658,10 @@ export const certificationSchema: AttestationSchema = {
   description: 'A flat schema for certifying that a subject has met the requirements of a defined certification program. Anchors immutable program data and supports optional subject and assessor metadata.',
   fields: certificationFields,
   deployedUIDs: {
-    66238: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // OMAchain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
-    66238: 137, // OMAchain Testnet
-    6623: 0, // OMAchain Mainnet (TODO)
     97: 52415269, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -530,14 +673,10 @@ export const endorsementSchema: AttestationSchema = {
   description: 'A lightweight attestation indicating support, trust, or approval for a DID-identified subject. The \'attestationType\' field may be used to distinguish informal endorsements from formal approvals.',
   fields: endorsementFields,
   deployedUIDs: {
-    66238: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // OMAchain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
-    66238: 136, // OMAchain Testnet
-    6623: 0, // OMAchain Mainnet (TODO)
     97: 52288891, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -545,37 +684,44 @@ export const endorsementSchema: AttestationSchema = {
 
 export const linkedIdentifierSchema: AttestationSchema = {
   id: 'linked-identifier',
-  title: 'Linked Identifier Attestation (Third-Party Certified)',
+  title: 'Linked Identifier',
   description: 'An attestation where the attester (a trusted third party) asserts that the subject controls the linked identifier, effectively attesting that two identities are owned by the same entity.',
   fields: linkedIdentifierFields,
   deployedUIDs: {
-    66238: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // OMAchain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
-    66238: 138, // OMAchain Testnet
-    6623: 0, // OMAchain Mainnet (TODO)
     97: 52415311, // BSC Testnet
+    56: 0  // BSC Mainnet
+  }
+};
+
+export const securityAssessmentSchema: AttestationSchema = {
+  id: 'security-assessment',
+  title: 'Security Assessment',
+  description: 'Use this form to record a security assessment onchain',
+  fields: securityAssessmentFields,
+  deployedUIDs: {
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+  },
+  deployedBlocks: {
+    97: 0, // BSC Testnet
     56: 0  // BSC Mainnet
   }
 };
 
 export const userReviewResponseSchema: AttestationSchema = {
   id: 'user-review-response',
-  title: 'UserReviewResponse',
+  title: 'User Review Response',
   description: 'A response from an app owner or representative to a UserReview attestation. Uses refUID to reference the original review.',
   fields: userReviewResponseFields,
   deployedUIDs: {
-    66238: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // OMAchain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
-    66238: 140, // OMAchain Testnet
-    6623: 0, // OMAchain Mainnet (TODO)
     97: 68597701, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -583,18 +729,14 @@ export const userReviewResponseSchema: AttestationSchema = {
 
 export const userReviewSchema: AttestationSchema = {
   id: 'user-review',
-  title: 'UserReview',
+  title: 'User Review',
   description: 'A flat schema for structured 1–5 star reviews of tokenized applications or digital services. Designed for onchain attestation and offchain anchoring.',
   fields: userReviewFields,
   deployedUIDs: {
-    66238: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // OMAchain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000', // OMAchain Mainnet (TODO)
     97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
   },
   deployedBlocks: {
-    66238: 139, // OMAchain Testnet
-    6623: 0, // OMAchain Mainnet (TODO)
     97: 52291400, // BSC Testnet
     56: 0  // BSC Mainnet
   }
@@ -605,6 +747,7 @@ const allSchemas: AttestationSchema[] = [
   certificationSchema,
   endorsementSchema,
   linkedIdentifierSchema,
+  securityAssessmentSchema,
   userReviewResponseSchema,
   userReviewSchema
 ]

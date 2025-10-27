@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Send } from 'lucide-react'
 import Link from 'next/link'
@@ -58,13 +58,13 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   const [generalError, setGeneralError] = useState<string | null>(null)
 
   // Get attestation service - this handles all service selection and wallet management
-  const { 
-    submitAttestation, 
-    isSubmitting, 
-    isConnected, 
+  const {
+    submitAttestation,
+    isSubmitting,
+    isConnected,
     isNetworkSupported,
     lastError,
-    clearError 
+    clearError
   } = useAttestation()
 
   // Toast for wallet approval
@@ -95,7 +95,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       ...prev,
       [fieldName]: value
     }))
-    
+
     // Clear error when user starts typing
     if (errors[fieldName]) {
       setErrors(prev => ({
@@ -103,7 +103,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         [fieldName]: ''
       }))
     }
-    
+
     // Clear service error when user makes changes
     if (lastError) {
       clearError()
@@ -119,10 +119,10 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       return Object.keys(newErrors).length === 0
     }
     const newErrors: FormErrors = {}
-    
+
     schema.fields.forEach(field => {
       const value = formData[field.name]
-      
+
       const error = validateField(field, value)
       if (error) {
         newErrors[field.name] = error
@@ -140,12 +140,12 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     if (!validateFormInternal()) {
       return
     }
-    
+
     try {
       // Ensure all schema fields are present with empty strings for optional fields
       // This maintains compatibility with BAS indexers and search functionality
       const completeData: Record<string, any> = {}
-      
+
       schema.fields.forEach(field => {
         const value = formData[field.name]
         if (value !== undefined && value !== null && value !== '') {
@@ -155,24 +155,24 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
           completeData[field.name] = field.type === 'array' ? [] : ''
         }
       })
-      
+
       // Extract subject field for recipient
-      const subjectField = schema.fields.find(field => 
+      const subjectField = schema.fields.find(field =>
         field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
       )
-      
+
       if (!subjectField) {
         throw new Error('No subject field found in schema')
       }
-      
+
       const subjectValue = completeData[subjectField.name] as string
       if (!subjectValue) {
         throw new Error('Subject field is required')
       }
-      
+
       // Validate that recipient is in DID format (no automatic conversion)
       const recipient = subjectValue
-      
+
       // Check if it's a valid DID format
       if (!recipient.startsWith('did:')) {
         // If it's an Ethereum address, tell user to convert it
@@ -195,33 +195,33 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
           throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", or "did:ethr:0x..."`)
         }
       }
-      
+
       // Basic DID format validation
       if (recipient.length < 7 || !recipient.includes(':')) {
         throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
       }
-      
+
       logger.log('Submitting attestation:', {
         schema: schema.id,
         recipient,
         data: completeData
       })
-      
+
       // Use the service layer to submit attestation
       const result = await submitAttestation({
         schemaId: schema.id,
         recipient,
         data: completeData
       })
-      
+
       logger.log('Attestation created successfully:', result)
-      
+
       // Show success message with transaction details
       alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
-      
+
       // Reset form after successful submission
       setFormData({})
-      
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       setGeneralError(errorMessage)
@@ -243,21 +243,21 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         )}
         {/* Header */}
         <div className="mb-8">
-          <Link 
-            href="/attest" 
+          <Link
+            href="/attest"
             className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to attestation types
           </Link>
-          
+
           <div className="flex items-center gap-4 mb-4">
             <h1 className="text-3xl font-bold">{schema.title}</h1>
             <Badge variant="secondary">
               {schema.fields.length} fields
             </Badge>
           </div>
-          
+
           <p className="text-lg text-muted-foreground">
             {schema.description}
           </p>
@@ -266,23 +266,13 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         {/* Form */}
         <Card>
           <CardHeader>
-            <CardTitle>Attestation Details</CardTitle>
             <CardDescription>
-              Fill out the form below to create your {schema.title.toLowerCase()} attestation.
               Fields marked with * are required.
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {requiredFields.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Required Fields
-                  </h3>
-                </div>
-              )}
-              
               {requiredFields.map((field) => (
                 <FieldRenderer
                   key={field.name}
@@ -292,15 +282,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                   error={errors[field.name]}
                 />
               ))}
-              
+
               {optionalFields.length > 0 && (
                 <>
-                  <div className="border-t pt-6 mt-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Optional Fields
-                    </h3>
-                  </div>
-                  
                   {optionalFields.map((field) => (
                     <FieldRenderer
                       key={field.name}
@@ -312,7 +296,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                   ))}
                 </>
               )}
-              
+
               <div className="flex gap-4 pt-6">
                 <Button
                   type="submit"
@@ -341,7 +325,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                     </>
                   )}
                 </Button>
-                
+
                 <Button type="button" variant="outline" asChild>
                   <Link href="/attest">Cancel</Link>
                 </Button>
