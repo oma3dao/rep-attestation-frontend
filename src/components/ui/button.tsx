@@ -1,6 +1,15 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
+import { useActiveAccount } from "thirdweb/react"
+import { client } from "@/app/client"
+import { ConnectButton as ThirdwebConnectButton } from "thirdweb/react"
+import { 
+  createWallet,
+  inAppWallet,
+  walletConnect
+} from "thirdweb/wallets"
+import { SUPPORTED_CHAINS } from "@/config/chains"
 
 import { cn } from "@/lib/utils"
 
@@ -37,10 +46,65 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  isConnectButton?: boolean
+  connectButtonProps?: {
+    label?: string
+  }
+}
+
+// Extend the ThirdwebConnectButton props to include className
+type ThirdwebConnectButtonProps = React.ComponentProps<typeof ThirdwebConnectButton> & {
+  className?: string
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, isConnectButton = false, connectButtonProps, ...props }, ref) => {
+    if (isConnectButton) {
+      const { client: _, ...restProps } = props as ThirdwebConnectButtonProps
+      
+      // Configure wallets in priority order
+      const wallets = [
+        inAppWallet({
+          auth: {
+            options: [
+              "email",
+              "google", 
+              "apple",
+              "facebook",
+              "passkey"
+            ]
+          }
+        }),
+        createWallet("io.metamask"),
+        createWallet("com.coinbase.wallet"),
+        walletConnect()
+      ];
+      
+      return (
+        <ThirdwebConnectButton
+          appMetadata={{
+            name: "OMA3 Attestation Portal",
+            url: "https://attestation.oma3.org",
+            description: "Create and manage attestations for the OMA3 ecosystem",
+            logoUrl: "/oma3_logo.svg"
+          }}
+          className={className}
+          autoConnect={{ timeout: 15000 }}
+          wallets={wallets}
+          chains={SUPPORTED_CHAINS}
+          connectModal={{
+            size: "wide",
+            showThirdwebBranding: false,
+          }}
+          connectButton={{
+            label: connectButtonProps?.label ?? "Connect Wallet",
+          }}
+          client={client}
+          {...restProps}
+        />
+      )
+    }
+
     const Comp = asChild ? Slot : "button"
     return (
       <Comp

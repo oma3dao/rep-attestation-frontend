@@ -6,8 +6,7 @@ import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Send } from 'lucide-react'
+import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
 import { useToast } from '@/components/ui/toast'
@@ -243,20 +242,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         )}
         {/* Header */}
         <div className="mb-8">
-          <Link
-            href="/attest"
-            className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to attestation types
-          </Link>
-
-          <div className="flex items-center gap-4 mb-4">
-            <h1 className="text-3xl font-bold">{schema.title}</h1>
-            <Badge variant="secondary">
-              {schema.fields.length} fields
-            </Badge>
-          </div>
+          <h1 className="text-3xl font-bold mb-4">{schema.title}</h1>
 
           <p className="text-lg text-muted-foreground">
             {schema.description}

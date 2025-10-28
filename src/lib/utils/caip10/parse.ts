@@ -22,18 +22,18 @@ export function parseCaip10(input: string): ParsedCaip10 | Error {
   const trimmed = input.trim();
   
   // CAIP-10 regex: namespace:reference:address
-  const match = trimmed.match(/^(?<ns>[a-z0-9]+):(?<ref>[^:]+):(?<acct>.+)$/);
+  const match = trimmed.match(/^([a-z0-9]+):([^:]+):(.+)$/);
   
-  if (!match || !match.groups) {
+  if (!match) {
     return new Error('Invalid CAIP-10 format. Expected: namespace:reference:address');
   }
 
-  const { ns, ref, acct } = match.groups;
+  const [, namespace, reference, address] = match;
 
   return {
-    namespace: ns,
-    reference: ref,
-    address: acct,
+    namespace,
+    reference,
+    address,
   };
 }
 
