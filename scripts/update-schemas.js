@@ -138,6 +138,11 @@ function transformFields(properties, required = [], schemaId = '') {
         if (prop.maximum !== undefined) field.max = prop.maximum
       }
 
+      if (prop.type === 'string') {
+        if (prop.minLength !== undefined) field.minLength = prop.minLength
+        if (prop.maxLength !== undefined) field.maxLength = prop.maxLength
+      }
+
       if (prop.format) {
         field.format = prop.format
       }
@@ -343,6 +348,8 @@ export interface FormField {
   format?: string // for validation (uri, date-time, etc.)
   min?: number // for integer fields
   max?: number // for integer fields
+  minLength?: number // for string fields
+  maxLength?: number // for string fields
   subFields?: FormField[] // for object fields with nested properties
   default?: any // default value for the field
   autoDefault?: string // auto-generate default (e.g., 'current-timestamp')

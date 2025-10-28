@@ -15,6 +15,8 @@ export interface FormField {
   format?: string // for validation (uri, date-time, etc.)
   min?: number // for integer fields
   max?: number // for integer fields
+  minLength?: number // for string fields
+  maxLength?: number // for string fields
   subFields?: FormField[] // for object fields with nested properties
   default?: any // default value for the field
   autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
@@ -39,15 +41,19 @@ const certificationFields: FormField[] = [
     "label": "Subject ID",
     "description": "DID of the product, system, or organization being certified.",
     "required": true,
-    "placeholder": "Enter subject"
+    "placeholder": "Enter subject",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "subjectOwner",
     "type": "string",
     "label": "Subject Owner ID",
-    "description": "DID of the entity responsible for the subject.",
+    "description": "DID of the entity responsible for the subject.  If there is no owner, leave blank.",
     "required": false,
-    "placeholder": "Enter subjectowner"
+    "placeholder": "Enter subjectowner",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "subjectMetadataURI",
@@ -56,15 +62,18 @@ const certificationFields: FormField[] = [
     "description": "Optional URI controlled by the subject that provides mutable, human-readable metadata.",
     "required": false,
     "placeholder": "https://example.com",
+    "maxLength": 256,
     "format": "uri"
   },
   {
     "name": "programIdentifier",
     "type": "string",
     "label": "Program ID",
-    "description": "DID or URI of the certification program under which this certification was issued.",
+    "description": "DID of the certification program under which this certification was issued. Program release version should be included in the DID.",
     "required": true,
-    "placeholder": "Enter programidentifier"
+    "placeholder": "Enter programidentifier",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "programMetadataURI",
@@ -73,40 +82,18 @@ const certificationFields: FormField[] = [
     "description": "Optional URI for mutable, human-readable certification program info.",
     "required": false,
     "placeholder": "https://example.com",
+    "maxLength": 256,
     "format": "uri"
-  },
-  {
-    "name": "anchoredDataURL",
-    "type": "uri",
-    "label": "Anchored Data URL",
-    "description": "Immutable URI containing the canonical certification program data (e.g., requirements, test plans).",
-    "required": false,
-    "placeholder": "https://example.com",
-    "format": "uri"
-  },
-  {
-    "name": "anchoredDataAlgorithm",
-    "type": "string",
-    "label": "Anchored Data Hash Algorithm",
-    "description": "Hashing algorithm used to generate anchoredDataHash (e.g., 'sha3-256').",
-    "required": false,
-    "placeholder": "Enter anchoreddataalgorithm"
-  },
-  {
-    "name": "anchoredDataHash",
-    "type": "string",
-    "label": "Anchored Data Hash",
-    "description": "Cryptographic hash of the content located at anchoredDataURL.",
-    "required": false,
-    "placeholder": "Enter anchoreddatahash"
   },
   {
     "name": "assessor",
     "type": "string",
-    "label": "Assessor ID",
+    "label": "Assessor DID",
     "description": "DID of the authorized assessor (test lab, auditor) who evaluated the subject.",
     "required": true,
-    "placeholder": "Enter assessor"
+    "placeholder": "Enter assessor",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "assessorMetadataURI",
@@ -115,6 +102,7 @@ const certificationFields: FormField[] = [
     "description": "Optional URI with human-readable info about the assessor (e.g., homepage, credentials).",
     "required": false,
     "placeholder": "https://example.com",
+    "maxLength": 256,
     "format": "uri"
   },
   {
@@ -123,7 +111,8 @@ const certificationFields: FormField[] = [
     "label": "Certification Level",
     "description": "Optional classification level of certification (e.g., 'Gold', 'Level 2').",
     "required": false,
-    "placeholder": "Enter certificationlevel"
+    "placeholder": "Enter certificationlevel",
+    "maxLength": 256
   },
   {
     "name": "version",
@@ -131,7 +120,8 @@ const certificationFields: FormField[] = [
     "label": "Software Version",
     "description": "Software version of the certified subject.",
     "required": false,
-    "placeholder": "Enter version"
+    "placeholder": "Enter version",
+    "maxLength": 50
   },
   {
     "name": "versionHW",
@@ -139,7 +129,8 @@ const certificationFields: FormField[] = [
     "label": "Hardware Version",
     "description": "Hardware version of the certified subject, if applicable.",
     "required": false,
-    "placeholder": "Enter versionhw"
+    "placeholder": "Enter versionhw",
+    "maxLength": 50
   },
   {
     "name": "effectiveAt",
@@ -147,7 +138,9 @@ const certificationFields: FormField[] = [
     "label": "Effective Date",
     "description": "Unix timestamp (in seconds) when the certification becomes effective.",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp"
   },
   {
     "name": "expiresAt",
@@ -155,7 +148,8 @@ const certificationFields: FormField[] = [
     "label": "Expiration Date",
     "description": "Optional expiration timestamp (in seconds).",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "subtype": "timestamp"
   },
   {
     "name": "issuedAt",
@@ -163,15 +157,9 @@ const certificationFields: FormField[] = [
     "label": "Issued Date",
     "description": "Optional timestamp (in seconds) when the certification was issued.",
     "required": false,
-    "placeholder": "0"
-  },
-  {
-    "name": "attestationType",
-    "type": "string",
-    "label": "Attestation Type",
-    "description": "Optional label (e.g., 'Certification') to help downstream tools interpret this attestation.",
-    "required": false,
-    "placeholder": "Enter attestationtype"
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp"
   }
 ]
 
@@ -182,33 +170,8 @@ const endorsementFields: FormField[] = [
     "label": "Subject ID",
     "description": "DID of the entity being endorsed or approved.",
     "required": true,
-    "placeholder": "Enter subject"
-  },
-  {
-    "name": "payloadVersion",
-    "type": "string",
-    "label": "Payload Version",
-    "description": "Semver describing the shape of 'payload' (additive changes may bump this without a new schema UID).",
-    "required": false,
-    "placeholder": "Enter payloadversion",
-    "default": "1.0.0"
-  },
-  {
-    "name": "payloadSpecURI",
-    "type": "uri",
-    "label": "Payload Specification URI",
-    "description": "URI to the human/machine-readable spec for the current payloadVersion (e.g., IPFS/HTTPS).",
-    "required": false,
-    "placeholder": "https://example.com",
-    "format": "uri"
-  },
-  {
-    "name": "payload",
-    "type": "string",
-    "label": "Endorsement Payload",
-    "description": "Endorsement details (schema-agnostic; no predefined keys).",
-    "required": false,
-    "placeholder": "Enter payload"
+    "placeholder": "Enter subject",
+    "maxLength": 128
   },
   {
     "name": "policyURI",
@@ -217,43 +180,40 @@ const endorsementFields: FormField[] = [
     "description": "Optional URI pointing to the criteria or process used for formal approvals.",
     "required": false,
     "placeholder": "https://example.com",
+    "maxLength": 256,
     "format": "uri"
   },
   {
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the attestation was issued.",
+    "description": "Unix timestamp (in seconds) when the attestation was issued. Default is the current time.",
     "required": false,
     "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
     "min": 0
   },
   {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Optional Unix timestamp when the endorsement or approval becomes effective.",
+    "description": "Optional Unix timestamp (in seconds) when the assessment becomes effective. Default is the current time.",
     "required": false,
     "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
     "min": 0
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Optional Unix timestamp after which the endorsement or approval expires.",
+    "description": "Unix timestamp (in seconds) after which the assessment expires. Leave empty if the assessment does not expire.",
     "required": false,
     "placeholder": "0",
+    "subtype": "timestamp",
     "min": 0
-  },
-  {
-    "name": "attestationType",
-    "type": "string",
-    "label": "Attestation Type",
-    "description": "Type identifier for this attestation (e.g., 'SecurityAssessment').",
-    "required": false,
-    "placeholder": "Enter attestationtype",
-    "default": "SecurityAssessment"
   }
 ]
 
@@ -264,7 +224,9 @@ const linkedIdentifierFields: FormField[] = [
     "label": "Subject ID",
     "description": "DID of the subject (such as did:pkh for wallet addresses or did:web for web domains) that is claimed to control the linked identifier.",
     "required": true,
-    "placeholder": "Enter subject"
+    "placeholder": "Enter subject",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "linkedId",
@@ -272,7 +234,8 @@ const linkedIdentifierFields: FormField[] = [
     "label": "Linked Identifier",
     "description": "The identifier being claimed as controlled by the subject (e.g., a did:web, email address, or domain).",
     "required": true,
-    "placeholder": "Enter linkedid"
+    "placeholder": "Enter linkedid",
+    "maxLength": 256
   },
   {
     "name": "linkedIdType",
@@ -280,7 +243,8 @@ const linkedIdentifierFields: FormField[] = [
     "label": "Linked ID Type",
     "description": "Type or namespace of the linkedId being asserted. Examples: did:web (for websites), did:key (for keys), email, twitter, github, facebook, discord, telegram, lens, farcaster, or any other well-known identifier type.",
     "required": false,
-    "placeholder": "Enter linkedidtype"
+    "placeholder": "Enter linkedidtype",
+    "maxLength": 100
   },
   {
     "name": "method",
@@ -301,29 +265,35 @@ const linkedIdentifierFields: FormField[] = [
   },
   {
     "name": "issuedAt",
-    "type": "datetime",
+    "type": "integer",
     "label": "Issued Date",
-    "description": "Timestamp when the attestation was issued.",
+    "description": "Unix timestamp (in seconds) when the attestation was issued. Default is the current time.",
     "required": true,
-    "placeholder": "2024-01-01T00:00:00Z",
-    "format": "date-time"
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
   },
   {
-    "name": "validUntil",
-    "type": "datetime",
-    "label": "Valid Until",
-    "description": "Optional expiration timestamp after which the attestation is no longer considered valid.",
+    "name": "effectiveAt",
+    "type": "integer",
+    "label": "Effective Date",
+    "description": "Optional Unix timestamp (in seconds) when the assessment becomes effective. Default is the current time.",
     "required": false,
-    "placeholder": "2024-01-01T00:00:00Z",
-    "format": "date-time"
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
   },
   {
-    "name": "attestationType",
-    "type": "string",
-    "label": "Attestation Type",
-    "description": "Optional classification of the attestation for filtering and indexing purposes.",
+    "name": "expiresAt",
+    "type": "integer",
+    "label": "Expiration Date",
+    "description": "Unix timestamp (in seconds) after which the assessment expires. Leave empty if the assessment does not expire.",
     "required": false,
-    "placeholder": "Enter attestationtype"
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "min": 0
   }
 ]
 
@@ -334,7 +304,9 @@ const securityAssessmentFields: FormField[] = [
     "label": "Subject ID",
     "description": "ID of the assessed application/contract/service. Select an ID type below and enter the proper identity.",
     "required": true,
-    "placeholder": "Enter subject"
+    "placeholder": "Enter subject",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "payload",
@@ -364,6 +336,7 @@ const securityAssessmentFields: FormField[] = [
         "description": "Methodology / SOP documentation.",
         "required": false,
         "placeholder": "https://example.com",
+        "maxLength": 256,
         "format": "uri"
       },
       {
@@ -373,6 +346,7 @@ const securityAssessmentFields: FormField[] = [
         "description": "Human-readable report location (may be mutable).",
         "required": false,
         "placeholder": "https://example.com",
+        "maxLength": 256,
         "format": "uri"
       },
       {
@@ -401,7 +375,8 @@ const securityAssessmentFields: FormField[] = [
             "label": "Report Hash Value",
             "description": "0x-prefixed hex digest of the canonical report bytes.",
             "required": false,
-            "placeholder": "Enter hex"
+            "placeholder": "Enter hex",
+            "maxLength": 200
           }
         ]
       },
@@ -462,7 +437,8 @@ const userReviewResponseFields: FormField[] = [
     "label": "Subject ID",
     "description": "Address of the original reviewer being responded to.",
     "required": true,
-    "placeholder": "Enter subject"
+    "placeholder": "Enter subject",
+    "maxLength": 128
   },
   {
     "name": "responseBody",
@@ -470,7 +446,8 @@ const userReviewResponseFields: FormField[] = [
     "label": "Response",
     "description": "Free-form text containing the response to the review.",
     "required": true,
-    "placeholder": "Enter responsebody"
+    "placeholder": "Enter responsebody",
+    "maxLength": 500
   },
   {
     "name": "datePublished",
@@ -479,6 +456,7 @@ const userReviewResponseFields: FormField[] = [
     "description": "Timestamp when the response was written or published, in ISO 8601 format.",
     "required": false,
     "placeholder": "2024-01-01T00:00:00Z",
+    "maxLength": 50,
     "format": "date-time"
   },
   {
@@ -488,6 +466,7 @@ const userReviewResponseFields: FormField[] = [
     "description": "URI pointing to offchain response content (e.g., IPFS, Cloudinary, Arweave).",
     "required": false,
     "placeholder": "https://example.com",
+    "maxLength": 256,
     "format": "uri"
   },
   {
@@ -496,7 +475,8 @@ const userReviewResponseFields: FormField[] = [
     "label": "Anchored Data Hash Algorithm",
     "description": "Hashing algorithm used for 'anchoredDataHash' (e.g., 'sha3-256').",
     "required": false,
-    "placeholder": "Enter anchoreddataalgorithm"
+    "placeholder": "Enter anchoreddataalgorithm",
+    "maxLength": 50
   },
   {
     "name": "anchoredDataHash",
@@ -504,7 +484,8 @@ const userReviewResponseFields: FormField[] = [
     "label": "Anchored Data Hash",
     "description": "Cryptographic hash of the content located at 'anchoredDataURL'.",
     "required": false,
-    "placeholder": "Enter anchoreddatahash"
+    "placeholder": "Enter anchoreddatahash",
+    "maxLength": 200
   },
   {
     "name": "attestationType",
@@ -512,7 +493,8 @@ const userReviewResponseFields: FormField[] = [
     "label": "Attestation Type",
     "description": "Type identifier for this attestation (e.g., 'UserReviewResponse').",
     "required": false,
-    "placeholder": "Enter attestationtype"
+    "placeholder": "Enter attestationtype",
+    "maxLength": 100
   },
   {
     "name": "issuedAt",
@@ -537,9 +519,11 @@ const userReviewFields: FormField[] = [
     "name": "subject",
     "type": "string",
     "label": "Subject ID",
-    "description": "DID or URI of the thing being reviewed.",
+    "description": "DID of the thing being reviewed.",
     "required": true,
-    "placeholder": "Enter subject"
+    "placeholder": "Enter subject",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "version",
@@ -547,7 +531,8 @@ const userReviewFields: FormField[] = [
     "label": "SubjectVersion",
     "description": "Version of the reviewed subject (e.g., app version).",
     "required": false,
-    "placeholder": "Enter version"
+    "placeholder": "Enter version",
+    "maxLength": 50
   },
   {
     "name": "summary",
@@ -555,7 +540,8 @@ const userReviewFields: FormField[] = [
     "label": "Review Summary",
     "description": "Short title or headline for the review (e.g., 'Loved it', 'Buggy experience').",
     "required": false,
-    "placeholder": "Enter summary"
+    "placeholder": "Enter summary",
+    "maxLength": 200
   },
   {
     "name": "reviewBody",
@@ -563,7 +549,8 @@ const userReviewFields: FormField[] = [
     "label": "Review",
     "description": "Free-form text describing the user's experience or feedback.",
     "required": false,
-    "placeholder": "Enter reviewbody"
+    "placeholder": "Enter reviewbody",
+    "maxLength": 500
   },
   {
     "name": "author",
@@ -571,16 +558,8 @@ const userReviewFields: FormField[] = [
     "label": "Author ID",
     "description": "DID, handle, or name of the user who wrote the review.",
     "required": false,
-    "placeholder": "Enter author"
-  },
-  {
-    "name": "datePublished",
-    "type": "datetime",
-    "label": "Date Published",
-    "description": "Timestamp when the review was written or published, in ISO 8601 format.",
-    "required": false,
-    "placeholder": "2024-01-01T00:00:00Z",
-    "format": "date-time"
+    "placeholder": "Enter author",
+    "maxLength": 200
   },
   {
     "name": "ratingValue",
@@ -601,53 +580,36 @@ const userReviewFields: FormField[] = [
     "placeholder": "Enter screenshoturls"
   },
   {
-    "name": "anchoredDataURL",
-    "type": "uri",
-    "label": "Anchored Data URL",
-    "description": "URI pointing to offchain review content (e.g., IPFS, Cloudinary, Arweave).",
-    "required": false,
-    "placeholder": "https://example.com",
-    "format": "uri"
-  },
-  {
-    "name": "anchoredDataAlgorithm",
-    "type": "string",
-    "label": "Anchored Data Hash Algorithm",
-    "description": "Hashing algorithm used for 'anchoredDataHash' (e.g., 'sha3-256').",
-    "required": false,
-    "placeholder": "Enter anchoreddataalgorithm"
-  },
-  {
-    "name": "anchoredDataHash",
-    "type": "string",
-    "label": "Anchored Data Hash",
-    "description": "Cryptographic hash of the content located at 'anchoredDataURL'.",
-    "required": false,
-    "placeholder": "Enter anchoreddatahash"
-  },
-  {
-    "name": "attestationType",
-    "type": "string",
-    "label": "Attestation Type",
-    "description": "Type identifier for this attestation (e.g., 'UserReview').",
-    "required": false,
-    "placeholder": "Enter attestationtype"
-  },
-  {
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) for when the review was submitted.",
+    "description": "Unix timestamp (in seconds) when the review was issued. Default is the current time.",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
+  },
+  {
+    "name": "effectiveAt",
+    "type": "integer",
+    "label": "Effective Date",
+    "description": "Optional Unix timestamp (in seconds) when the review becomes effective. Default is the current time.",
+    "required": false,
+    "placeholder": "0",
+    "autoDefault": "current-timestamp",
+    "subtype": "timestamp",
+    "min": 0
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Optional expiration timestamp for the attestation.",
+    "description": "Unix timestamp (in seconds) after which the review expires. Leave empty if the review does not expire.",
     "required": false,
-    "placeholder": "0"
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "min": 0
   }
 ]
 
@@ -655,7 +617,7 @@ const userReviewFields: FormField[] = [
 export const certificationSchema: AttestationSchema = {
   id: 'certification',
   title: 'Certification',
-  description: 'A flat schema for certifying that a subject has met the requirements of a defined certification program. Anchors immutable program data and supports optional subject and assessor metadata.',
+  description: 'Certification bodies use this attestation when a subject passes certification.',
   fields: certificationFields,
   deployedUIDs: {
     97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet

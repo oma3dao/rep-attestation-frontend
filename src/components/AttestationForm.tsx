@@ -27,7 +27,17 @@ export function validateField(field: any, value: any): string | undefined {
     }
   }
   if (value && typeof value === 'string') {
-    if (field.type === 'uri' && value.trim()) {
+    const trimmedValue = value.trim();
+    
+    // String length validation
+    if (field.minLength !== undefined && trimmedValue.length < field.minLength) {
+      return `${field.label} must be at least ${field.minLength} characters`;
+    }
+    if (field.maxLength !== undefined && trimmedValue.length > field.maxLength) {
+      return `${field.label} must be at most ${field.maxLength} characters`;
+    }
+    
+    if (field.type === 'uri' && trimmedValue) {
       try {
         new URL(value);
       } catch {
