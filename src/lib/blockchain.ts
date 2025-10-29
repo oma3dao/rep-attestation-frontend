@@ -1,6 +1,5 @@
 import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
-import { bsc, bscTestnet, sepolia, mainnet } from 'thirdweb/chains'
-import { omachainTestnet, omachainMainnet } from '@/config/chains'
+import { omachainTestnet, omachainMainnet, bscTestnet, bscMainnet, sepolia, mainnet } from '@/config/chains'
 
 /**
  * Pure ThirdWeb wallet integration
@@ -17,7 +16,7 @@ export function useWallet() {
   
   // Check if current chain is supported by BAS
   const isBASChain = (chainId?: number): boolean => {
-    return chainId === bscTestnet.id || chainId === bsc.id
+    return chainId === bscTestnet.id || chainId === bscMainnet.id
   }
   
   // Check if current chain supports any attestation service
@@ -43,6 +42,6 @@ export function useWallet() {
     chain,
     
     // Utilities
-    supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bsc.id, sepolia.id, mainnet.id]
+    supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bscMainnet.id, sepolia.id, mainnet.id]
   }
 } 

@@ -621,11 +621,15 @@ export const certificationSchema: AttestationSchema = {
   fields: certificationFields,
   deployedUIDs: {
     97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0x0e1f0bd850abce189c5825ca3fe52d465eeafc068e76af2c88a0b11bbf164835', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52415269, // BSC Testnet
-    56: 0  // BSC Mainnet
+    56: 0, // BSC Mainnet
+    66238: 48, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 
@@ -636,11 +640,15 @@ export const endorsementSchema: AttestationSchema = {
   fields: endorsementFields,
   deployedUIDs: {
     97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0xaa85b8d1e4d75ade301ba75d599a63612c9aa8374f94b5c09d434ddb654638b2', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52288891, // BSC Testnet
-    56: 0  // BSC Mainnet
+    56: 0, // BSC Mainnet
+    66238: 49, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 
@@ -651,11 +659,15 @@ export const linkedIdentifierSchema: AttestationSchema = {
   fields: linkedIdentifierFields,
   deployedUIDs: {
     97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52415311, // BSC Testnet
-    56: 0  // BSC Mainnet
+    56: 0, // BSC Mainnet
+    66238: 50, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 
@@ -666,11 +678,15 @@ export const securityAssessmentSchema: AttestationSchema = {
   fields: securityAssessmentFields,
   deployedUIDs: {
     97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0x59f77f548c96e8a6109d7c3a1863f0b08d8ab0989bb25f0e44914dd6549a61ff', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 0, // BSC Testnet
-    56: 0  // BSC Mainnet
+    56: 0, // BSC Mainnet
+    66238: 46, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 
@@ -680,12 +696,16 @@ export const userReviewResponseSchema: AttestationSchema = {
   description: 'A response from an app owner or representative to a UserReview attestation. Uses refUID to reference the original review.',
   fields: userReviewResponseFields,
   deployedUIDs: {
-    97: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0xb28cd01484fe76c3cd24a2df64051a281eba7724f527ed6b3d99a72c4d6293ae', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
-    97: 68597701, // BSC Testnet
-    56: 0  // BSC Mainnet
+    97: 0, // BSC Testnet
+    56: 0, // BSC Mainnet
+    66238: 51, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 
@@ -696,11 +716,15 @@ export const userReviewSchema: AttestationSchema = {
   fields: userReviewFields,
   deployedUIDs: {
     97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
-    56: '0x0000000000000000000000000000000000000000000000000000000000000000'  // BSC Mainnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0x8689195186fbed7eca49500a063b71acc4b5e2289725db43b691491c21be74f3', // OMAchain Testnet
+    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52291400, // BSC Testnet
-    56: 0  // BSC Mainnet
+    56: 0, // BSC Mainnet
+    66238: 47, // OMAchain Testnet
+    6623: 0  // OMAchain Mainnet
   }
 };
 

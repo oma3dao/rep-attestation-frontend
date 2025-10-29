@@ -6,6 +6,7 @@
 
 import { useActiveAccount, useActiveWallet, useActiveWalletChain } from 'thirdweb/react'
 import { prepareContractCall, sendTransaction, getContract } from 'thirdweb'
+import { defineChain } from 'thirdweb/chains'
 import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk'
 import { client } from '@/app/client'
 import type { AttestationServiceClient, AttestationData, AttestationResult } from './types'
@@ -16,7 +17,16 @@ import { getSchema } from '@/config/schemas'
 import { ethers6Adapter } from 'thirdweb/adapters/ethers6'
 import logger from '@/lib/logger'
 import { didToIndexAddress, computeDidHash } from '@/lib/did-index'
-import { omachainTestnet } from '@/config/chains'
+import { omachainTestnet as omachainTestnetConfig } from '@/config/chains'
+
+// Convert plain chain config to thirdweb chain
+const omachainTestnet = defineChain({
+  id: omachainTestnetConfig.id,
+  rpc: omachainTestnetConfig.rpc,
+  name: omachainTestnetConfig.name,
+  nativeCurrency: omachainTestnetConfig.nativeCurrency,
+  blockExplorers: omachainTestnetConfig.blockExplorers,
+})
 
 /**
  * Convert our schema fields to EAS schema string for encoding

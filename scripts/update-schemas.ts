@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck - Build script with dynamic JSON processing
 
 /**
  * Schema Update Script
@@ -6,12 +7,13 @@
  * Reads JSON schema files from a folder and updates src/config/schemas.ts
  * 
  * Usage:
- *   node scripts/update-schemas.js /path/to/schemas/folder
+ *   npx esno scripts/update-schemas.ts /path/to/schemas/folder
  *   npm run update-schemas /path/to/schemas/folder
  */
 
-const fs = require('fs').promises
-const path = require('path')
+import { promises as fs } from 'fs'
+import path from 'path'
+import { CHAIN_IDS, DEPLOYMENT_FILE_MAPPINGS, getChainName } from '../src/config/chains'
 
 /**
  * Escape string for JavaScript code generation
@@ -79,19 +81,19 @@ function transformFields(properties, required = [], schemaId = '') {
           required: required.includes(name),
           subFields: transformFields(prop.properties, prop.required || [], schemaId)
         }
-        
+
         // Add nested flag if present
         if (prop['x-oma3-nested'] !== undefined) {
           objectField.nested = prop['x-oma3-nested']
         }
-        
+
         return objectField
       }
 
       // Map JSON Schema types to UI field types
       const typeMapping = {
-        'string': prop.format === 'uri' ? 'uri' : 
-                  prop.format === 'date-time' ? 'datetime' : 'string',
+        'string': prop.format === 'uri' ? 'uri' :
+          prop.format === 'date-time' ? 'datetime' : 'string',
         'integer': 'integer',
         'number': 'integer',
         'array': 'array',
@@ -176,11 +178,11 @@ function generatePlaceholder(name, prop) {
 async function readSchemasFromDirectory(directoryPath) {
   try {
     console.log(`📁 Reading schemas from: ${directoryPath}`)
-    
+
     const fullPath = path.resolve(directoryPath)
     const files = await fs.readdir(fullPath)
     const schemas = {}
-    
+
     for (const file of files) {
       // Skip test-deploy.schema.json and non-JSON files
       if (file === 'test-deploy.schema.json' || !file.endsWith('.json')) {
@@ -192,17 +194,17 @@ async function readSchemasFromDirectory(directoryPath) {
         const filePath = path.join(fullPath, file)
         const content = await fs.readFile(filePath, 'utf8')
         const schema = JSON.parse(content)
-        
+
         // Extract schema ID from filename (remove .schema.json or .json)
         const schemaId = file.replace(/\.schema\.json$/, '').replace(/\.json$/, '')
         schemas[schemaId] = schema
-        
+
         console.log(`✅ Loaded: ${file} → ${schemaId}`)
       } catch (error) {
         console.error(`❌ Failed to load ${file}:`, error.message)
       }
     }
-    
+
     return schemas
   } catch (error) {
     console.error('❌ Failed to read directory:', error.message)
@@ -216,31 +218,30 @@ async function readSchemasFromDirectory(directoryPath) {
 async function readDeploymentData(rootPath) {
   const deploymentPath = path.join(rootPath, 'generated')
   const deployments = {}
-  
+
   try {
     console.log(`📡 Reading deployment data from: ${deploymentPath}`)
     const files = await fs.readdir(deploymentPath)
-    
+
     for (const file of files) {
       let schemaId, chainId, chainName
-      
-      if (file.endsWith('.deployed.bastest.json')) {
-        schemaId = file.replace('.deployed.bastest.json', '')
-        chainId = 97
-        chainName = 'BSC Testnet'
-      } else if (file.endsWith('.deployed.bas.json')) {
-        schemaId = file.replace('.deployed.bas.json', '')
-        chainId = 56
-        chainName = 'BSC Mainnet'
+
+      // Find matching deployment file extension
+      const matchedExtension = Object.keys(DEPLOYMENT_FILE_MAPPINGS).find(ext => file.endsWith(ext))
+
+      if (matchedExtension) {
+        schemaId = file.replace(matchedExtension, '')
+        chainId = DEPLOYMENT_FILE_MAPPINGS[matchedExtension]
+        chainName = getChainName(chainId)
       } else {
         continue // Skip non-deployment files
       }
-      
+
       try {
         const filePath = path.join(deploymentPath, file)
         const content = await fs.readFile(filePath, 'utf8')
         const deploymentData = JSON.parse(content)
-        
+
         // Convert PascalCase filename to kebab-case to match schema IDs
         // e.g., "Certification" -> "certification", "Linked-Identifier" -> "linked-identifier"
         const normalizedSchemaId = schemaId
@@ -252,18 +253,18 @@ async function readDeploymentData(rootPath) {
             }
             return letter.toLowerCase()
           })
-        
+
         // Initialize schema deployments if not exists
         if (!deployments[normalizedSchemaId]) {
           deployments[normalizedSchemaId] = {}
         }
-        
+
         deployments[normalizedSchemaId][chainId] = {
           schemaUID: deploymentData.uid, // Property is 'uid' not 'schemaUID'
           blockNumber: deploymentData.blockNumber,
           chainName
         }
-        
+
         console.log(`   ✅ ${schemaId} -> ${normalizedSchemaId} (${chainName}): ${deploymentData.uid}`)
       } catch (fileError) {
         console.warn(`   ⚠️  Failed to read ${file}:`, fileError.message)
@@ -273,7 +274,7 @@ async function readDeploymentData(rootPath) {
     console.warn(`⚠️  Could not read deployment directory: ${error.message}`)
     console.log(`   This is okay - will use placeholder values`)
   }
-  
+
   return deployments
 }
 
@@ -281,7 +282,7 @@ async function readDeploymentData(rootPath) {
  * Generate the schemas.ts file
  */
 async function generateSchemasFile(schemas, deployments = {}) {
-  const uiSchemas = Object.entries(schemas).map(([id, schema]) => 
+  const uiSchemas = Object.entries(schemas).map(([id, schema]) =>
     transformToUISchema(schema, id)
   )
 
@@ -297,13 +298,19 @@ async function generateSchemasFile(schemas, deployments = {}) {
   // Generate TypeScript export for each schema
   const schemaExports = fieldArrays.map(item => {
     const deployment = deployments[item.schema.id]
-    const testnetData = deployment?.[97]
-    const mainnetData = deployment?.[56]
-    
-    const testnetUID = testnetData ? testnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
-    const testnetBlock = testnetData ? testnetData.blockNumber : 0
-    const mainnetUID = mainnetData ? mainnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
-    const mainnetBlock = mainnetData ? mainnetData.blockNumber : 0
+    const bscTestnetData = deployment?.[CHAIN_IDS.BSC_TESTNET]
+    const bscMainnetData = deployment?.[CHAIN_IDS.BSC_MAINNET]
+    const omachainTestnetData = deployment?.[CHAIN_IDS.OMACHAIN_TESTNET]
+    const omachainMainnetData = deployment?.[CHAIN_IDS.OMACHAIN_MAINNET]
+
+    const bscTestnetUID = bscTestnetData ? bscTestnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const bscTestnetBlock = bscTestnetData ? bscTestnetData.blockNumber : 0
+    const bscMainnetUID = bscMainnetData ? bscMainnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const bscMainnetBlock = bscMainnetData ? bscMainnetData.blockNumber : 0
+    const omachainTestnetUID = omachainTestnetData ? omachainTestnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const omachainTestnetBlock = omachainTestnetData ? omachainTestnetData.blockNumber : 0
+    const omachainMainnetUID = omachainMainnetData ? omachainMainnetData.schemaUID : '0x0000000000000000000000000000000000000000000000000000000000000000'
+    const omachainMainnetBlock = omachainMainnetData ? omachainMainnetData.blockNumber : 0
 
     // Convert kebab-case to camelCase for variable names
     const varName = item.schema.id.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase())
@@ -315,16 +322,20 @@ async function generateSchemasFile(schemas, deployments = {}) {
       `  description: '${escapeString(item.schema.description)}',`,
       `  fields: ${item.fieldsVarName},`,
       `  deployedUIDs: {`,
-      `    97: '${escapeString(testnetUID)}', // BSC Testnet`,
-      `    56: '${escapeString(mainnetUID)}'  // BSC Mainnet`,
+      `    ${CHAIN_IDS.BSC_TESTNET}: '${escapeString(bscTestnetUID)}', // BSC Testnet`,
+      `    ${CHAIN_IDS.BSC_MAINNET}: '${escapeString(bscMainnetUID)}', // BSC Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAchain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAchain Mainnet`,
       `  },`,
       `  deployedBlocks: {`,
-      `    97: ${testnetBlock}, // BSC Testnet`,
-      `    56: ${mainnetBlock}  // BSC Mainnet`,
+      `    ${CHAIN_IDS.BSC_TESTNET}: ${bscTestnetBlock}, // BSC Testnet`,
+      `    ${CHAIN_IDS.BSC_MAINNET}: ${bscMainnetBlock}, // BSC Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: ${omachainTestnetBlock}, // OMAchain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAchain Mainnet`,
       `  }`,
       `};`
     ].join('\n')
-    
+
     return {
       varName,
       export: schemaExport
@@ -400,7 +411,7 @@ export function getAllSchemas(): AttestationSchema[] {
  */
 async function main() {
   const args = process.argv.slice(2)
-  
+
   if (args.length !== 1) {
     console.error('❌ Error: Please provide the root path to the tools project')
     console.error('Usage: node scripts/update-schemas.js /path/to/rep-attestation-tools-evm-solidity')
@@ -413,22 +424,22 @@ async function main() {
   try {
     console.log(`🚀 Starting schema update from tools project: ${rootPath}`)
     console.log(`📁 Reading schemas from: ${schemasPath}`)
-    
+
     const schemas = await readSchemasFromDirectory(schemasPath)
-    
+
     if (Object.keys(schemas).length === 0) {
       console.warn('⚠️  No schemas found to process')
       return
     }
-    
+
     const deployments = await readDeploymentData(rootPath)
-    
+
     await generateSchemasFile(schemas, deployments)
-    
+
     console.log(`✅ Schema update completed successfully!`)
     console.log(`📊 Processed ${Object.keys(schemas).length} schemas:`)
     Object.keys(schemas).forEach(id => console.log(`   - ${id}`))
-    
+
     if (Object.keys(deployments).length > 0) {
       console.log(`🚀 Loaded deployments:`)
       Object.entries(deployments).forEach(([schemaId, chains]) => {
@@ -439,7 +450,7 @@ async function main() {
         })
       })
     }
-    
+
   } catch (error) {
     console.error(`❌ Schema update failed: ${error.message}`)
     process.exit(1)

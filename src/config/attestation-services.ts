@@ -1,5 +1,4 @@
-import { bsc, bscTestnet } from 'thirdweb/chains'
-// import { customChain } from '@/lib/thirdweb'
+import { CHAIN_IDS, omachainTestnet, omachainMainnet, bscTestnet, bscMainnet } from './chains'
 
 // Attestation service configuration
 export interface AttestationServiceConfig {
@@ -21,14 +20,10 @@ export const BAS_CONFIG: AttestationServiceConfig = {
   description: 'Decentralized attestation service built on BNB Smart Chain',
   website: 'https://docs.bnbchain.org/bas/',
   docs: 'https://docs.bnbchain.org/bas/developer-guide/',
-  supportedChains: [bscTestnet.id, bsc.id],
-  // When custom chain is ready, add support:
-  // supportedChains: [bscTestnet.id, bsc.id, customChain.id],
+  supportedChains: [CHAIN_IDS.BSC_TESTNET, CHAIN_IDS.BSC_MAINNET],
   contracts: {
-    [bscTestnet.id]: '0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD', // Official BAS testnet contract
-    [bsc.id]: '0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC' // Official BAS mainnet contract
-    // When custom chain is ready, add contract:
-    // [customChain.id]: '0x0000000000000000000000000000000000000000' // TODO: Deploy to custom chain
+    [CHAIN_IDS.BSC_TESTNET]: bscTestnet.contracts.basContract!,
+    [CHAIN_IDS.BSC_MAINNET]: bscMainnet.contracts.basContract!,
   },
   features: [
     'On-chain attestations',
@@ -38,10 +33,8 @@ export const BAS_CONFIG: AttestationServiceConfig = {
     'BNB Smart Chain native'
   ],
   estimatedGasCost: {
-    [bscTestnet.id]: BigInt('100000'), // ~0.0002 BNB at 2 gwei
-    [bsc.id]: BigInt('100000')
-    // When custom chain is ready, add gas cost:
-    // [customChain.id]: BigInt('50000') // Adjust based on custom chain gas costs
+    [CHAIN_IDS.BSC_TESTNET]: BigInt('100000'), // ~0.0002 BNB at 2 gwei
+    [CHAIN_IDS.BSC_MAINNET]: BigInt('100000')
   }
 }
 
@@ -74,10 +67,10 @@ export const EAS_CONFIG: AttestationServiceConfig = {
   description: 'Decentralized attestation service on OMAchain',
   website: 'https://attest.org/',
   docs: 'https://docs.attest.org/',
-  supportedChains: [66238, 6623], // OMAchain testnet and mainnet
+  supportedChains: [CHAIN_IDS.OMACHAIN_TESTNET, CHAIN_IDS.OMACHAIN_MAINNET],
   contracts: {
-    66238: '0xDc120C00E62822329A4d8C7808f5a43C9CbfC1f8', // EAS contract on OMAchain testnet
-    6623: '0x0000000000000000000000000000000000000000' // TODO: Update when mainnet is available
+    [CHAIN_IDS.OMACHAIN_TESTNET]: omachainTestnet.contracts.easContract!,
+    [CHAIN_IDS.OMACHAIN_MAINNET]: omachainMainnet.contracts.easContract!,
   },
   features: [
     'On-chain attestations',
@@ -87,8 +80,8 @@ export const EAS_CONFIG: AttestationServiceConfig = {
     'OMAchain native'
   ],
   estimatedGasCost: {
-    66238: BigInt('100000'), // Adjust based on actual costs
-    6623: BigInt('100000')
+    [CHAIN_IDS.OMACHAIN_TESTNET]: BigInt('100000'), // Adjust based on actual costs
+    [CHAIN_IDS.OMACHAIN_MAINNET]: BigInt('100000')
   }
 }
 
