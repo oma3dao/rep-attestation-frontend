@@ -9,9 +9,21 @@ import {
   inAppWallet,
   walletConnect
 } from "thirdweb/wallets"
+import { defineChain } from "thirdweb/chains"
 import { SUPPORTED_CHAINS } from "@/config/chains"
 
 import { cn } from "@/lib/utils"
+
+// Convert plain chain configs to thirdweb chains
+const thirdwebChains = SUPPORTED_CHAINS.map(chain => 
+  defineChain({
+    id: chain.id,
+    rpc: chain.rpc,
+    name: chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    blockExplorers: chain.blockExplorers,
+  })
+)
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -91,7 +103,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className={className}
           autoConnect={{ timeout: 15000 }}
           wallets={wallets}
-          chains={SUPPORTED_CHAINS}
+          chains={thirdwebChains}
           connectModal={{
             size: "wide",
             showThirdwebBranding: false,
