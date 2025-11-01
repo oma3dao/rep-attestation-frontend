@@ -174,6 +174,16 @@ const endorsementFields: FormField[] = [
     "maxLength": 128
   },
   {
+    "name": "version",
+    "type": "string",
+    "label": "Software Version",
+    "description": "Semantic version of the endorsed subject (e.g., '1.2.3'). Optional - leave empty if endorsing the subject generally rather than a specific version.",
+    "required": false,
+    "placeholder": "Enter version",
+    "subtype": "semver",
+    "maxLength": 50
+  },
+  {
     "name": "policyURI",
     "type": "uri",
     "label": "Policy URI",
@@ -307,6 +317,16 @@ const securityAssessmentFields: FormField[] = [
     "placeholder": "Enter subject",
     "maxLength": 128,
     "format": "did"
+  },
+  {
+    "name": "version",
+    "type": "string",
+    "label": "Software Version",
+    "description": "Semantic version of the software/code that was assessed (e.g., '1.2.3').",
+    "required": false,
+    "placeholder": "Enter version",
+    "subtype": "semver",
+    "maxLength": 50
   },
   {
     "name": "payload",
@@ -528,10 +548,11 @@ const userReviewFields: FormField[] = [
   {
     "name": "version",
     "type": "string",
-    "label": "SubjectVersion",
+    "label": "Subject Version",
     "description": "Version of the reviewed subject (e.g., app version).",
     "required": false,
     "placeholder": "Enter version",
+    "subtype": "semver",
     "maxLength": 50
   },
   {
@@ -641,13 +662,13 @@ export const endorsementSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0xaa85b8d1e4d75ade301ba75d599a63612c9aa8374f94b5c09d434ddb654638b2', // OMAchain Testnet
+    66238: '0x7857fd1dedf3bd8aa207f081039e066390c567f4cda746d93447af70dab67289', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52288891, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 49, // OMAchain Testnet
+    66238: 121, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };
@@ -679,13 +700,13 @@ export const securityAssessmentSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0x59f77f548c96e8a6109d7c3a1863f0b08d8ab0989bb25f0e44914dd6549a61ff', // OMAchain Testnet
+    66238: '0xa3e21ac03740d2710641e415e1e74f06c5e54a28a03211aa5182287d8257e887', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 46, // OMAchain Testnet
+    66238: 122, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };
