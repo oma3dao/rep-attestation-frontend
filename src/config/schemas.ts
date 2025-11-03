@@ -46,6 +46,16 @@ const certificationFields: FormField[] = [
     "format": "did"
   },
   {
+    "name": "organization",
+    "type": "string",
+    "label": "Organization",
+    "description": "DID of the parent organization. Use this when certifying a service or resource that belongs to an organization (e.g., certifying did:web:example.com:service:api, set organization to did:web:example.com). Leave empty when certifying an organization directly.",
+    "required": false,
+    "placeholder": "Enter organization",
+    "maxLength": 128,
+    "format": "did"
+  },
+  {
     "name": "subjectOwner",
     "type": "string",
     "label": "Subject Owner ID",
@@ -172,6 +182,16 @@ const endorsementFields: FormField[] = [
     "required": true,
     "placeholder": "Enter subject",
     "maxLength": 128
+  },
+  {
+    "name": "organization",
+    "type": "string",
+    "label": "Organization",
+    "description": "DID of the parent organization. Use this when endorsing a service or resource that belongs to an organization (e.g., endorsing did:web:example.com:service:api, set organization to did:web:example.com). Leave empty when endorsing an organization directly.",
+    "required": false,
+    "placeholder": "Enter organization",
+    "maxLength": 128,
+    "format": "did"
   },
   {
     "name": "version",
@@ -315,6 +335,16 @@ const securityAssessmentFields: FormField[] = [
     "description": "ID of the assessed application/contract/service. Select an ID type below and enter the proper identity.",
     "required": true,
     "placeholder": "Enter subject",
+    "maxLength": 128,
+    "format": "did"
+  },
+  {
+    "name": "organization",
+    "type": "string",
+    "label": "Organization",
+    "description": "DID of the parent organization. Use this when assessing a service or resource that belongs to an organization (e.g., assessing did:web:example.com:service:api, set organization to did:web:example.com). Leave empty when assessing an organization directly.",
+    "required": false,
+    "placeholder": "Enter organization",
     "maxLength": 128,
     "format": "did"
   },
@@ -546,10 +576,20 @@ const userReviewFields: FormField[] = [
     "format": "did"
   },
   {
+    "name": "organization",
+    "type": "string",
+    "label": "Owning Organization",
+    "description": "DID of the service organization. Use this when reviewing a service that belongs to an organization. Leave empty when reviewing an organization directly.",
+    "required": false,
+    "placeholder": "Enter organization",
+    "maxLength": 128,
+    "format": "did"
+  },
+  {
     "name": "version",
     "type": "string",
     "label": "Subject Version",
-    "description": "Version of the reviewed subject (e.g., app version).",
+    "description": "Version of the reviewed subject (e.g., app or API version).",
     "required": false,
     "placeholder": "Enter version",
     "subtype": "semver",
@@ -559,7 +599,7 @@ const userReviewFields: FormField[] = [
     "name": "summary",
     "type": "string",
     "label": "Review Summary",
-    "description": "Short title or headline for the review (e.g., 'Loved it', 'Buggy experience').",
+    "description": "Short headline for the review (e.g., 'Loved it', 'Buggy experience').",
     "required": false,
     "placeholder": "Enter summary",
     "maxLength": 200
@@ -568,7 +608,7 @@ const userReviewFields: FormField[] = [
     "name": "reviewBody",
     "type": "string",
     "label": "Review",
-    "description": "Free-form text describing the user's experience or feedback.",
+    "description": "Free-form text describing your experience or feedback.",
     "required": false,
     "placeholder": "Enter reviewbody",
     "maxLength": 500
@@ -577,7 +617,7 @@ const userReviewFields: FormField[] = [
     "name": "author",
     "type": "string",
     "label": "Author ID",
-    "description": "DID, handle, or name of the user who wrote the review.",
+    "description": "Your DID, handle, or name.",
     "required": false,
     "placeholder": "Enter author",
     "maxLength": 200
@@ -604,7 +644,7 @@ const userReviewFields: FormField[] = [
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the review was issued. Default is the current time.",
+    "description": "Timestamp (in seconds) when the review was issued. Default is the current time.",
     "required": false,
     "placeholder": "0",
     "autoDefault": "current-timestamp",
@@ -615,7 +655,7 @@ const userReviewFields: FormField[] = [
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Optional Unix timestamp (in seconds) when the review becomes effective. Default is the current time.",
+    "description": "Timestamp (in seconds) when the review becomes effective. Default is the current time.",
     "required": false,
     "placeholder": "0",
     "autoDefault": "current-timestamp",
@@ -626,7 +666,7 @@ const userReviewFields: FormField[] = [
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Unix timestamp (in seconds) after which the review expires. Leave empty if the review does not expire.",
+    "description": "Timestamp (in seconds) after which the review expires. Leave empty if the review does not expire.",
     "required": false,
     "placeholder": "0",
     "subtype": "timestamp",
@@ -643,13 +683,13 @@ export const certificationSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0x0e1f0bd850abce189c5825ca3fe52d465eeafc068e76af2c88a0b11bbf164835', // OMAchain Testnet
+    66238: '0xa798698f86b62e0fa2e63cff94e7bcdf275ab015702d1e9ed85d1a95af7bff78', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52415269, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 48, // OMAchain Testnet
+    66238: 128, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };
@@ -662,13 +702,13 @@ export const endorsementSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0xda787e2c5b89cd1b2c77d7a9565573cc89bac752e9b587f3348e85c62d606a68', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0x7857fd1dedf3bd8aa207f081039e066390c567f4cda746d93447af70dab67289', // OMAchain Testnet
+    66238: '0xa349c19677b8c98c44e176eb03e8481e700f1e50ca22cfdfb395f32243e51abe', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52288891, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 121, // OMAchain Testnet
+    66238: 127, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };
@@ -700,13 +740,13 @@ export const securityAssessmentSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0xa3e21ac03740d2710641e415e1e74f06c5e54a28a03211aa5182287d8257e887', // OMAchain Testnet
+    66238: '0x99eeac6a1110ac16e8abf80118ddab37cf37916e3f79f995384d034f56cd0c1c', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 122, // OMAchain Testnet
+    66238: 126, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };
@@ -738,13 +778,13 @@ export const userReviewSchema: AttestationSchema = {
   deployedUIDs: {
     97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0x8689195186fbed7eca49500a063b71acc4b5e2289725db43b691491c21be74f3', // OMAchain Testnet
+    66238: '0xdcc94cf54d3b13c6718c796f44d69609f459f81d80800ecc0ae3083168010571', // OMAchain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAchain Mainnet
   },
   deployedBlocks: {
     97: 52291400, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 47, // OMAchain Testnet
+    66238: 125, // OMAchain Testnet
     6623: 0  // OMAchain Mainnet
   }
 };

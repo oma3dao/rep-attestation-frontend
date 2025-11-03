@@ -137,19 +137,9 @@ npm run update-schemas ../attestation-schemas/schemas
 ### What the Script Does
 
 1. **Reads** all `*.json` files from the specified directory
-2. **Skips** `test-deploy.schema.json` automatically 
-3. **Transforms** JSON schemas to TypeScript UI schemas
-4. **Overwrites** `src/config/schemas.ts` with the new definitions
-5. **Maintains** existing export structure for components
-
-### Schema File Processing
-
-| Input File | Schema ID | Status |
-|------------|-----------|---------|
-| `certification.json` | `certification` | ✅ Processed |
-| `endorsement.schema.json` | `endorsement` | ✅ Processed |
-| `test-deploy.schema.json` | - | ⏭️ Skipped |
-| `user-review.json` | `user-review` | ✅ Processed |
+2. **Transforms** JSON schemas to TypeScript UI schemas
+3. **Overwrites** `src/config/schemas.ts` with the new definitions
+4. **Maintains** existing export structure for components
 
 ### UI Metadata
 

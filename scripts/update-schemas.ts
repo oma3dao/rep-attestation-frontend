@@ -184,12 +184,6 @@ async function readSchemasFromDirectory(directoryPath) {
     const schemas = {}
 
     for (const file of files) {
-      // Skip test-deploy.schema.json and non-JSON files
-      if (file === 'test-deploy.schema.json' || !file.endsWith('.json')) {
-        console.log(`⏭️  Skipping: ${file}`)
-        continue
-      }
-
       try {
         const filePath = path.join(fullPath, file)
         const content = await fs.readFile(filePath, 'utf8')
