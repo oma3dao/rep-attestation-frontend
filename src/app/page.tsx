@@ -52,7 +52,7 @@ export default function HomePage() {
       <div className="text-center mb-16">
         <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">OMATrust Attestation Portal</h1>
         <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-          Create verifiable attestations for OMATrust and help secure the open internet.
+          Submit verifiable attestations on apps and services and help secure the open internet
         </p>
       </div>
 

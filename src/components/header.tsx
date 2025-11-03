@@ -13,6 +13,7 @@ export function Header() {
 
   const navItems = [
     { href: "/", label: "Home", external: false },
+    { href: "https://registry.omatrust.org", label: "Developers", external: true },
     { href: "https://docs.oma3.org/attestations", label: "Docs", external: true },
     // { href: "/attest", label: "Create Attestation" }, // Redundant with home page
     // { href: "/dashboard", label: "Dashboard" }, // TODO: Re-enable when dashboard is implemented
@@ -67,7 +68,7 @@ export function Header() {
             <Button 
               isConnectButton 
               className="bg-blue-600 text-white hover:bg-blue-700 rounded-md px-4 py-2"
-              connectButtonProps={{ label: "Connect Wallet" }}
+              connectButtonProps={{ label: "Sign In" }}
             />
           </div>
         </div>
