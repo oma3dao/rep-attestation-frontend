@@ -109,4 +109,19 @@ export function getContractAddress(serviceId: string, chainId: number): string |
 
 export function getAllServiceIds(): string[] {
   return Object.keys(ATTESTATION_SERVICES)
+}
+
+// Query configuration for fetching latest attestations
+export const ATTESTATION_QUERY_CONFIG = {
+  // Progressive block ranges to try when querying for attestations
+  // Tries smaller ranges first for efficiency, expands if needed
+  blockRanges: [
+    { blocks: 1000, label: '~30 minutes' },
+    { blocks: 10000, label: '~5 hours' },
+    { blocks: 1000000, label: '~20 days' }
+  ],
+  // Default number of attestations to display
+  defaultLimit: 20,
+  // Safety multiplier when fetching events (to account for filtering)
+  fetchMultiplier: 2
 } 

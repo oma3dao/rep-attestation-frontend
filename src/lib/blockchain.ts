@@ -1,6 +1,28 @@
 import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
 import { omachainTestnet, omachainMainnet, bscTestnet, bscMainnet, sepolia, mainnet } from '@/config/chains'
 
+// Get default chain from environment variable
+function getDefaultChain() {
+  const activeChain = process.env.NEXT_PUBLIC_ACTIVE_CHAIN
+  
+  switch (activeChain) {
+    case 'omachain-testnet':
+      return omachainTestnet
+    case 'omachain-mainnet':
+      return omachainMainnet
+    case 'bsc-testnet':
+      return bscTestnet
+    case 'bsc-mainnet':
+      return bscMainnet
+    case 'sepolia':
+      return sepolia
+    case 'mainnet':
+      return mainnet
+    default:
+      return omachainTestnet // Fallback to OMAchain testnet
+  }
+}
+
 /**
  * Pure ThirdWeb wallet integration
  * Provides wallet state and chain information using ThirdWeb hooks
@@ -24,8 +46,9 @@ export function useWallet() {
     return isEASChain(chainId) || isBASChain(chainId)
   }
   
-  // Use current chain or default to OMAchain testnet
-  const chainId = chain?.id || omachainTestnet.id
+  // Use current chain or default from environment variable
+  const defaultChain = getDefaultChain()
+  const chainId = chain?.id || defaultChain.id
   
   return {
     // Wallet connection state

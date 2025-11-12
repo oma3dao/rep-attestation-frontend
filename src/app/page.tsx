@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Shield, FileCheck, LinkIcon, Award, Star, MessageSquare } from "lucide-react"
+import { LatestAttestations } from "@/components/latest-attestations"
 
 export default function HomePage() {
   const features = [
@@ -50,9 +51,9 @@ export default function HomePage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Hero Section */}
       <div className="text-center mb-16">
-        <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">OMATrust Attestation Portal</h1>
-        <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-          Submit verifiable attestations on apps and services and help secure the open internet
+        <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">OMATrust Reputation Portal</h1>
+        <p className="text-3xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          Submit verifiable attestations on apps and services
         </p>
       </div>
 
@@ -69,7 +70,7 @@ export default function HomePage() {
               <div className="flex justify-center mt-4">
                 <Link href={feature.href}>
                   <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Attest
+                    Submit
                   </Button>
                 </Link>
               </div>
@@ -97,6 +98,9 @@ export default function HomePage() {
         </div>
       </div>
       */}
+
+      {/* Latest Attestations */}
+      <LatestAttestations />
     </div>
   )
 }

@@ -13,7 +13,7 @@ export function Header() {
 
   const navItems = [
     { href: "/", label: "Home", external: false },
-    { href: "https://registry.omatrust.org", label: "Developers", external: true },
+    { href: "https://registry.omatrust.org", label: "Registry", external: true },
     { href: "https://docs.oma3.org/attestations", label: "Docs", external: true },
     // { href: "/attest", label: "Create Attestation" }, // Redundant with home page
     // { href: "/dashboard", label: "Dashboard" }, // TODO: Re-enable when dashboard is implemented
@@ -32,7 +32,7 @@ export function Header() {
               priority
               style={{ width: 'auto', height: '40px' }}
             />
-            <span className="ml-2 text-gray-600 text-lg">Attestation Portal</span>
+            <span className="ml-2 text-gray-600 text-lg">Reputation Portal</span>
           </Link>
 
           <div className="flex-1" />
@@ -65,11 +65,28 @@ export function Header() {
                 </span>
               </div>
             )}
-            <Button 
-              isConnectButton 
-              className="bg-blue-600 text-white hover:bg-blue-700 rounded-md px-4 py-2"
-              connectButtonProps={{ label: "Sign In" }}
-            />
+            <div id="header-connect">
+              <Button 
+                isConnectButton 
+                className="bg-black text-white hover:bg-black/80 rounded-md px-4 py-2"
+                connectButtonProps={{ label: "Sign In" }}
+              />
+              <style>{`
+                #header-connect .tw-connect-wallet {
+                  height: 2.25rem !important;
+                  padding: 0 0.75rem !important;
+                  background-color: rgb(0 0 0) !important;
+                  color: white !important;
+                  border-radius: 0.375rem !important;
+                  font-weight: 500 !important;
+                  font-size: 0.875rem !important;
+                  border: none !important;
+                }
+                #header-connect .tw-connect-wallet:hover {
+                  background-color: rgb(0 0 0 / 0.8) !important;
+                }
+              `}</style>
+            </div>
           </div>
         </div>
       </div>
