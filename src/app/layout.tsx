@@ -12,10 +12,13 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "OMA3 Attestation Portal",
   description: "Create and manage attestations for the OMA3 App Registry",
-  icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+  keywords: ["attestations", "OMA3", "blockchain", "certifications", "reviews", "security", "web3"],
+  authors: [{ name: "OMA3" }],
+  openGraph: {
+    title: "OMA3 Attestation Portal",
+    description: "Create and manage attestations for the OMA3 App Registry",
+    type: "website",
+    url: "https://reputation.omatrust.org",
   },
 }
 
