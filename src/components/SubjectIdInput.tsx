@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/select"
 import { DidWebInput } from "@/components/did-web-input"
 import { Caip10Input } from "@/components/caip10-input"
+import { DidHandleInput } from "@/components/did-handle-input"
+import { DidKeyInput } from "@/components/did-key-input"
 import { InfoIcon } from "lucide-react"
 
 interface SubjectIdInputProps {
@@ -20,12 +22,12 @@ interface SubjectIdInputProps {
   className?: string
 }
 
-type DidMethod = "did:web" | "did:pkh" | ""
+type DidMethod = "did:web" | "did:pkh" | "did:handle" | "did:key" | ""
 
 /**
  * Subject ID Input Component
  * Provides a user-friendly interface for entering DID identifiers
- * Supports did:web (Web Domain) and did:pkh (Blockchain Address)
+ * Supports did:web, did:pkh, did:handle, and did:key
  */
 export function SubjectIdInput({
   value = "",
@@ -37,6 +39,8 @@ export function SubjectIdInput({
   const getMethodFromValue = (val: string): DidMethod => {
     if (val.startsWith("did:web:")) return "did:web"
     if (val.startsWith("did:pkh:")) return "did:pkh"
+    if (val.startsWith("did:handle:")) return "did:handle"
+    if (val.startsWith("did:key:")) return "did:key"
     return ""
   }
 
@@ -87,6 +91,12 @@ export function SubjectIdInput({
             <SelectItem value="did:pkh">
               🔑 Blockchain Address - For smart contracts and wallet addresses
             </SelectItem>
+            <SelectItem value="did:handle">
+              👤 Social Handle - For Twitter, GitHub, Discord, etc.
+            </SelectItem>
+            <SelectItem value="did:key">
+              🔐 Cryptographic Key - For public key identifiers
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -119,6 +129,22 @@ export function SubjectIdInput({
         <Caip10Input
           value={caip10Value}
           onChange={handleCaip10Change}
+          error={error}
+        />
+      )}
+
+      {method === "did:handle" && (
+        <DidHandleInput
+          value={value}
+          onChange={onChange}
+          error={error}
+        />
+      )}
+
+      {method === "did:key" && (
+        <DidKeyInput
+          value={value}
+          onChange={onChange}
           error={error}
         />
       )}

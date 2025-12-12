@@ -198,10 +198,10 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         }
         // For other identifier formats, require DID format
         else if (recipient.trim().length > 0) {
-          throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", or "did:ethr:0x..."`)
+          throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
         }
         else {
-          throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", or "did:ethr:0x..."`)
+          throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
         }
       }
 

@@ -52,10 +52,10 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
             <span className="font-medium text-gray-700">Subject:</span>{' '}
             <span className="text-gray-600 font-mono break-all">{subjectShort}</span>
           </div>
-          {attestation.decodedData?.rating && (
+          {attestation.decodedData?.ratingValue && (
             <div>
               <span className="font-medium text-gray-700">Rating:</span>{' '}
-              <span className="text-gray-600">{attestation.decodedData.rating}/5</span>
+              <span className="text-gray-600">{Number(attestation.decodedData.ratingValue)}/5</span>
             </div>
           )}
         </div>

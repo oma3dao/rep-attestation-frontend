@@ -45,6 +45,22 @@ export function canonicalizeDID(did: string): string {
       return `did:pkh:${namespace}:${chainId}:${address.toLowerCase()}`
     }
     
+    case 'handle': {
+      // For did:handle, lowercase the platform and handle
+      // Example: did:handle:Twitter:Alice -> did:handle:twitter:alice
+      if (parts.length !== 4) {
+        throw new Error('Invalid did:handle format: must have 4 parts (did:handle:platform:username)')
+      }
+      const [, , platform, username] = parts
+      return `did:handle:${platform.toLowerCase()}:${username.toLowerCase()}`
+    }
+    
+    case 'key': {
+      // For did:key, the multibase encoding is case-sensitive
+      // Keep the key portion as-is, only lowercase the method
+      return `did:key:${parts.slice(2).join(':')}`
+    }
+    
     default:
       // For other methods, return as-is (may need method-specific rules later)
       return did.toLowerCase()
