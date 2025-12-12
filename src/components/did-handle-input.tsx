@@ -3,14 +3,23 @@
 import React, { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { CheckIcon, AlertCircleIcon, InfoIcon } from "lucide-react"
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { CheckIcon, AlertCircleIcon, InfoIcon, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { socialPlatforms, getPlatformById } from "@/config/social-platforms"
 
 interface DidHandleInputProps {
   value?: string
@@ -18,41 +27,6 @@ interface DidHandleInputProps {
   className?: string
   error?: string
 }
-
-type Platform = 
-  | "bluesky"
-  | "discord"
-  | "epic"
-  | "facebook"
-  | "farcaster"
-  | "github"
-  | "gitlab"
-  | "instagram"
-  | "kakaotalk"
-  | "lens"
-  | "line"
-  | "linkedin"
-  | "mastodon"
-  | "pinterest"
-  | "playstation"
-  | "reddit"
-  | "roblox"
-  | "signal"
-  | "snapchat"
-  | "stackoverflow"
-  | "steam"
-  | "telegram"
-  | "threads"
-  | "tiktok"
-  | "twitch"
-  | "twitter"
-  | "vk"
-  | "wechat"
-  | "weibo"
-  | "whatsapp"
-  | "xbox"
-  | "youtube"
-  | ""
 
 /**
  * Input for did:handle identifiers
@@ -64,7 +38,8 @@ export function DidHandleInput({
   className = "",
   error: externalError,
 }: DidHandleInputProps) {
-  const [platform, setPlatform] = useState<Platform>("")
+  const [open, setOpen] = useState(false)
+  const [platformId, setPlatformId] = useState("")
   const [handle, setHandle] = useState("")
   const [internalError, setInternalError] = useState<string | null>(null)
 
@@ -73,17 +48,18 @@ export function DidHandleInput({
     if (value && value.startsWith("did:handle:")) {
       const parts = value.replace("did:handle:", "").split(":")
       if (parts.length === 2) {
-        setPlatform(parts[0] as Platform)
+        setPlatformId(parts[0])
         setHandle(parts[1])
       }
     }
   }, [value])
 
-  const handlePlatformChange = (newPlatform: string) => {
-    setPlatform(newPlatform as Platform)
+  const handlePlatformSelect = (newPlatformId: string) => {
+    setPlatformId(newPlatformId)
+    setOpen(false)
     setInternalError(null)
-    if (handle && newPlatform) {
-      const did = `did:handle:${newPlatform}:${handle}`
+    if (handle && newPlatformId) {
+      const did = `did:handle:${newPlatformId}:${handle}`
       onChange(did)
     } else {
       onChange(null)
@@ -97,71 +73,71 @@ export function DidHandleInput({
   }
 
   const handleBlur = () => {
-    if (!handle.trim() || !platform) {
+    if (!handle.trim() || !platformId) {
       onChange(null)
       return
     }
 
-    // Basic handle validation (alphanumeric, underscores, hyphens)
-    const handleRegex = /^[a-zA-Z0-9_-]+$/
-    
+    // Basic handle validation (alphanumeric, underscores, hyphens, dots)
+    const handleRegex = /^[a-zA-Z0-9_.\-]+$/
+
     if (!handleRegex.test(handle)) {
-      setInternalError("Invalid handle format. Use only letters, numbers, underscores, and hyphens.")
+      setInternalError("Invalid handle format. Use only letters, numbers, underscores, hyphens, and dots.")
       onChange(null)
       return
     }
 
-    const did = `did:handle:${platform}:${handle}`
+    const did = `did:handle:${platformId}:${handle}`
     onChange(did)
   }
 
-  const completeDid = platform && handle ? `did:handle:${platform}:${handle}` : ""
+  const selectedPlatform = getPlatformById(platformId)
+  const completeDid = platformId && handle ? `did:handle:${platformId}:${handle}` : ""
   const showError = externalError || internalError
   const errorMessage = externalError || internalError
 
   return (
     <div className={`space-y-3 ${className}`}>
       <div className="grid gap-2">
-        <Label htmlFor="did-handle-platform">Platform</Label>
-        <Select value={platform} onValueChange={handlePlatformChange}>
-          <SelectTrigger id="did-handle-platform">
-            <SelectValue placeholder="Select platform" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="bitbucket">Bitbucket</SelectItem>
-            <SelectItem value="bluesky">Bluesky</SelectItem>
-            <SelectItem value="discord">Discord</SelectItem>
-            <SelectItem value="epic">Epic Games</SelectItem>
-            <SelectItem value="facebook">Facebook</SelectItem>
-            <SelectItem value="farcaster">Farcaster</SelectItem>
-            <SelectItem value="github">GitHub</SelectItem>
-            <SelectItem value="gitlab">GitLab</SelectItem>
-            <SelectItem value="instagram">Instagram</SelectItem>
-            <SelectItem value="kakaotalk">KakaoTalk</SelectItem>
-            <SelectItem value="lens">Lens Protocol</SelectItem>
-            <SelectItem value="line">LINE</SelectItem>
-            <SelectItem value="linkedin">LinkedIn</SelectItem>
-            <SelectItem value="mastodon">Mastodon</SelectItem>
-            <SelectItem value="pinterest">Pinterest</SelectItem>
-            <SelectItem value="playstation">PlayStation</SelectItem>
-            <SelectItem value="reddit">Reddit</SelectItem>
-            <SelectItem value="roblox">Roblox</SelectItem>
-            <SelectItem value="signal">Signal</SelectItem>
-            <SelectItem value="snapchat">Snapchat</SelectItem>
-            <SelectItem value="steam">Steam</SelectItem>
-            <SelectItem value="telegram">Telegram</SelectItem>
-            <SelectItem value="threads">Threads</SelectItem>
-            <SelectItem value="tiktok">TikTok</SelectItem>
-            <SelectItem value="twitch">Twitch</SelectItem>
-            <SelectItem value="twitter">Twitter / X</SelectItem>
-            <SelectItem value="vk">VK</SelectItem>
-            <SelectItem value="wechat">WeChat</SelectItem>
-            <SelectItem value="weibo">Weibo</SelectItem>
-            <SelectItem value="whatsapp">WhatsApp</SelectItem>
-            <SelectItem value="xbox">Xbox</SelectItem>
-            <SelectItem value="youtube">YouTube</SelectItem>
-          </SelectContent>
-        </Select>
+        <Label>Platform</Label>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="justify-between font-normal"
+            >
+              {selectedPlatform ? selectedPlatform.label : "Select platform..."}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+            <Command>
+              <CommandInput placeholder="Search platforms..." />
+              <CommandList>
+                <CommandEmpty>No platform found.</CommandEmpty>
+                <CommandGroup>
+                  {socialPlatforms.map((platform) => (
+                    <CommandItem
+                      key={platform.id}
+                      value={platform.label}
+                      onSelect={() => handlePlatformSelect(platform.id)}
+                    >
+                      <CheckIcon
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          platformId === platform.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      {platform.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="grid gap-2">
@@ -176,7 +152,7 @@ export function DidHandleInput({
             onChange={handleHandleChange}
             onBlur={handleBlur}
             placeholder="username"
-            disabled={!platform}
+            disabled={!platformId}
             className={`border-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${showError ? "border-red-500" : ""}`}
           />
         </div>
@@ -194,7 +170,7 @@ export function DidHandleInput({
         )}
 
         {/* Success */}
-        {!showError && platform && handle && (
+        {!showError && platformId && handle && (
           <div className="flex gap-2 items-start text-green-600 dark:text-green-400 text-sm">
             <CheckIcon size={16} className="mt-0.5 flex-shrink-0" />
             <span>Valid handle format</span>
