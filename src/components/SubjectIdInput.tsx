@@ -79,7 +79,7 @@ export function SubjectIdInput({
     <div className={`space-y-4 ${className}`}>
       {/* DID Method Selector */}
       <div className="space-y-2">
-        <Label htmlFor="did-method">Subject ID Type</Label>
+        <Label htmlFor="did-method">Subject Type</Label>
         <Select value={method} onValueChange={handleMethodChange}>
           <SelectTrigger id="did-method">
             <SelectValue placeholder="Select identifier type" />

@@ -15,6 +15,80 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { CHAIN_IDS, DEPLOYMENT_FILE_MAPPINGS, getChainName } from '../src/config/chains'
 
+// Cache for loaded external schemas
+let externalSchemaCache: Record<string, any> = {}
+let schemasDirectory: string = ''
+
+/**
+ * Load an external schema file (e.g., common.schema.json)
+ */
+async function loadExternalSchema(schemaFile: string): Promise<any> {
+  if (externalSchemaCache[schemaFile]) {
+    return externalSchemaCache[schemaFile]
+  }
+
+  const schemaPath = path.join(schemasDirectory, schemaFile)
+  try {
+    const content = await fs.readFile(schemaPath, 'utf8')
+    const schema = JSON.parse(content)
+    externalSchemaCache[schemaFile] = schema
+    return schema
+  } catch (error) {
+    console.warn(`⚠️  Could not load external schema ${schemaFile}: ${error.message}`)
+    return null
+  }
+}
+
+/**
+ * Resolve a $ref reference to get the referenced definition
+ * Supports refs like "common.schema.json#/$defs/Version"
+ */
+async function resolveRef(ref: string): Promise<any> {
+  const [schemaFile, pointer] = ref.split('#')
+  
+  if (!schemaFile || !pointer) {
+    console.warn(`⚠️  Invalid $ref format: ${ref}`)
+    return null
+  }
+
+  const schema = await loadExternalSchema(schemaFile)
+  if (!schema) return null
+
+  // Parse JSON pointer (e.g., "/$defs/Version" -> ["$defs", "Version"])
+  const parts = pointer.split('/').filter(p => p)
+  let result = schema
+  
+  for (const part of parts) {
+    if (result && typeof result === 'object' && part in result) {
+      result = result[part]
+    } else {
+      console.warn(`⚠️  Could not resolve path ${pointer} in ${schemaFile}`)
+      return null
+    }
+  }
+
+  return result
+}
+
+/**
+ * Resolve a property that may contain a $ref, merging with local overrides
+ * Local properties take precedence over referenced properties
+ */
+async function resolveProperty(prop: any): Promise<any> {
+  if (!prop || typeof prop !== 'object') return prop
+  
+  // If no $ref, return as-is
+  if (!prop['$ref']) return prop
+
+  // Resolve the reference
+  const refDef = await resolveRef(prop['$ref'])
+  if (!refDef) return prop
+
+  // Merge: start with referenced definition, override with local properties
+  const { '$ref': _ref, ...localProps } = prop
+  return { ...refDef, ...localProps }
+}
+
 /**
  * Escape string for JavaScript code generation
  */
@@ -32,7 +106,7 @@ function escapeString(str) {
 /**
  * Transform JSON Schema to UI Schema
  */
-function transformToUISchema(jsonSchema, schemaId) {
+async function transformToUISchema(jsonSchema, schemaId) {
   // Require title - it's essential for UI
   if (!jsonSchema.title) {
     throw new Error(`Schema '${schemaId}' is missing required 'title' property. Schema titles are used in form headings and must be provided.`)
@@ -47,48 +121,70 @@ function transformToUISchema(jsonSchema, schemaId) {
     id: schemaId,
     title: jsonSchema.title,
     description: jsonSchema.description,
-    fields: transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId)
+    fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId)
   }
 }
 
 /**
  * Transform JSON Schema properties to FormField format
  */
-function transformFields(properties, required = [], schemaId = '') {
-  return Object.entries(properties)
-    .filter(([name, prop]) => {
-      // Skip fields marked with x-oma3-skip-reason
-      if (prop['x-oma3-skip-reason']) {
-        console.log(`Skipping field '${name}' - reason: ${prop['x-oma3-skip-reason']}`)
-        return false
-      }
-      return true
-    })
-    .map(([name, prop]) => {
-      // Require title for form fields - it's essential for UI labels
-      if (!prop.title) {
-        throw new Error(`Field '${name}' in schema '${schemaId}' is missing required 'title' property. Field titles are used as form labels and must be provided.`)
-      }
+async function transformFields(properties, required = [], schemaId = '') {
+  const entries = Object.entries(properties)
+  const fields = []
 
-      // Handle object types with nested properties
-      if (prop.type === 'object' && prop.properties) {
-        console.log(`   📦 Processing object field '${name}' with ${Object.keys(prop.properties).length} sub-fields`)
-        const objectField = {
+  for (const [name, rawProp] of entries) {
+    // Resolve $ref if present (merges with local overrides)
+    const prop = await resolveProperty(rawProp)
+
+    // Skip fields marked with x-oma3-skip-reason
+    if (prop['x-oma3-skip-reason']) {
+      console.log(`Skipping field '${name}' - reason: ${prop['x-oma3-skip-reason']}`)
+      continue
+    }
+
+    // Require title for form fields - it's essential for UI labels
+    if (!prop.title) {
+      throw new Error(`Field '${name}' in schema '${schemaId}' is missing required 'title' property. Field titles are used as form labels and must be provided.`)
+    }
+
+    // Handle object types with nested properties
+    if (prop.type === 'object' && prop.properties) {
+      // Check render mode: 'raw' = JSON input, 'expanded' or default = sub-fields
+      const renderMode = prop['x-oma3-render'] || 'expanded'
+      
+      if (renderMode === 'raw') {
+        console.log(`   📦 Processing object field '${name}' as raw JSON input`)
+        const rawField = {
           name,
-          type: 'object',
+          type: 'json',
           label: prop.title,
           description: prop.description,
           required: required.includes(name),
-          subFields: transformFields(prop.properties, prop.required || [], schemaId)
+          placeholder: 'Paste JSON object...'
         }
-
-        // Add nested flag if present
-        if (prop['x-oma3-nested'] !== undefined) {
-          objectField.nested = prop['x-oma3-nested']
-        }
-
-        return objectField
+        fields.push(rawField)
+        continue
       }
+
+      // renderMode === 'expanded' (default)
+      console.log(`   📦 Processing object field '${name}' with ${Object.keys(prop.properties).length} sub-fields`)
+      const objectField = {
+        name,
+        type: 'object',
+        label: prop.title,
+        description: prop.description,
+        required: required.includes(name),
+        subFields: await transformFields(prop.properties, prop.required || [], schemaId)
+      }
+
+      // Add nested flag if present
+      if (prop['x-oma3-nested'] !== undefined) {
+        objectField.nested = prop['x-oma3-nested']
+      }
+
+      fields.push(objectField)
+      continue
+    }
 
       // Map JSON Schema types to UI field types
       const typeMapping = {
@@ -143,14 +239,17 @@ function transformFields(properties, required = [], schemaId = '') {
       if (prop.type === 'string') {
         if (prop.minLength !== undefined) field.minLength = prop.minLength
         if (prop.maxLength !== undefined) field.maxLength = prop.maxLength
+        if (prop.pattern) field.pattern = prop.pattern
       }
 
       if (prop.format) {
         field.format = prop.format
       }
 
-      return field
-    })
+    fields.push(field)
+  }
+
+  return fields
 }
 
 /**
@@ -276,8 +375,10 @@ async function readDeploymentData(rootPath) {
  * Generate the schemas.ts file
  */
 async function generateSchemasFile(schemas, deployments = {}) {
-  const uiSchemas = Object.entries(schemas).map(([id, schema]) =>
-    transformToUISchema(schema, id)
+  const uiSchemas = await Promise.all(
+    Object.entries(schemas).map(([id, schema]) =>
+      transformToUISchema(schema, id)
+    )
   )
 
   // Generate field arrays for each schema
@@ -340,7 +441,7 @@ async function generateSchemasFile(schemas, deployments = {}) {
 // Do not edit manually - your changes will be overwritten
 
 // Schema definitions for attestation forms
-export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object'
+export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object' | 'json'
 
 export interface FormField {
   name: string
@@ -349,8 +450,9 @@ export interface FormField {
   description?: string
   required: boolean
   placeholder?: string
-  options?: string[] // for enum fields
+  options?: (string | number)[] // for enum fields (strings or integers)
   format?: string // for validation (uri, date-time, etc.)
+  pattern?: string // regex pattern for string validation
   min?: number // for integer fields
   max?: number // for integer fields
   minLength?: number // for string fields
@@ -418,6 +520,10 @@ async function main() {
   try {
     console.log(`🚀 Starting schema update from tools project: ${rootPath}`)
     console.log(`📁 Reading schemas from: ${schemasPath}`)
+
+    // Set the schemas directory for $ref resolution
+    schemasDirectory = schemasPath
+    externalSchemaCache = {} // Clear cache for fresh run
 
     const schemas = await readSchemasFromDirectory(schemasPath)
 

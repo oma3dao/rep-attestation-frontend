@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { SubjectIdInput } from '@/components/SubjectIdInput'
 import { ObjectFieldRenderer } from '@/components/ObjectFieldRenderer'
 import { TimestampInput } from '@/components/TimestampInput'
+import { ProofInput } from '@/components/ProofInput'
 import { useState } from 'react'
 
 interface FieldRendererProps {
@@ -251,16 +252,51 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
       }
 
       default:
-        fieldElement = (
-          <Input
-            id={field.name}
-            type="text"
-            placeholder={field.placeholder}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => onChange(e.target.value)}
-            className={error ? 'border-red-500' : ''}
-          />
-        )
+        // Handle proofs field specially
+        if (field.name === 'proofs') {
+          // Parse existing proof from JSON string if present
+          let proofValue = null
+          if (typeof value === 'string' && value) {
+            try {
+              const parsed = JSON.parse(value)
+              // If it's an array, take the first proof
+              proofValue = Array.isArray(parsed) ? parsed[0] : parsed
+            } catch {
+              // Invalid JSON, ignore
+            }
+          }
+
+          // Determine proof purpose from field config or default to commercial-tx
+          // Use 'shared-control' for linking attestations (linked-identifier, key-binding)
+          const proofPurpose = (field as any).proofPurpose || 'commercial-tx'
+
+          fieldElement = (
+            <ProofInput
+              value={proofValue}
+              onChange={(proof) => {
+                // Store as JSON string array with single proof
+                if (proof) {
+                  onChange(JSON.stringify([proof]))
+                } else {
+                  onChange('')
+                }
+              }}
+              defaultPurpose={proofPurpose}
+              error={error}
+            />
+          )
+        } else {
+          fieldElement = (
+            <Input
+              id={field.name}
+              type="text"
+              placeholder={field.placeholder}
+              value={typeof value === 'string' ? value : ''}
+              onChange={(e) => onChange(e.target.value)}
+              className={error ? 'border-red-500' : ''}
+            />
+          )
+        }
     }
   }
 

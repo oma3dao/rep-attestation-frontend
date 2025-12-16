@@ -37,6 +37,22 @@ export function validateField(field: any, value: any): string | undefined {
       return `${field.label} must be at most ${field.maxLength} characters`;
     }
     
+    // Pattern validation (regex)
+    if (field.pattern && trimmedValue) {
+      try {
+        const regex = new RegExp(field.pattern);
+        if (!regex.test(trimmedValue)) {
+          // Provide helpful error message based on subtype
+          if (field.subtype === 'semver') {
+            return `${field.label} must be a valid semantic version (e.g., 1.2.3)`;
+          }
+          return `${field.label} format is invalid`;
+        }
+      } catch {
+        // Invalid regex pattern in schema - skip validation
+      }
+    }
+    
     if (field.type === 'uri' && trimmedValue) {
       try {
         new URL(value);
