@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     const chainConfig = getActiveChain();
     const chainId = chainConfig.id;
     const easAddress = getContractAddress('eas', chainId);
-    const maxGas = Number(process.env.MAX_GAS_PER_TX || 600000);
+    const maxGas = Number(process.env.MAX_GAS_PER_TX || 800000);
 
     console.log(`[delegated-attest] Active chain: ${chainConfig.name} (${chainId})`);
 
@@ -302,8 +302,9 @@ export async function POST(req: NextRequest) {
         const gasEstimate = await eas.attestByDelegation.estimateGas(delegatedRequest);
         console.log(`[delegated-attest] Gas estimate: ${gasEstimate}`);
         // Use estimate + 20% buffer, but cap at a reasonable max
-        const estimateWithBuffer = (BigInt(gasEstimate) * 120n) / 100n;
-        gasLimit = Number(estimateWithBuffer < 1000000n ? estimateWithBuffer : 1000000n);
+        const estimateWithBuffer = (BigInt(gasEstimate) * BigInt(120)) / BigInt(100);
+        const maxLimit = BigInt(1000000);
+        gasLimit = Number(estimateWithBuffer < maxLimit ? estimateWithBuffer : maxLimit);
         console.log(`[delegated-attest] Using gas limit: ${gasLimit}`);
       } catch (estimateError: any) {
         console.error(`[delegated-attest] Gas estimation failed:`, estimateError?.reason || estimateError?.message);
