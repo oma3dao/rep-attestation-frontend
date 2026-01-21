@@ -104,6 +104,25 @@ function escapeString(str) {
 }
 
 /**
+ * Detect if schema should be revocable based on presence of 'revoked' field
+ * with x-oma3-skip-reason: "eas" (meaning EAS handles revocation natively)
+ * 
+ * When a schema has revoked field with x-oma3-skip-reason: "eas", it means:
+ * 1. The schema is deployed as revocable on EAS
+ * 2. ALL attestations using this schema MUST be revocable
+ * 3. Clients should ignore non-revocable attestations on revocable schemas
+ */
+function detectRevocable(properties: Record<string, any> | undefined): boolean {
+  if (!properties) return false
+  
+  const revokedField = properties['revoked']
+  if (revokedField && revokedField['x-oma3-skip-reason'] === 'eas') {
+    return true
+  }
+  return false
+}
+
+/**
  * Transform JSON Schema to UI Schema
  */
 async function transformToUISchema(jsonSchema, schemaId) {
@@ -117,11 +136,15 @@ async function transformToUISchema(jsonSchema, schemaId) {
     throw new Error(`Schema '${schemaId}' is missing required 'description' property. Schema descriptions are used in form instructions and must be provided.`)
   }
 
+  // Detect if schema should be revocable (has 'revoked' field with x-oma3-skip-reason: "eas")
+  const revocable = detectRevocable(jsonSchema.properties)
+
   return {
     id: schemaId,
     title: jsonSchema.title,
     description: jsonSchema.description,
-    fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId)
+    fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId),
+    revocable
   }
 }
 
@@ -410,12 +433,22 @@ async function generateSchemasFile(schemas, deployments = {}) {
     // Convert kebab-case to camelCase for variable names
     const varName = item.schema.id.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase())
 
-    const schemaExport = [
+    // Build schema export lines
+    const exportLines = [
       `export const ${varName}Schema: AttestationSchema = {`,
       `  id: '${escapeString(item.schema.id)}',`,
       `  title: '${escapeString(item.schema.title)}',`,
       `  description: '${escapeString(item.schema.description)}',`,
       `  fields: ${item.fieldsVarName},`,
+    ]
+
+    // Add revocable flag only if true (schemas that need revocation support)
+    // This is auto-detected from the JSON schema's 'revoked' field with x-oma3-skip-reason: "eas"
+    if (item.schema.revocable) {
+      exportLines.push(`  revocable: true,`)
+    }
+
+    exportLines.push(
       `  deployedUIDs: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: '${escapeString(bscTestnetUID)}', // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: '${escapeString(bscMainnetUID)}', // BSC Mainnet`,
@@ -429,11 +462,11 @@ async function generateSchemasFile(schemas, deployments = {}) {
       `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAchain Mainnet`,
       `  }`,
       `};`
-    ].join('\n')
+    )
 
     return {
       varName,
-      export: schemaExport
+      export: exportLines.join('\n')
     }
   })
 
@@ -471,6 +504,7 @@ export interface AttestationSchema {
   fields: FormField[]
   deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
+  revocable?: boolean // Whether attestations using this schema can be revoked (default: false)
 }
 
 // Field definitions

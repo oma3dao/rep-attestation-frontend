@@ -1,8 +1,12 @@
 import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
+import { defineChain } from 'thirdweb/chains'
 import { omachainTestnet, omachainMainnet, bscTestnet, bscMainnet, sepolia, mainnet } from '@/config/chains'
 
-// Get default chain from environment variable
-function getDefaultChain() {
+/**
+ * Get active chain from environment variable
+ * This is the authoritative chain - NOT determined by user's wallet
+ */
+export function getActiveChain() {
   const activeChain = process.env.NEXT_PUBLIC_ACTIVE_CHAIN
   
   switch (activeChain) {
@@ -24,12 +28,33 @@ function getDefaultChain() {
 }
 
 /**
+ * Get active chain as Thirdweb chain object
+ * Required for Thirdweb's ethers adapter
+ */
+export function getActiveThirdwebChain() {
+  const chain = getActiveChain()
+  return defineChain({
+    id: chain.id,
+    rpc: chain.rpc,
+    name: chain.name,
+    nativeCurrency: chain.nativeCurrency,
+    blockExplorers: chain.blockExplorers,
+  })
+}
+
+/**
  * Pure ThirdWeb wallet integration
  * Provides wallet state and chain information using ThirdWeb hooks
+ * 
+ * IMPORTANT: Chain is determined by NEXT_PUBLIC_ACTIVE_CHAIN environment variable,
+ * NOT by the user's wallet. The wallet is only used for identity and signing.
  */
 export function useWallet() {
   const account = useActiveAccount()
-  const chain = useActiveWalletChain()
+  const walletChain = useActiveWalletChain()
+  
+  // Always use environment-determined chain
+  const activeChain = getActiveChain()
   
   // Check if current chain is supported by EAS
   const isEASChain = (chainId?: number): boolean => {
@@ -46,23 +71,25 @@ export function useWallet() {
     return isEASChain(chainId) || isBASChain(chainId)
   }
   
-  // Use current chain or default from environment variable
-  const defaultChain = getDefaultChain()
-  const chainId = chain?.id || defaultChain.id
+  // Use environment chain (not wallet chain)
+  const chainId = activeChain.id
   
   return {
     // Wallet connection state
     isConnected: !!account,
     address: account?.address || null,
     
-    // Chain state  
+    // Chain state (environment-determined)
     chainId,
+    chain: activeChain,
     isChainSupported: isAttestationChain(chainId),
     isAttestationSupported: isAttestationChain(chainId),
     
-    // Account and chain objects
+    // Wallet's actual chain (for informational purposes only)
+    walletChainId: walletChain?.id,
+    
+    // Account object
     account,
-    chain,
     
     // Utilities
     supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bscMainnet.id, sepolia.id, mainnet.id]

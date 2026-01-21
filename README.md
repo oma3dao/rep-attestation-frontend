@@ -174,6 +174,35 @@ Currently integrated:
 - **BAS (Binance Attestation Service)** - Available on BSC networks
 - **Future**: EAS (Ethereum Attestation Service) and custom attestation services
 
+### Delegated Attestations (Gas Subsidy)
+
+For subsidized schemas, the server pays gas on behalf of users via EAS delegated attestations.
+
+#### EAS Delegate Wallet Addresses
+
+| Environment | Address | Chain |
+|-------------|---------|-------|
+| Testnet | `0xe9e676a6c1160f6df7b296da0d02677294ba9423` | OMAchain Testnet |
+| Mainnet | TBD (Thirdweb Server Wallet) | OMAchain Mainnet |
+
+**Funding:** The testnet delegate wallet needs OMA tokens to pay for gas. Fund it via the OMAchain testnet faucet or transfer from another wallet.
+
+#### Environment Variables (Server-side)
+
+```bash
+# Testnet only - private key for EAS delegate wallet
+EAS_DELEGATE_PRIVATE_KEY=0x...
+
+# Optional: max gas per transaction (default: 300000)
+MAX_GAS_PER_TX=300000
+```
+
+For local development, you can also create a key file:
+```bash
+node -e "console.log('0x' + require('crypto').randomBytes(32).toString('hex'))" > ~/.ssh/eas-delegate-key
+chmod 600 ~/.ssh/eas-delegate-key
+```
+
 ### Troubleshooting
 
 #### "No client ID provided" Error
