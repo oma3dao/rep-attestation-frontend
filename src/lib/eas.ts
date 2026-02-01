@@ -437,20 +437,23 @@ export function useEASClient() {
       revocable,
     });
 
-    // Fetch current nonce for the attester from EAS contract
-    const signer = await ethers6Adapter.signer.toEthers({
+    // Fetch current nonce for the attester via API (avoids client needing RPC access)
+    logger.log('[EAS] Fetching nonce via API for attester:', address);
+    const nonceResponse = await fetch(`/api/eas/nonce?attester=${address}`);
+    if (!nonceResponse.ok) {
+      const errorData = await nonceResponse.json();
+      throw new Error(errorData.error || 'Failed to fetch nonce');
+    }
+    const nonceData = await nonceResponse.json();
+    const nonce = BigInt(nonceData.nonce);
+    logger.log('[EAS] Fetched nonce for attester:', { attester: address, nonce: nonce.toString() });
+
+    // Get signer for signing the typed data
+    const signer = ethers6Adapter.signer.toEthers({
       client,
       chain: activeThirdwebChain,
       account,
     });
-    
-    const easContract = new ethers.Contract(
-      EASContractAddress,
-      ['function getNonce(address account) view returns (uint256)'],
-      signer
-    );
-    const nonce = await easContract.getNonce(address);
-    logger.log('[EAS] Fetched nonce for attester:', { attester: address, nonce: nonce.toString() });
 
     // Build delegated attestation data
     const delegated = {
