@@ -3,6 +3,13 @@ import React, { createRef } from 'react';
 import { vi } from 'vitest';
 import { Button } from '@/components/ui/button';
 
+vi.mock('thirdweb/react', () => ({
+  useActiveAccount: vi.fn(() => null),
+  ConnectButton: ({ connectButton, ...rest }: any) => (
+    <div data-testid="connect-button" data-connect-label={connectButton?.label} {...rest} />
+  ),
+}));
+
 describe('Button component', () => {
   it('renders with default props', () => {
     render(<Button>Click me</Button>);
@@ -85,5 +92,21 @@ describe('Button component', () => {
     render(<Button data-testid="arbitrary" aria-label="labelled">Arbitrary</Button>);
     const btn = screen.getByTestId('arbitrary');
     expect(btn).toHaveAttribute('aria-label', 'labelled');
+  });
+
+  it('renders ConnectButton with default label when isConnectButton', () => {
+    render(<Button isConnectButton>Connect</Button>);
+    const connectEl = screen.getByTestId('connect-button');
+    expect(connectEl).toHaveAttribute('data-connect-label', 'Connect Wallet');
+  });
+
+  it('renders ConnectButton with custom label when connectButtonProps.label is set', () => {
+    render(
+      <Button isConnectButton connectButtonProps={{ label: 'Sign in' }}>
+        Connect
+      </Button>
+    );
+    const connectEl = screen.getByTestId('connect-button');
+    expect(connectEl).toHaveAttribute('data-connect-label', 'Sign in');
   });
 }); 

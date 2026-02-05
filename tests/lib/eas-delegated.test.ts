@@ -193,3 +193,112 @@ describe('splitSignature', () => {
     expect(v).toBe(28)
   })
 })
+
+// ============================================================================
+// Edge Case Tests (from TEST_ENGINEER_DELEGATED_ATTESTATION.md)
+// ============================================================================
+
+describe('buildDelegatedAttestationTypedData - edge cases', () => {
+  const mockDelegated: DelegatedAttestationData = {
+    schema: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`,
+    recipient: '0xabcdef1234567890abcdef1234567890abcdef12' as `0x${string}`,
+    expirationTime: BigInt(0),
+    revocable: true,
+    refUID: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+    data: '0xdeadbeef' as `0x${string}`,
+    deadline: 1700000000,
+  }
+  const mockAttester = '0x1234567890123456789012345678901234567890' as `0x${string}`
+  const mockNonce = BigInt(0)
+  const chainId = 66238
+  const easAddress = '0x4200000000000000000000000000000000000021' as `0x${string}`
+
+  it('handles zero expirationTime', () => {
+    const delegated = { ...mockDelegated, expirationTime: BigInt(0) }
+    const result = buildDelegatedAttestationTypedData(chainId, easAddress, delegated, mockAttester, mockNonce)
+    expect(result.message.expirationTime).toBe(BigInt(0))
+  })
+
+  it('handles max uint64 deadline', () => {
+    const maxDeadline = 2 ** 64 - 1
+    const delegated = { ...mockDelegated, deadline: maxDeadline }
+    const result = buildDelegatedAttestationTypedData(chainId, easAddress, delegated, mockAttester, mockNonce)
+    expect(result.message.deadline).toBe(BigInt(maxDeadline))
+  })
+
+  it('handles revocable=false', () => {
+    const delegated = { ...mockDelegated, revocable: false }
+    const result = buildDelegatedAttestationTypedData(chainId, easAddress, delegated, mockAttester, mockNonce)
+    expect(result.message.revocable).toBe(false)
+  })
+
+  it('handles non-zero refUID', () => {
+    const refUID = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`
+    const delegated = { ...mockDelegated, refUID }
+    const result = buildDelegatedAttestationTypedData(chainId, easAddress, delegated, mockAttester, mockNonce)
+    expect(result.message.refUID).toBe(refUID)
+  })
+
+  it('handles empty data field', () => {
+    const delegated = { ...mockDelegated, data: '0x' as `0x${string}` }
+    const result = buildDelegatedAttestationTypedData(chainId, easAddress, delegated, mockAttester, mockNonce)
+    expect(result.message.data).toBe('0x')
+  })
+
+  it('handles different chain IDs', () => {
+    const chains = [1, 10, 8453, 42161, 66238]
+    for (const chain of chains) {
+      const result = buildDelegatedAttestationTypedData(chain, easAddress, mockDelegated, mockAttester, mockNonce)
+      expect(result.domain.chainId).toBe(chain)
+    }
+  })
+})
+
+describe('splitSignature - edge cases', () => {
+  it('handles signature shorter than 65 bytes gracefully', () => {
+    // Note: Current implementation doesn't validate length, but should handle gracefully
+    const shortSig = '0x' + 'aa'.repeat(64) // 64 bytes, missing v
+    // The function will still try to extract, but v will be NaN or incorrect
+    // This test documents current behavior - implementation may need validation
+    const result = splitSignature(shortSig)
+    // Should still return r and s, but v might be invalid
+    expect(result).toHaveProperty('r')
+    expect(result).toHaveProperty('s')
+    expect(result).toHaveProperty('v')
+  })
+
+  it('handles signature longer than 65 bytes (ignores extra)', () => {
+    const longSig = '0x' + 'aa'.repeat(32) + 'bb'.repeat(32) + '1b' + 'cc'.repeat(10)
+    const { v, r, s } = splitSignature(longSig)
+    expect(v).toBe(27)
+    // Should still extract correct r, s
+    expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
+  })
+
+  it('handles v=27 without normalization', () => {
+    const sig = '0x' + 'aa'.repeat(32) + 'bb'.repeat(32) + '1b'
+    const { v } = splitSignature(sig)
+    expect(v).toBe(27)
+  })
+
+  it('handles v=28 without normalization', () => {
+    const sig = '0x' + 'aa'.repeat(32) + 'bb'.repeat(32) + '1c'
+    const { v } = splitSignature(sig)
+    expect(v).toBe(28)
+  })
+
+  it('handles uppercase hex', () => {
+    const sig = '0x' + 'AA'.repeat(32) + 'BB'.repeat(32) + '1B'
+    const { r, s, v } = splitSignature(sig)
+    expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(v).toBe(27)
+  })
+
+  it('handles mixed case hex', () => {
+    const sig = '0x' + 'AaBb'.repeat(16) + 'CcDd'.repeat(16) + '1c'
+    const { v } = splitSignature(sig)
+    expect(v).toBe(28)
+  })
+})
