@@ -78,4 +78,49 @@ describe('toast (useToast)', () => {
     expect(screen.getByText('Info message')).toBeInTheDocument();
     expect(screen.getByText('Error message')).toBeInTheDocument();
   });
+
+  it('dismissToast removes toast when called with toast id', () => {
+    let lastToastId: string;
+    function DismissByIdComponent() {
+      const { showToast, ToastContainer, dismissToast } = useToast();
+      return (
+        <div>
+          <button onClick={() => { lastToastId = showToast('To dismiss', 'info'); }}>Show</button>
+          <button onClick={() => dismissToast(lastToastId!)}>Dismiss by id</button>
+          <ToastContainer />
+        </div>
+      );
+    }
+    render(<DismissByIdComponent />);
+    fireEvent.click(screen.getByText('Show'));
+    expect(screen.getByText('To dismiss')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Dismiss by id'));
+    act(() => { vi.advanceTimersByTime(0); });
+    expect(screen.queryByText('To dismiss')).not.toBeInTheDocument();
+  });
+});
+
+function ToastContainerCenterTest() {
+  const { showToast, ToastContainer } = useToast();
+  return (
+    <div>
+      <button onClick={() => showToast('Center toast', 'info')}>Show</button>
+      <ToastContainer position="center" />
+    </div>
+  );
+}
+
+describe('ToastContainer position', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    act(() => { vi.runOnlyPendingTimers(); });
+    vi.useRealTimers();
+  });
+
+  it('renders with center position class when position is center', () => {
+    render(<ToastContainerCenterTest />);
+    fireEvent.click(screen.getByText('Show'));
+    const container = document.querySelector('.fixed.left-1\\/2.top-24');
+    expect(container || document.querySelector('[class*="translate-x"]')).toBeTruthy();
+  });
 }); 

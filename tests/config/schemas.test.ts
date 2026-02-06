@@ -56,7 +56,7 @@ describe('schemas config', () => {
     it('has correct properties', () => {
       expect(certificationSchema.id).toBe('certification');
       expect(certificationSchema.title).toBe('Certification');
-      expect(certificationSchema.description).toContain('certifying');
+      expect(certificationSchema.description).toContain('certification');
     });
 
     it('has required fields', () => {
@@ -64,7 +64,7 @@ describe('schemas config', () => {
       const requiredFieldNames = requiredFields.map(field => field.name);
       
       expect(requiredFieldNames).toContain('subject');
-      expect(requiredFieldNames).toContain('programIdentifier');
+      expect(requiredFieldNames).toContain('programID');
       expect(requiredFieldNames).toContain('assessor');
     });
 
@@ -94,7 +94,7 @@ describe('schemas config', () => {
   describe('linkedIdentifierSchema', () => {
     it('has correct properties', () => {
       expect(linkedIdentifierSchema.id).toBe('linked-identifier');
-      expect(linkedIdentifierSchema.title).toBe('Linked Identifier Attestation (Third-Party Certified)');
+      expect(linkedIdentifierSchema.title).toBe('Linked Identifier');
       expect(linkedIdentifierSchema.description).toContain('third party');
     });
   });
@@ -102,24 +102,16 @@ describe('schemas config', () => {
   describe('userReviewSchema', () => {
     it('has correct properties', () => {
       expect(userReviewSchema.id).toBe('user-review');
-      expect(userReviewSchema.title).toBe('UserReview');
+      expect(userReviewSchema.title).toBe('User Review');
       expect(userReviewSchema.description).toContain('star reviews');
     });
 
-    it('has rating field with min/max validation', () => {
+    it('has rating field with enum options', () => {
       const ratingField = userReviewSchema.fields.find(field => field.name === 'ratingValue');
       expect(ratingField).toBeDefined();
-      expect(ratingField?.type).toBe('integer');
-      expect(ratingField?.min).toBe(1);
-      expect(ratingField?.max).toBe(5);
+      expect(ratingField?.type).toBe('enum');
+      expect(ratingField?.options).toEqual([1, 2, 3, 4, 5]);
       expect(ratingField?.required).toBe(true);
-    });
-
-    it('has datetime field with format', () => {
-      const dateField = userReviewSchema.fields.find(field => field.name === 'datePublished');
-      expect(dateField).toBeDefined();
-      expect(dateField?.type).toBe('datetime');
-      expect(dateField?.format).toBe('date-time');
     });
   });
 
@@ -140,7 +132,7 @@ describe('schemas config', () => {
   describe('getSchemaIds function', () => {
     it('returns all schema IDs', () => {
       const ids = getSchemaIds();
-      expect(ids).toEqual(['certification', 'endorsement', 'linked-identifier', 'user-review']);
+      expect(ids).toEqual(['certification', 'common', 'endorsement', 'key-binding', 'linked-identifier', 'security-assessment', 'user-review-response', 'user-review']);
     });
 
     it('returns array of strings', () => {
@@ -155,7 +147,7 @@ describe('schemas config', () => {
   describe('getAllSchemas function', () => {
     it('returns all schemas', () => {
       const schemas = getAllSchemas();
-      expect(schemas).toHaveLength(4);
+      expect(schemas).toHaveLength(8);
       expect(schemas).toContain(certificationSchema);
       expect(schemas).toContain(endorsementSchema);
       expect(schemas).toContain(linkedIdentifierSchema);
@@ -176,7 +168,7 @@ describe('schemas config', () => {
 
   describe('field validation', () => {
     it('all fields have valid types', () => {
-      const validTypes: FieldType[] = ['string', 'integer', 'array', 'enum', 'datetime', 'uri', 'text'];
+      const validTypes: FieldType[] = ['string', 'integer', 'array', 'enum', 'datetime', 'uri', 'object', 'json'];
       const allSchemas = getAllSchemas();
       
       allSchemas.forEach(schema => {

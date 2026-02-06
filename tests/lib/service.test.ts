@@ -8,6 +8,7 @@ import { renderHook, act } from '@testing-library/react';
 import * as attestationServices from '@/config/attestation-services';
 import * as walletModule from '@/lib/blockchain';
 import * as basModule from '@/lib/bas';
+import * as easModule from '@/lib/eas';
 import { useAttestation } from '@/lib/service';
 
 // Mock @/app/client to provide a dummy clientId
@@ -229,5 +230,27 @@ describe('useAttestation hook', () => {
     expect(result.result.current.isNetworkSupported).toBe(true);
     expect(result.result.current.availableServices.length).toBe(1);
     expect(result.result.current.recommendedService.id).toBe('bas');
+  });
+
+  it('uses EAS when chain supports EAS and preferredNetwork selects it', async () => {
+    const easCreateAttestation = vi.fn().mockResolvedValue({ transactionHash: '0xea5' });
+    vi.spyOn(walletModule, 'useWallet').mockReturnValue(mockWallet({ chainId: 66238 }));
+    vi.spyOn(basModule, 'useBASClient').mockReturnValue(mockBASClient());
+    vi.spyOn(easModule, 'useEASClient').mockReturnValue({ createAttestation: easCreateAttestation });
+    vi.spyOn(attestationServices, 'getServicesForChain').mockReturnValue([
+      { id: 'eas', name: 'EAS', description: '', website: '', docs: '', supportedChains: [66238], contracts: {}, features: [] },
+    ]);
+    vi.spyOn(attestationServices, 'getAttestationService').mockImplementation((id) =>
+      id === 'eas' ? { id: 'eas', name: 'EAS', description: '', website: '', docs: '', supportedChains: [66238], contracts: {}, features: [] } : undefined
+    );
+    let result;
+    await act(async () => {
+      result = renderHook(() => useAttestation());
+    });
+    await act(async () => {
+      await result.result.current.submitAttestation(validAttestationData, 66238);
+    });
+    expect(easCreateAttestation).toHaveBeenCalledWith(validAttestationData);
+    expect(result.result.current.lastResult).toEqual({ transactionHash: '0xea5' });
   });
 }); 

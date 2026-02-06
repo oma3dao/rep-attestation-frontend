@@ -29,10 +29,10 @@ describe('Header', () => {
       render(<Header />);
     });
     expect(screen.getByAltText('OMA3 Logo')).not.toBeNull();
-    expect(screen.getByText('Attestation Portal')).not.toBeNull();
+    expect(screen.getByText('Reputation Portal')).not.toBeNull();
     expect(screen.getByText('Home')).not.toBeNull();
-    expect(screen.getByText('Create Attestation')).not.toBeNull();
-    expect(screen.getByText('Dashboard')).not.toBeNull();
+    expect(screen.getByText('Registry')).not.toBeNull();
+    expect(screen.getByText('Docs')).not.toBeNull();
   });
 
   it('renders wallet connect button', async () => {
