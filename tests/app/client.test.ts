@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 describe('client', () => {
-  const originalEnv = process.env;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
     vi.resetModules();
+    // Reset to a clean env state
     process.env = { ...originalEnv };
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
   });
 
   it('should create client with valid client ID', async () => {
@@ -38,26 +40,35 @@ describe('client', () => {
     expect(client).toBeDefined();
     expect(typeof client).toBe('object');
   });
+});
+
+// Separate describe block for environment-specific tests to avoid module caching issues
+describe('client environment handling', () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
 
   it('should throw in production when no client ID and window is defined', async () => {
-    const origNodeEnv = process.env.NODE_ENV;
+    vi.resetModules();
     delete process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
     process.env.NODE_ENV = 'production';
-    vi.resetModules();
+    
     await expect(import('@/app/client')).rejects.toThrow(/no client id provided/i);
-    process.env.NODE_ENV = origNodeEnv;
   });
 
   it('should warn when no client ID in development (not test)', async () => {
-    const origNodeEnv = process.env.NODE_ENV;
+    vi.resetModules();
     delete process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
     process.env.NODE_ENV = 'development';
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.resetModules();
+    
     const { client } = await import('@/app/client');
+    
     expect(client).toBeDefined();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('NEXT_PUBLIC_THIRDWEB_CLIENT_ID'));
-    warnSpy.mockRestore();
-    process.env.NODE_ENV = origNodeEnv;
   });
 }); 
