@@ -4,6 +4,8 @@ import React from 'react'
 import { useState, useEffect, useRef } from 'react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
+import { EvidencePointerProofInput } from './EvidencePointerProofInput'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Send } from 'lucide-react'
@@ -23,7 +25,11 @@ type FormErrors = Record<string, string>
 
 export function validateField(field: any, value: any): string | undefined {
   if (field.required) {
-    if (!value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)) {
+    // Fields with autoDefault (e.g., issuedAt with current-timestamp) will be
+    // populated automatically on submission if the user hasn't touched them.
+    // Skip the required check when the value is untouched (undefined/null/'').
+    const isEmpty = !value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)
+    if (isEmpty && !field.autoDefault) {
       return `${field.label} is required`;
     }
   }
@@ -176,11 +182,29 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         const value = formData[field.name]
         if (value !== undefined && value !== null && value !== '') {
           completeData[field.name] = value
+        } else if (field.autoDefault === 'current-timestamp') {
+          // Apply auto-default for timestamp fields the user didn't touch
+          completeData[field.name] = Math.floor(Date.now() / 1000)
         } else {
           // Use empty string for missing optional fields to maintain search compatibility
           completeData[field.name] = field.type === 'array' ? [] : ''
         }
       })
+
+      // For witness-enabled schemas, wrap the proof URL into the full
+      // evidence-pointer proof structure before submission
+      if (isWitnessSchema && completeData['proofs']) {
+        const proofUrl = typeof completeData['proofs'] === 'string' ? completeData['proofs'] : ''
+        if (proofUrl) {
+          completeData['proofs'] = JSON.stringify([{
+            proofType: 'evidence-pointer',
+            proofPurpose: 'shared-control',
+            proofObject: { url: proofUrl }
+          }])
+        } else {
+          completeData['proofs'] = []
+        }
+      }
 
       // For key-binding and linked-identifier schemas, if the user hasn't
       // explicitly set effectiveAt (left at auto-default), add a grace period
@@ -266,6 +290,51 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
   }
 
+  // For witness-enabled schemas (key-binding, linked-identifier), render the proofs
+  // field as a simplified EvidencePointerProofInput instead of the generic ProofInput.
+  // The proofs field stores just the URL during editing; we wrap it on submission.
+  const isWitnessSchema = !!schema.witness
+  const controllerFieldName = schema.witness?.controllerField // 'keyId' or 'linkedId'
+
+  const renderField = (field: typeof schema.fields[0]) => {
+    // For witness-enabled schemas, replace the proofs field with EvidencePointerProofInput
+    if (isWitnessSchema && field.name === 'proofs') {
+      const subjectDid = (formData['subject'] as string) || ''
+      const controllerDid = controllerFieldName ? (formData[controllerFieldName] as string) || '' : ''
+      const proofUrl = (formData['proofs'] as string) || ''
+
+      return (
+        <div key={field.name} className="space-y-2">
+          <Label htmlFor={field.name} className="text-sm font-medium">
+            {field.label}
+            {field.required && <span className="text-red-500 ml-1">*</span>}
+          </Label>
+          {field.description && (
+            <p className="text-sm text-muted-foreground">{field.description}</p>
+          )}
+          <EvidencePointerProofInput
+            subjectDid={subjectDid}
+            controllerDid={controllerDid}
+            value={proofUrl}
+            onChange={(url) => handleFieldChange('proofs', url)}
+            error={errors[field.name]}
+          />
+          {errors[field.name] && <p className="text-sm text-red-500" data-testid="field-error">{errors[field.name]}</p>}
+        </div>
+      )
+    }
+
+    return (
+      <FieldRenderer
+        key={field.name}
+        field={field}
+        value={formData[field.name] || (field.type === 'array' ? [] : '')}
+        onChange={(value) => handleFieldChange(field.name, value)}
+        error={errors[field.name]}
+      />
+    )
+  }
+
   // Determine if submit should be enabled
   const canSubmit = isConnected && isNetworkSupported
 
@@ -297,27 +366,11 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {requiredFields.map((field) => (
-                <FieldRenderer
-                  key={field.name}
-                  field={field}
-                  value={formData[field.name] || (field.type === 'array' ? [] : '')}
-                  onChange={(value) => handleFieldChange(field.name, value)}
-                  error={errors[field.name]}
-                />
-              ))}
+              {requiredFields.map((field) => renderField(field))}
 
               {optionalFields.length > 0 && (
                 <>
-                  {optionalFields.map((field) => (
-                    <FieldRenderer
-                      key={field.name}
-                      field={field}
-                      value={formData[field.name] || (field.type === 'array' ? [] : '')}
-                      onChange={(value) => handleFieldChange(field.name, value)}
-                      error={errors[field.name]}
-                    />
-                  ))}
+                  {optionalFields.map((field) => renderField(field))}
                 </>
               )}
 

@@ -32,7 +32,7 @@ const METHODS: readonly string[] = ['dns-txt', 'did-json']
 
 const WITNESS_GATEWAY_URL =
   process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ??
-  'https://api.omatrust.org/v1/controller-witness'
+  'https://registry.omatrust.org/api/controller-witness'
 
 /**
  * POST a single witness request. Returns the response body on success,

@@ -4,7 +4,7 @@ import React from 'react';
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, FileCheck, LinkIcon, Award, Star, MessageSquare } from "lucide-react"
+import { Shield, FileCheck, LinkIcon, Award, Star, MessageSquare, KeyRound, Eye } from "lucide-react"
 import { LatestAttestations } from "@/components/latest-attestations"
 
 export default function HomePage() {
@@ -32,6 +32,18 @@ export default function HomePage() {
       title: "Linked Identifiers",
       description: "Link and verify different identity systems",
       href: "/attest/linked-identifier"
+    },
+    {
+      icon: KeyRound,
+      title: "Key Binding",
+      description: "Publicly authorize a key to sign on your behalf",
+      href: "/attest/key-binding"
+    },
+    {
+      icon: Eye,
+      title: "Controller Witness",
+      description: "Be a third-party witness to a Key Binding or Linked Identifier attestation",
+      href: "/attest/controller-witness"
     },
     {
       icon: Star,
