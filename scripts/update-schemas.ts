@@ -139,12 +139,16 @@ async function transformToUISchema(jsonSchema, schemaId) {
   // Detect if schema should be revocable (has 'revoked' field with x-oma3-skip-reason: "eas")
   const revocable = detectRevocable(jsonSchema.properties)
 
+  // Extract witness configuration if present
+  const witness = jsonSchema['x-oma3-witness'] || undefined
+
   return {
     id: schemaId,
     title: jsonSchema.title,
     description: jsonSchema.description,
     fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId),
-    revocable
+    revocable,
+    witness
   }
 }
 
@@ -395,9 +399,56 @@ async function readDeploymentData(rootPath) {
 }
 
 /**
+ * Read EAS schema strings from generated .eas.json files (not .deployed.)
+ * These contain the Solidity-typed schema string used by SchemaEncoder.
+ */
+async function readEasSchemaStrings(rootPath) {
+  const generatedPath = path.join(rootPath, 'generated')
+  const schemaStrings: Record<string, string> = {}
+
+  try {
+    console.log(`📐 Reading EAS schema strings from: ${generatedPath}`)
+    const files = await fs.readdir(generatedPath)
+
+    for (const file of files) {
+      // Match .eas.json but NOT .deployed.*.json
+      if (!file.endsWith('.eas.json') || file.includes('.deployed.')) continue
+
+      const rawName = file.replace('.eas.json', '')
+
+      // Convert PascalCase/hyphenated filename to kebab-case to match schema IDs
+      const normalizedSchemaId = rawName
+        .replace(/([A-Z])/g, (match, letter, index) => {
+          if (index > 0 && rawName[index - 1] !== '-') {
+            return '-' + letter.toLowerCase()
+          }
+          return letter.toLowerCase()
+        })
+
+      try {
+        const filePath = path.join(generatedPath, file)
+        const content = await fs.readFile(filePath, 'utf8')
+        const data = JSON.parse(content)
+
+        if (data.schema) {
+          schemaStrings[normalizedSchemaId] = data.schema
+          console.log(`   ✅ ${normalizedSchemaId}: ${data.schema.substring(0, 60)}...`)
+        }
+      } catch (err) {
+        console.warn(`   ⚠️  Failed to read ${file}:`, err.message)
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️  Could not read generated directory for schema strings: ${error.message}`)
+  }
+
+  return schemaStrings
+}
+
+/**
  * Generate the schemas.ts file
  */
-async function generateSchemasFile(schemas, deployments = {}) {
+async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: Record<string, string> = {}) {
   const uiSchemas = await Promise.all(
     Object.entries(schemas).map(([id, schema]) =>
       transformToUISchema(schema, id)
@@ -446,6 +497,17 @@ async function generateSchemasFile(schemas, deployments = {}) {
     // This is auto-detected from the JSON schema's 'revoked' field with x-oma3-skip-reason: "eas"
     if (item.schema.revocable) {
       exportLines.push(`  revocable: true,`)
+    }
+
+    // Add witness configuration if present (from x-oma3-witness in JSON schema)
+    if (item.schema.witness) {
+      exportLines.push(`  witness: ${JSON.stringify(item.schema.witness)},`)
+    }
+
+    // Add EAS schema string if available (from generated .eas.json files)
+    const easStr = easSchemaStrings[item.schema.id]
+    if (easStr) {
+      exportLines.push(`  easSchemaString: '${escapeString(easStr)}',`)
     }
 
     exportLines.push(
@@ -505,6 +567,8 @@ export interface AttestationSchema {
   deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
   revocable?: boolean // Whether attestations using this schema can be revoked (default: false)
+  easSchemaString?: string // Solidity-typed schema string for EAS SchemaEncoder
+  witness?: { subjectField: string; controllerField: string } // Controller Witness API config from x-oma3-witness
 }
 
 // Field definitions
@@ -568,7 +632,9 @@ async function main() {
 
     const deployments = await readDeploymentData(rootPath)
 
-    await generateSchemasFile(schemas, deployments)
+    const easSchemaStrings = await readEasSchemaStrings(rootPath)
+
+    await generateSchemasFile(schemas, deployments, easSchemaStrings)
 
     console.log(`✅ Schema update completed successfully!`)
     console.log(`📊 Processed ${Object.keys(schemas).length} schemas:`)

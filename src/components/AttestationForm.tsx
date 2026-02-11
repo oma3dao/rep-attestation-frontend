@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
+import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
 import { useToast } from '@/components/ui/toast'
 import logger from '@/lib/logger';
 
@@ -180,6 +181,17 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
           completeData[field.name] = field.type === 'array' ? [] : ''
         }
       })
+
+      // For key-binding and linked-identifier schemas, if the user hasn't
+      // explicitly set effectiveAt (left at auto-default), add a grace period
+      // so the Controller Witness API can observe and attest the controller
+      // evidence before the attestation becomes effective.
+      if (CONTROLLER_WITNESS_CONFIG.graceSchemaIds.includes(schema.id)) {
+        const userExplicitlySetEffectiveAt = formData['effectiveAt'] !== undefined && formData['effectiveAt'] !== ''
+        if (!userExplicitlySetEffectiveAt) {
+          completeData['effectiveAt'] = Math.floor(Date.now() / 1000) + CONTROLLER_WITNESS_CONFIG.graceSeconds
+        }
+      }
 
       // Extract subject field for recipient
       const subjectField = schema.fields.find(field =>

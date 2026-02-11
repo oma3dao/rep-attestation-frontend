@@ -122,35 +122,46 @@ src/
 
 ## Schema Management
 
-This project uses JSON schemas to generate TypeScript attestation forms. When schema definitions change, you can update them using the provided script.
+This project uses JSON schemas to generate TypeScript attestation forms. Schema definitions live in the `rep-attestation-tools-evm-solidity` repository under `schemas-json/`. For the full authoring guide — OMA3 extensions (`x-oma3-*`), best practices, and example structures — see that repo's `schemas-json/README.md`.
 
 ### Updating Schemas
 
-```bash
-# Update schemas from a directory
-npm run update-schemas /path/to/schemas/folder
+When schema definitions change in `rep-attestation-tools-evm-solidity`, you need to regenerate the frontend schemas:
 
-# Example: Update from a local schema repository
-npm run update-schemas ../attestation-schemas/schemas
+```bash
+# 1. Generate EAS objects (run from the tools repo)
+cd ../rep-attestation-tools-evm-solidity
+npx hardhat generate-eas-object --schema schemas-json/<schema-name>.schema.json --network omachainTestnet
+
+# 2. Update this frontend's schemas.ts
+cd ../rep-attestation-frontend
+npm run update-schemas ../rep-attestation-tools-evm-solidity
+
+# 3. Copy to app-registry-frontend (schemas.ts must stay in sync)
+cp src/config/schemas.ts ../app-registry-frontend/src/config/schemas.ts
 ```
+
+If you also deployed the schema on-chain, the deployment UIDs and block numbers are picked up automatically from the `generated/*.deployed.*.json` files. See the tools repo README for the full deployment workflow.
 
 ### What the Script Does
 
-1. **Reads** all `*.json` files from the specified directory
-2. **Transforms** JSON schemas to TypeScript UI schemas
-3. **Overwrites** `src/config/schemas.ts` with the new definitions
-4. **Maintains** existing export structure for components
+1. Reads all `*.schema.json` files from the tools repo's `schemas-json/` directory
+2. Reads EAS schema strings from `generated/*.eas.json` files
+3. Reads deployment UIDs and block numbers from `generated/*.deployed.*.json` files
+4. Transforms JSON schemas to TypeScript UI schemas, respecting `x-oma3-*` extensions
+5. Generates `src/config/schemas.ts` with field definitions, deployed UIDs, and metadata
 
-### UI Metadata
+### Key Schema Extensions
 
-The script automatically adds UI-specific metadata for known schemas:
+The script processes `x-oma3-*` extension fields from the JSON schemas (e.g., `x-oma3-skip-reason`, `x-oma3-subtype`, `x-oma3-default`, `x-oma3-render`, `x-oma3-witness`). For the full reference on all supported extensions, see [`schemas-json/README.md`](https://github.com/oma3dao/rep-attestation-tools-evm-solidity/blob/main/schemas-json/README.md) in the tools repository.
 
-- **Icons** and **colors** for visual consistency
-- **Smart placeholders** based on field names and types
-- **Type transformations** (e.g., `boolean` → `enum` with Yes/No options)
-- **Validation rules** for URI, integer, and datetime fields
+### Controller Witness
 
-For unknown schemas, default metadata is generated from the JSON schema title and description.
+Schemas that declare `x-oma3-witness` at the top level trigger an automatic, non-blocking call to the Controller Witness API after a successful attestation. Currently enabled on Key Binding and Linked Identifier schemas.
+
+The witness call tries `dns-txt` first, then falls back to `did-json`. Failures are logged but never block the user flow. The endpoint is configurable via `NEXT_PUBLIC_CONTROLLER_WITNESS_URL` (defaults to `https://api.omatrust.org/v1/controller-witness`).
+
+For details on the `x-oma3-witness` extension, see the tools repo's [`schemas-json/README.md`](https://github.com/oma3dao/rep-attestation-tools-evm-solidity/blob/main/schemas-json/README.md). For the API reference, see `developer-docs/docs/api/controller-witness.md`.
 
 ## Contributing
 
@@ -162,17 +173,18 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of cond
 
 ### Blockchain Networks
 
-The application currently supports:
-- **BSC Testnet** (default) - For development and testing
-- **BSC Mainnet** - For production use
-- **Ethereum Sepolia** - Ethereum testnet
-- **Ethereum Mainnet** - Ethereum mainnet
+The application targets:
+- **OMAchain Testnet** (chain ID 66238) - For development and testing
+- **OMAchain Mainnet** (chain ID 6623) - For production use (when available)
+
+Legacy BSC and Ethereum chain configs remain in `chains.ts` but are not actively used for attestations.
 
 ### Attestation Services
 
 Currently integrated:
-- **BAS (Binance Attestation Service)** - Available on BSC networks
-- **Future**: EAS (Ethereum Attestation Service) and custom attestation services
+- **EAS (Ethereum Attestation Service)** - Deployed on OMAchain Testnet
+- **Delegated attestations** - Server pays gas for subsidized schemas
+- **Controller Witness** - Automatic post-attestation witness for key-binding and linked-identifier schemas
 
 ### Delegated Attestations (Gas Subsidy)
 

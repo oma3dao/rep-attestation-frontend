@@ -124,4 +124,15 @@ export const ATTESTATION_QUERY_CONFIG = {
   defaultLimit: 20,
   // Safety multiplier when fetching events (to account for filtering)
   fetchMultiplier: 2
-} 
+}
+
+// Controller Witness grace period configuration
+// When creating key-binding or linked-identifier attestations, the effectiveAt
+// default is pushed forward by this amount so the Controller Witness API can
+// observe and attest controller evidence before the attestation becomes effective.
+export const CONTROLLER_WITNESS_CONFIG = {
+  /** Schema IDs whose effectiveAt default gets the grace period */
+  graceSchemaIds: ['key-binding', 'linked-identifier'],
+  /** Seconds added to current time for the default effectiveAt */
+  graceSeconds: 120, // 2 minutes — enough for OMAchain finality + witness call
+}
