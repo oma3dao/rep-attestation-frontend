@@ -21,12 +21,27 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     })
 
-    const data = await res.json()
-    return NextResponse.json(data, { status: res.status })
+    // Try to parse as JSON, fall back to text
+    const contentType = res.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const data = await res.json()
+      return NextResponse.json(data, { status: res.status })
+    } else {
+      const text = await res.text()
+      console.error('[controller-witness proxy] Non-JSON response:', {
+        status: res.status,
+        body: text.slice(0, 500),
+      })
+      return NextResponse.json(
+        { error: `Upstream returned ${res.status}`, detail: text.slice(0, 200) },
+        { status: res.status || 502 }
+      )
+    }
   } catch (error) {
-    console.error('[controller-witness proxy] Error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[controller-witness proxy] Fetch error:', message)
     return NextResponse.json(
-      { error: 'Failed to reach witness API' },
+      { error: 'Failed to reach witness API', detail: message },
       { status: 502 }
     )
   }
