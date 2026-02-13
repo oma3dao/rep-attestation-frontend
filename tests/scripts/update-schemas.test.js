@@ -69,6 +69,64 @@ describe('update-schemas script', () => {
       await expect(transformToUISchema(badSchema, 'bad')).rejects.toThrow(/missing required 'title'/i)
     })
 
+    it('extracts x-oma3-witness configuration when present', async () => {
+      const schema = {
+        title: 'Key Binding',
+        description: 'Bind a cryptographic key to a DID',
+        'x-oma3-witness': { subjectField: 'subject', controllerField: 'keyId' },
+        properties: {
+          subject: { type: 'string', title: 'Subject' },
+          keyId: { type: 'string', title: 'Key ID' },
+        },
+        required: ['subject', 'keyId'],
+      }
+      const result = await transformToUISchema(schema, 'key-binding')
+      expect(result.witness).toEqual({ subjectField: 'subject', controllerField: 'keyId' })
+    })
+
+    it('returns undefined witness when x-oma3-witness is not present', async () => {
+      const schema = {
+        title: 'Endorsement',
+        description: 'A simple endorsement',
+        properties: {
+          subject: { type: 'string', title: 'Subject' },
+        },
+        required: ['subject'],
+      }
+      const result = await transformToUISchema(schema, 'endorsement')
+      expect(result.witness).toBeUndefined()
+    })
+
+    it('detects revocable schema with x-oma3-skip-reason eas on revoked field', async () => {
+      const schema = {
+        title: 'Revocable Schema',
+        description: 'A schema that supports revocation',
+        properties: {
+          subject: { type: 'string', title: 'Subject' },
+          revoked: { type: 'boolean', title: 'Revoked', 'x-oma3-skip-reason': 'eas' },
+        },
+        required: ['subject'],
+      }
+      const result = await transformToUISchema(schema, 'revocable-test')
+      expect(result.revocable).toBe(true)
+      // The revoked field should be skipped from form fields
+      expect(result.fields.length).toBe(1)
+      expect(result.fields[0].name).toBe('subject')
+    })
+
+    it('detects non-revocable schema when revoked field is absent', async () => {
+      const schema = {
+        title: 'Non-Revocable',
+        description: 'desc',
+        properties: {
+          subject: { type: 'string', title: 'Subject' },
+        },
+        required: [],
+      }
+      const result = await transformToUISchema(schema, 'non-revocable')
+      expect(result.revocable).toBe(false)
+    })
+
     it('skips fields with x-oma3-skip-reason', async () => {
       const schema = {
         title: 'Skip',

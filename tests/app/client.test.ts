@@ -55,7 +55,7 @@ describe('client environment handling', () => {
   it('should throw in production when no client ID and window is defined', async () => {
     vi.resetModules();
     delete process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
-    process.env.NODE_ENV = 'production';
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', writable: true });
     
     await expect(import('@/app/client')).rejects.toThrow(/no client id provided/i);
   });
@@ -63,7 +63,7 @@ describe('client environment handling', () => {
   it('should warn when no client ID in development (not test)', async () => {
     vi.resetModules();
     delete process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
-    process.env.NODE_ENV = 'development';
+    Object.defineProperty(process.env, 'NODE_ENV', { value: 'development', writable: true });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     
     const { client } = await import('@/app/client');

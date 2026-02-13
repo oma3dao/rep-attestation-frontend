@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   certificationSchema,
+  commonSchema,
+  controllerWitnessSchema,
   endorsementSchema,
+  keyBindingSchema,
   linkedIdentifierSchema,
+  securityAssessmentSchema,
+  userReviewResponseSchema,
   userReviewSchema,
   getSchema,
   getSchemaIds,
@@ -14,15 +19,20 @@ import {
 
 describe('schemas config', () => {
   describe('schema exports', () => {
-    it('exports all four schemas', () => {
+    it('exports all nine schemas', () => {
       expect(certificationSchema).toBeDefined();
+      expect(commonSchema).toBeDefined();
+      expect(controllerWitnessSchema).toBeDefined();
       expect(endorsementSchema).toBeDefined();
+      expect(keyBindingSchema).toBeDefined();
       expect(linkedIdentifierSchema).toBeDefined();
+      expect(securityAssessmentSchema).toBeDefined();
+      expect(userReviewResponseSchema).toBeDefined();
       expect(userReviewSchema).toBeDefined();
     });
 
     it('each schema has required properties', () => {
-      const schemas = [certificationSchema, endorsementSchema, linkedIdentifierSchema, userReviewSchema];
+      const schemas = getAllSchemas();
       
       schemas.forEach(schema => {
         expect(schema).toHaveProperty('id');
@@ -30,18 +40,22 @@ describe('schemas config', () => {
         expect(schema).toHaveProperty('description');
         expect(schema).toHaveProperty('fields');
         expect(Array.isArray(schema.fields)).toBe(true);
-        expect(schema.fields.length).toBeGreaterThan(0);
+        // commonSchema has no fields, others should have at least one
+        if (schema.id !== 'common') {
+          expect(schema.fields.length).toBeGreaterThan(0);
+        }
       });
     });
 
     it('each schema has unique IDs', () => {
-      const ids = [certificationSchema.id, endorsementSchema.id, linkedIdentifierSchema.id, userReviewSchema.id];
+      const schemas = getAllSchemas();
+      const ids = schemas.map(s => s.id);
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(ids.length);
     });
 
     it('each schema has deployedUIDs and deployedBlocks', () => {
-      const schemas = [certificationSchema, endorsementSchema, linkedIdentifierSchema, userReviewSchema];
+      const schemas = getAllSchemas();
       
       schemas.forEach(schema => {
         expect(schema.deployedUIDs).toBeDefined();
@@ -77,6 +91,159 @@ describe('schemas config', () => {
     });
   });
 
+  describe('controllerWitnessSchema', () => {
+    it('has correct properties', () => {
+      expect(controllerWitnessSchema.id).toBe('controller-witness');
+      expect(controllerWitnessSchema.title).toBe('Controller Witness');
+      expect(controllerWitnessSchema.description).toContain('witness');
+    });
+
+    it('has correct required fields', () => {
+      const requiredFields = controllerWitnessSchema.fields.filter(f => f.required);
+      const names = requiredFields.map(f => f.name);
+      expect(names).toContain('subject');
+      expect(names).toContain('controller');
+      expect(names).toContain('method');
+      expect(names).toContain('observedAt');
+    });
+
+    it('has method field with observation method enum options', () => {
+      const methodField = controllerWitnessSchema.fields.find(f => f.name === 'method');
+      expect(methodField).toBeDefined();
+      expect(methodField?.type).toBe('enum');
+      expect(methodField?.options).toEqual(['dns-txt', 'did-json', 'social-profile', 'manual']);
+    });
+
+    it('has observedAt timestamp field', () => {
+      const observedAt = controllerWitnessSchema.fields.find(f => f.name === 'observedAt');
+      expect(observedAt).toBeDefined();
+      expect(observedAt?.type).toBe('integer');
+      expect(observedAt?.subtype).toBe('timestamp');
+      expect(observedAt?.autoDefault).toBe('current-timestamp');
+    });
+
+    it('has EAS schema string', () => {
+      expect(controllerWitnessSchema.easSchemaString).toBe(
+        'string subject, string controller, string method, uint256 observedAt'
+      );
+    });
+
+    it('has deployedUID on OMAchain Testnet', () => {
+      expect(controllerWitnessSchema.deployedUIDs?.[66238]).toBe(
+        '0xc81419f828755c0be2c49091dcad0887b5ca7342316dfffb4314aadbf8205090'
+      );
+    });
+  });
+
+  describe('keyBindingSchema', () => {
+    it('has correct properties', () => {
+      expect(keyBindingSchema.id).toBe('key-binding');
+      expect(keyBindingSchema.title).toBe('Key Binding');
+      expect(keyBindingSchema.revocable).toBe(true);
+    });
+
+    it('has witness configuration for controller witness', () => {
+      expect(keyBindingSchema.witness).toBeDefined();
+      expect(keyBindingSchema.witness?.subjectField).toBe('subject');
+      expect(keyBindingSchema.witness?.controllerField).toBe('keyId');
+    });
+
+    it('has keyId as required field', () => {
+      const keyIdField = keyBindingSchema.fields.find(f => f.name === 'keyId');
+      expect(keyIdField).toBeDefined();
+      expect(keyIdField?.required).toBe(true);
+      expect(keyIdField?.pattern).toBe('^did:[a-z0-9]+:.+$');
+    });
+
+    it('has keyPurpose array field', () => {
+      const keyPurpose = keyBindingSchema.fields.find(f => f.name === 'keyPurpose');
+      expect(keyPurpose).toBeDefined();
+      expect(keyPurpose?.type).toBe('array');
+      expect(keyPurpose?.required).toBe(true);
+    });
+
+    it('has priorUIDs for OMAchain Testnet', () => {
+      expect(keyBindingSchema.priorUIDs).toBeDefined();
+      expect(keyBindingSchema.priorUIDs?.[66238]).toEqual([
+        '0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d'
+      ]);
+    });
+
+    it('has EAS schema string', () => {
+      expect(keyBindingSchema.easSchemaString).toContain('string subject');
+      expect(keyBindingSchema.easSchemaString).toContain('string keyId');
+      expect(keyBindingSchema.easSchemaString).toContain('string[] keyPurpose');
+      expect(keyBindingSchema.easSchemaString).toContain('string[] proofs');
+    });
+  });
+
+  describe('linkedIdentifierSchema', () => {
+    it('has correct properties', () => {
+      expect(linkedIdentifierSchema.id).toBe('linked-identifier');
+      expect(linkedIdentifierSchema.title).toBe('Linked Identifier');
+      expect(linkedIdentifierSchema.description).toContain('third party');
+      expect(linkedIdentifierSchema.revocable).toBe(true);
+    });
+
+    it('has witness configuration for controller witness', () => {
+      expect(linkedIdentifierSchema.witness).toBeDefined();
+      expect(linkedIdentifierSchema.witness?.subjectField).toBe('subject');
+      expect(linkedIdentifierSchema.witness?.controllerField).toBe('linkedId');
+    });
+
+    it('has linkedId as required field', () => {
+      const linkedIdField = linkedIdentifierSchema.fields.find(f => f.name === 'linkedId');
+      expect(linkedIdField).toBeDefined();
+      expect(linkedIdField?.required).toBe(true);
+      expect(linkedIdField?.pattern).toBe('^did:[a-z0-9]+:.+$');
+    });
+
+    it('has method as required field', () => {
+      const methodField = linkedIdentifierSchema.fields.find(f => f.name === 'method');
+      expect(methodField).toBeDefined();
+      expect(methodField?.required).toBe(true);
+      expect(methodField?.type).toBe('string');
+    });
+  });
+
+  describe('securityAssessmentSchema', () => {
+    it('has correct properties', () => {
+      expect(securityAssessmentSchema.id).toBe('security-assessment');
+      expect(securityAssessmentSchema.title).toBe('Security Assessment');
+    });
+
+    it('has payload as object field with nested subFields', () => {
+      const payload = securityAssessmentSchema.fields.find(f => f.name === 'payload');
+      expect(payload).toBeDefined();
+      expect(payload?.type).toBe('object');
+      expect(payload?.required).toBe(true);
+      expect(Array.isArray(payload?.subFields)).toBe(true);
+      expect(payload?.subFields?.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('commonSchema', () => {
+    it('has correct properties', () => {
+      expect(commonSchema.id).toBe('common');
+      expect(commonSchema.title).toBe('OMA3 Common Definitions');
+      expect(commonSchema.fields).toHaveLength(0);
+    });
+  });
+
+  describe('userReviewResponseSchema', () => {
+    it('has correct properties', () => {
+      expect(userReviewResponseSchema.id).toBe('user-review-response');
+      expect(userReviewResponseSchema.title).toBe('User Review Response');
+    });
+
+    it('has refUID and responseBody as required', () => {
+      const refUID = userReviewResponseSchema.fields.find(f => f.name === 'refUID');
+      const responseBody = userReviewResponseSchema.fields.find(f => f.name === 'responseBody');
+      expect(refUID?.required).toBe(true);
+      expect(responseBody?.required).toBe(true);
+    });
+  });
+
   describe('endorsementSchema', () => {
     it('has correct properties', () => {
       expect(endorsementSchema.id).toBe('endorsement');
@@ -88,14 +255,6 @@ describe('schemas config', () => {
       const subjectField = endorsementSchema.fields.find(field => field.name === 'subject');
       expect(subjectField).toBeDefined();
       expect(subjectField?.required).toBe(true);
-    });
-  });
-
-  describe('linkedIdentifierSchema', () => {
-    it('has correct properties', () => {
-      expect(linkedIdentifierSchema.id).toBe('linked-identifier');
-      expect(linkedIdentifierSchema.title).toBe('Linked Identifier');
-      expect(linkedIdentifierSchema.description).toContain('third party');
     });
   });
 
@@ -115,12 +274,61 @@ describe('schemas config', () => {
     });
   });
 
+  describe('witness configuration', () => {
+    it('only key-binding and linked-identifier have witness config', () => {
+      const schemas = getAllSchemas();
+      const witnessSchemas = schemas.filter(s => s.witness);
+      expect(witnessSchemas).toHaveLength(2);
+      expect(witnessSchemas.map(s => s.id).sort()).toEqual(['key-binding', 'linked-identifier']);
+    });
+
+    it('witness config has correct shape', () => {
+      const witnessSchemas = getAllSchemas().filter(s => s.witness);
+      witnessSchemas.forEach(schema => {
+        expect(schema.witness).toHaveProperty('subjectField');
+        expect(schema.witness).toHaveProperty('controllerField');
+        expect(typeof schema.witness!.subjectField).toBe('string');
+        expect(typeof schema.witness!.controllerField).toBe('string');
+      });
+    });
+  });
+
+  describe('priorUIDs', () => {
+    it('key-binding has priorUIDs for backward compatibility', () => {
+      expect(keyBindingSchema.priorUIDs).toBeDefined();
+      const priorUIDs66238 = keyBindingSchema.priorUIDs?.[66238];
+      expect(Array.isArray(priorUIDs66238)).toBe(true);
+      expect(priorUIDs66238!.length).toBeGreaterThan(0);
+      priorUIDs66238!.forEach(uid => {
+        expect(uid).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      });
+    });
+  });
+
+  describe('revocable schemas', () => {
+    it('key-binding and linked-identifier are revocable', () => {
+      expect(keyBindingSchema.revocable).toBe(true);
+      expect(linkedIdentifierSchema.revocable).toBe(true);
+    });
+
+    it('other schemas are not explicitly revocable', () => {
+      expect(certificationSchema.revocable).toBeFalsy();
+      expect(endorsementSchema.revocable).toBeFalsy();
+      expect(controllerWitnessSchema.revocable).toBeFalsy();
+    });
+  });
+
   describe('getSchema function', () => {
     it('returns schema for valid ID', () => {
       expect(getSchema('certification')).toBe(certificationSchema);
       expect(getSchema('endorsement')).toBe(endorsementSchema);
       expect(getSchema('linked-identifier')).toBe(linkedIdentifierSchema);
       expect(getSchema('user-review')).toBe(userReviewSchema);
+      expect(getSchema('controller-witness')).toBe(controllerWitnessSchema);
+      expect(getSchema('key-binding')).toBe(keyBindingSchema);
+      expect(getSchema('security-assessment')).toBe(securityAssessmentSchema);
+      expect(getSchema('common')).toBe(commonSchema);
+      expect(getSchema('user-review-response')).toBe(userReviewResponseSchema);
     });
 
     it('returns undefined for invalid ID', () => {
@@ -149,8 +357,13 @@ describe('schemas config', () => {
       const schemas = getAllSchemas();
       expect(schemas).toHaveLength(9);
       expect(schemas).toContain(certificationSchema);
+      expect(schemas).toContain(commonSchema);
+      expect(schemas).toContain(controllerWitnessSchema);
       expect(schemas).toContain(endorsementSchema);
+      expect(schemas).toContain(keyBindingSchema);
       expect(schemas).toContain(linkedIdentifierSchema);
+      expect(schemas).toContain(securityAssessmentSchema);
+      expect(schemas).toContain(userReviewResponseSchema);
       expect(schemas).toContain(userReviewSchema);
     });
 
@@ -162,6 +375,25 @@ describe('schemas config', () => {
         expect(schema).toHaveProperty('title');
         expect(schema).toHaveProperty('description');
         expect(schema).toHaveProperty('fields');
+      });
+    });
+  });
+
+  describe('EAS schema strings', () => {
+    it('schemas with fields have EAS schema strings', () => {
+      const schemasWithFields = getAllSchemas().filter(s => s.fields.length > 0);
+      schemasWithFields.forEach(schema => {
+        expect(schema.easSchemaString).toBeDefined();
+        expect(typeof schema.easSchemaString).toBe('string');
+        expect(schema.easSchemaString!.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('EAS schema strings contain Solidity types', () => {
+      const schemasWithEAS = getAllSchemas().filter(s => s.easSchemaString);
+      schemasWithEAS.forEach(schema => {
+        // All should contain at least a string type
+        expect(schema.easSchemaString).toMatch(/string |uint256 |string\[\] /);
       });
     });
   });
@@ -191,6 +423,17 @@ describe('schemas config', () => {
           expect(typeof field.type).toBe('string');
           expect(typeof field.label).toBe('string');
           expect(typeof field.required).toBe('boolean');
+        });
+      });
+    });
+
+    it('all DID fields have proper pattern validation', () => {
+      const allSchemas = getAllSchemas();
+      allSchemas.forEach(schema => {
+        schema.fields.forEach(field => {
+          if (field.format === 'did') {
+            expect(field.pattern).toBe('^did:[a-z0-9]+:.+$');
+          }
         });
       });
     });

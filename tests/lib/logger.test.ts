@@ -21,7 +21,7 @@ describe('logger', () => {
 
   describe('log', () => {
     it('logs in development mode', () => {
-      process.env.NODE_ENV = 'development'
+      (process.env as Record<string, string>).NODE_ENV = 'development';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'false'
       
       logger.log('test message', { data: 123 })
@@ -30,7 +30,7 @@ describe('logger', () => {
     })
 
     it('logs when NEXT_PUBLIC_DEBUG_ADAPTER is true', () => {
-      process.env.NODE_ENV = 'production'
+      (process.env as Record<string, string>).NODE_ENV = 'production';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'true'
       
       logger.log('debug message')
@@ -39,7 +39,7 @@ describe('logger', () => {
     })
 
     it('does not log in production without debug flag', () => {
-      process.env.NODE_ENV = 'production'
+      (process.env as Record<string, string>).NODE_ENV = 'production';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'false'
       
       logger.log('should not appear')
@@ -48,7 +48,7 @@ describe('logger', () => {
     })
 
     it('handles multiple arguments', () => {
-      process.env.NODE_ENV = 'development'
+      (process.env as Record<string, string>).NODE_ENV = 'development';
       
       logger.log('message', 1, 2, 3, { key: 'value' })
       
@@ -58,7 +58,7 @@ describe('logger', () => {
 
   describe('warn', () => {
     it('warns in development mode', () => {
-      process.env.NODE_ENV = 'development'
+      (process.env as Record<string, string>).NODE_ENV = 'development';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'false'
       
       logger.warn('warning message')
@@ -67,7 +67,7 @@ describe('logger', () => {
     })
 
     it('warns when NEXT_PUBLIC_DEBUG_ADAPTER is true', () => {
-      process.env.NODE_ENV = 'production'
+      (process.env as Record<string, string>).NODE_ENV = 'production';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'true'
       
       logger.warn('debug warning')
@@ -76,7 +76,7 @@ describe('logger', () => {
     })
 
     it('does not warn in production without debug flag', () => {
-      process.env.NODE_ENV = 'production'
+      (process.env as Record<string, string>).NODE_ENV = 'production';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'false'
       
       logger.warn('should not appear')
@@ -85,7 +85,7 @@ describe('logger', () => {
     })
 
     it('handles multiple arguments', () => {
-      process.env.NODE_ENV = 'development'
+      (process.env as Record<string, string>).NODE_ENV = 'development';
       
       logger.warn('warning', { details: 'info' })
       
@@ -95,7 +95,7 @@ describe('logger', () => {
 
   describe('error', () => {
     it('always logs errors regardless of environment', () => {
-      process.env.NODE_ENV = 'production'
+      (process.env as Record<string, string>).NODE_ENV = 'production';
       process.env.NEXT_PUBLIC_DEBUG_ADAPTER = 'false'
       
       logger.error('error message')
@@ -104,7 +104,7 @@ describe('logger', () => {
     })
 
     it('logs errors in development', () => {
-      process.env.NODE_ENV = 'development'
+      (process.env as Record<string, string>).NODE_ENV = 'development';
       
       logger.error('dev error')
       

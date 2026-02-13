@@ -240,7 +240,7 @@ describe('useBASClient hook', () => {
       account: undefined,
       chain: undefined,
       supportedChainIds: [],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue(undefined);
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue(undefined);
     vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue(undefined);
@@ -257,8 +257,7 @@ describe('useBASClient hook', () => {
     await expect(result.current.getSchema()).rejects.toThrow(/not supported/);
   });
 
-  // Skipped due to network limitation: testnet.rpc is not a real endpoint and cannot be reached in test
-  it.skip('returns enabled state and exposes methods when wallet/contract/account is present', async () => {
+  it('returns enabled state and exposes methods when wallet/contract/account is present', async () => {
     vi.spyOn(walletModule, 'useWallet').mockReturnValue({
       isConnected: true,
       address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -266,9 +265,9 @@ describe('useBASClient hook', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -281,7 +280,7 @@ describe('useBASClient hook', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
       id === 'test'
@@ -294,6 +293,14 @@ describe('useBASClient hook', () => {
           }
         : undefined
     );
+
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
+    basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
+
+    const ethers6 = await import('thirdweb/adapters/ethers6');
+    vi.mocked(ethers6.ethers6Adapter.signer.toEthers).mockResolvedValue({
+      getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+    } as any);
 
     const { result } = renderHook(() => useBASClient());
     expect(result.current.isConnected).toBe(true);
@@ -418,9 +425,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -433,7 +440,7 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue(undefined);
 
@@ -450,9 +457,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -465,19 +472,19 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: {},
-      fields: [{ name: 'foo', type: 'string' }],
-    });
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
+    } as any);
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    });
+    } as any);
     const { result } = renderHook(() => useBASClient());
     await expect(result.current.createAttestation({ schemaId: 'test', data: { foo: 'bar' }, recipient: 'did:web:example.com' }))
       .rejects.toThrow(/not deployed/);
@@ -491,9 +498,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -506,19 +513,19 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: { 97: '0x0000000000000000000000000000000000000000000000000000000000000000' },
-      fields: [{ name: 'foo', type: 'string' }],
-    });
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
+    } as any);
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    });
+    } as any);
     const { result } = renderHook(() => useBASClient());
     await expect(result.current.createAttestation({ schemaId: 'test', data: { foo: 'bar' }, recipient: 'did:web:example.com' }))
       .rejects.toThrow(/deployment UID not set/);
@@ -532,9 +539,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -547,17 +554,17 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: { 97: '0x' + '1'.repeat(64) },
-      fields: [{ name: 'foo', type: 'string' }],
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
     });
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
-    vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue(undefined);
+    vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue(undefined as any);
     const { result } = renderHook(() => useBASClient());
     await expect(result.current.createAttestation({ schemaId: 'test', data: { foo: 'bar' }, recipient: 'did:web:example.com' }))
       .rejects.toThrow(/Failed to obtain ethers.js signer/);
@@ -571,9 +578,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -586,19 +593,19 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: { 97: '0x' + '1'.repeat(64) },
-      fields: [{ name: 'foo', type: 'string' }],
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
     });
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    });
+    } as any);
     const { result } = renderHook(() => useBASClient());
     await expect(result.current.createAttestation({ schemaId: 'test', data: { foo: 'bar' }, recipient: '' }))
       .rejects.toThrow(/Unsupported identifier format/i);
@@ -612,9 +619,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -627,19 +634,19 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: { 97: '0x' + '1'.repeat(64) },
-      fields: [{ name: 'foo', type: 'string' }],
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
     });
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    });
+    } as any);
     const { result } = renderHook(() => useBASClient());
     await expect(result.current.revokeAttestation()).rejects.toThrow(/not implemented/);
     await expect(result.current.getAttestation()).rejects.toThrow(/not implemented/);
@@ -655,9 +662,9 @@ describe('useBASClient uncovered branches', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -670,19 +677,19 @@ describe('useBASClient uncovered branches', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'test',
       title: 'Test',
       description: '',
       deployedUIDs: { 97: '0x' + '1'.repeat(64) },
-      fields: [{ name: 'foo', type: 'string' }],
+      fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }],
     });
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-    });
+    } as any);
     const { result } = renderHook(() => useBASClient());
     expect(await result.current.estimateGas()).toBe(BigInt('100000'));
   });
@@ -697,9 +704,9 @@ describe('useBASClient when enabled', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -712,11 +719,11 @@ describe('useBASClient when enabled', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
       id === 'test'
-        ? { id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string' }] }
+        ? ({ id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }] } as any)
         : undefined
     );
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
@@ -732,18 +739,18 @@ describe('useBASClient when enabled', () => {
   it('revokeAttestation rejects with not implemented when enabled', async () => {
     await enableWalletAndContract();
     const { result } = renderHook(() => useBASClient());
-    await expect(result.current.revokeAttestation('any-id')).rejects.toThrow(/Revocation not implemented/);
+    await expect((result.current.revokeAttestation as (id: string) => Promise<unknown>)('any-id')).rejects.toThrow(/Revocation not implemented/);
   });
 
   it('getAttestation rejects with not implemented when enabled', async () => {
     await enableWalletAndContract();
     const { result } = renderHook(() => useBASClient());
-    await expect(result.current.getAttestation('any-id')).rejects.toThrow(/Get attestation not implemented/);
+    await expect((result.current.getAttestation as (id: string) => Promise<unknown>)('any-id')).rejects.toThrow(/Get attestation not implemented/);
   });
 
   it('createAttestation rethrows when bas.attest throws', async () => {
     await enableWalletAndContract();
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockRejectedValueOnce(new Error('tx failed'));
     const { result } = renderHook(() => useBASClient());
     await expect(
@@ -753,7 +760,7 @@ describe('useBASClient when enabled', () => {
 
   it('createAttestation uses DID index when data.subject is a DID', async () => {
     await enableWalletAndContract();
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -768,7 +775,7 @@ describe('useBASClient when enabled', () => {
 
   it('createAttestation uses extractAddressFromDID when no subject in data', async () => {
     await enableWalletAndContract();
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -781,7 +788,7 @@ describe('useBASClient when enabled', () => {
 
   it('createAttestation auto-computes subjectDidHash when schema has subjectDidHash and data.subject is DID', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test'
         ? {
             id: 'test',
@@ -789,13 +796,13 @@ describe('useBASClient when enabled', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'foo', type: 'string' },
-              { name: 'subjectDidHash', type: 'string' },
+              { name: 'foo', type: 'string', label: 'Foo', required: false },
+              { name: 'subjectDidHash', type: 'string', label: 'Subject DID Hash', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -810,7 +817,7 @@ describe('useBASClient when enabled', () => {
 
   it('createAttestation encodes bytes32 field when schema has format bytes32', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test'
         ? {
             id: 'test',
@@ -818,13 +825,13 @@ describe('useBASClient when enabled', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'foo', type: 'string' },
-              { name: 'hash', type: 'string', format: 'bytes32' },
+              { name: 'foo', type: 'string', label: 'Foo', required: false },
+              { name: 'hash', type: 'string', label: 'Hash', required: false, format: 'bytes32' },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     const hashValue = '0x' + 'a'.repeat(64);
@@ -846,16 +853,16 @@ describe('useBASClient when enabled', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
-    vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue(null);
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue(null as any);
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
       id === 'test'
-        ? { id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string' }] }
+        ? ({ id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }] } as any)
         : undefined
     );
     const { result } = renderHook(() => useBASClient());
@@ -868,10 +875,10 @@ describe('useBASClient when enabled', () => {
     await enableWalletAndContract();
     vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
       id === 'test'
-        ? { id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string' }] }
+        ? ({ id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }] } as any)
         : undefined
     );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -888,10 +895,10 @@ describe('useBASClient when enabled', () => {
     await enableWalletAndContract();
     vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
       id === 'test'
-        ? { id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string' }] }
+        ? ({ id: 'test', title: 'Test', description: '', deployedUIDs: { 97: '0x' + '1'.repeat(64) }, fields: [{ name: 'foo', type: 'string', label: 'Foo', required: false }] } as any)
         : undefined
     );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -906,7 +913,7 @@ describe('useBASClient when enabled', () => {
 
   it('createAttestation convertToBASData bytes32 field uses zero when value not valid hex', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test'
         ? {
             id: 'test',
@@ -914,13 +921,13 @@ describe('useBASClient when enabled', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'foo', type: 'string' },
-              { name: 'hash', type: 'string', format: 'bytes32' },
+              { name: 'foo', type: 'string', label: 'Foo', required: false },
+              { name: 'hash', type: 'string', label: 'Hash', required: false, format: 'bytes32' },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -948,9 +955,9 @@ describe('useBASClient happy path', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -963,9 +970,9 @@ describe('useBASClient happy path', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test'
         ? {
             id: 'test',
@@ -973,19 +980,18 @@ describe('useBASClient happy path', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'foo', type: 'string' }
+              { name: 'foo', type: 'string', label: 'Foo', required: false },
             ],
           }
         : undefined
-    );
+    ) as any);
     // Override the mock for this test to ensure a valid signer is returned
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
       getAddress: vi.fn().mockResolvedValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
-      // Add more methods if needed by the code under test
-    });
+    } as any);
     // Import and set the basAttestMock to throw
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     // Now run the hook and call createAttestation
     const { result } = renderHook(() => useBASClient());
@@ -1059,9 +1065,9 @@ describe('useBASClient with array and enum fields', () => {
       isChainSupported: true,
       isAttestationSupported: true,
       account: { address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() },
-      chain: { id: 97, rpc: 'https://testnet.rpc' },
+      chain: { id: 97, rpc: 'https://testnet.rpc' } as any,
       supportedChainIds: [97, 56],
-    });
+    } as any);
     vi.spyOn(thirdwebHooks, 'useActiveAccount').mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sendTransaction: vi.fn(), signMessage: vi.fn(), signTypedData: vi.fn() });
     vi.spyOn(thirdwebHooks, 'useActiveWallet').mockReturnValue({
       id: 'wallet1' as any,
@@ -1074,7 +1080,7 @@ describe('useBASClient with array and enum fields', () => {
       subscribe: vi.fn(),
       getConfig: vi.fn(),
     });
-    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' });
+    vi.spyOn(thirdwebHooks, 'useActiveWalletChain').mockReturnValue({ id: 97, rpc: 'https://testnet.rpc' } as any);
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xcontract');
     const { ethers6Adapter } = await import('thirdweb/adapters/ethers6');
     vi.spyOn(ethers6Adapter.signer, 'toEthers').mockResolvedValue({
@@ -1088,7 +1094,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles array field type', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-array'
         ? {
             id: 'test-array',
@@ -1096,12 +1102,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'tags', type: 'array' },
+              { name: 'tags', type: 'array', label: 'Tags', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -1114,7 +1120,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles enum field type', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-enum'
         ? {
             id: 'test-enum',
@@ -1122,12 +1128,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'status', type: 'enum' },
+              { name: 'status', type: 'enum', label: 'Status', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -1140,7 +1146,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles array field with non-array value', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-array-single'
         ? {
             id: 'test-array-single',
@@ -1148,12 +1154,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'tags', type: 'array' },
+              { name: 'tags', type: 'array', label: 'Tags', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -1166,7 +1172,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles integer field type', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-integer'
         ? {
             id: 'test-integer',
@@ -1174,12 +1180,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'count', type: 'integer', max: 255 },
+              { name: 'count', type: 'integer', label: 'Count', required: false, max: 255 },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -1192,7 +1198,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles datetime field type', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-datetime'
         ? {
             id: 'test-datetime',
@@ -1200,12 +1206,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'createdAt', type: 'datetime' },
+              { name: 'createdAt', type: 'datetime', label: 'Created At', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
@@ -1218,7 +1224,7 @@ describe('useBASClient with array and enum fields', () => {
 
   it('createAttestation handles uri field type', async () => {
     await enableWalletAndContract();
-    vi.spyOn(schemasModule, 'getSchema').mockImplementation((id: string) =>
+    vi.spyOn(schemasModule, 'getSchema').mockImplementation(((id: string) =>
       id === 'test-uri'
         ? {
             id: 'test-uri',
@@ -1226,12 +1232,12 @@ describe('useBASClient with array and enum fields', () => {
             description: '',
             deployedUIDs: { 97: '0x' + '1'.repeat(64) },
             fields: [
-              { name: 'website', type: 'uri' },
+              { name: 'website', type: 'uri', label: 'Website', required: false },
             ],
           }
         : undefined
-    );
-    const { basAttestMock } = await import('@bnb-attestation-service/bas-sdk');
+    ) as any);
+    const basAttestMock = (await import('@bnb-attestation-service/bas-sdk') as any).basAttestMock;
     basAttestMock.mockResolvedValue({ wait: vi.fn().mockResolvedValue('0xhash') });
     const { result } = renderHook(() => useBASClient());
     await result.current.createAttestation({
