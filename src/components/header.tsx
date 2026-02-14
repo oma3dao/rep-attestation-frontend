@@ -30,9 +30,7 @@ export function Header() {
               width={120} 
               height={40} 
               priority
-              style={{ width: 'auto' }}
             />
-            <span className="ml-2 text-gray-600 text-lg">Reputation Portal</span>
           </Link>
 
           <div className="flex-1" />
