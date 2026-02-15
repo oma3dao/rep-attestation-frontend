@@ -12,11 +12,10 @@ import { client } from '@/app/client'
 import type { AttestationServiceClient, AttestationData, AttestationResult } from './types'
 import { BAS_CONFIG, getContractAddress } from '@/config/attestation-services'
 import { useWallet } from '@/lib/blockchain'
-import { extractAddressFromDID } from '@/lib/utils'
+import { didToAddress, computeDidHash } from '@oma3/omatrust/identity'
 import { getSchema } from '@/config/schemas'
 import { ethers6Adapter } from 'thirdweb/adapters/ethers6'
 import logger from '@/lib/logger'
-import { didToIndexAddress, computeDidHash } from '@/lib/did-index'
 
 // BAS Contract ABI (simplified for core functions)
 const BAS_ABI = [
@@ -290,20 +289,16 @@ export function useBASClient() {
     // Otherwise fall back to the provided recipient
     let didIndex: string;
     if (data.data.subject && typeof data.data.subject === 'string' && data.data.subject.startsWith('did:')) {
-      didIndex = didToIndexAddress(data.data.subject);
+      didIndex = didToAddress(data.data.subject);
       logger.log('[BAS] Using DID Index Address for subject:', {
         subjectDID: data.data.subject,
         didIndex,
         didHash: computeDidHash(data.data.subject)
       });
     } else {
-      // Fallback to extracting address from recipient field
-      didIndex = extractAddressFromDID(data.recipient);
-      logger.log('[BAS] Using extracted address from recipient:', {
-        recipient: data.recipient,
-        didIndex
-      });
+      throw new Error('Attestation data must include a subject DID field. All OMATrust schemas require subject.');
     }
+
 
     // Add detailed logging
     logger.log('[BAS] Submitting attestation:', {

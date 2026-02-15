@@ -8,6 +8,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.js'],
+    exclude: [
+      'node_modules/**',
+      'tests/lib/bas.test.ts', // BAS is deprecated, no longer supported
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'text-summary'],

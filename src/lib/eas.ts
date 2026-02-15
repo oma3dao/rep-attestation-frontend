@@ -10,12 +10,11 @@ import { client } from '@/app/client'
 import type { AttestationServiceClient, AttestationData, AttestationResult } from './types'
 import { EAS_CONFIG, getContractAddress } from '@/config/attestation-services'
 import { useWallet, getActiveThirdwebChain } from '@/lib/blockchain'
-import { extractAddressFromDID } from '@/lib/utils'
+import { didToAddress, computeDidHash } from '@oma3/omatrust/identity'
 import { getSchema } from '@/config/schemas'
 import { ethers6Adapter } from 'thirdweb/adapters/ethers6'
 import { ethers } from 'ethers'
 import logger from '@/lib/logger'
-import { didToIndexAddress, computeDidHash } from '@/lib/did-index'
 import { isSubsidizedSchema } from '@/config/subsidized-schemas'
 
 // Get Thirdweb chain from shared source
@@ -189,17 +188,13 @@ function prepareAttestationData(
   // Compute DID Index Address
   let didIndex: string
   if (data.data.subject && typeof data.data.subject === 'string' && data.data.subject.startsWith('did:')) {
-    didIndex = didToIndexAddress(data.data.subject)
+    didIndex = didToAddress(data.data.subject)
     logger.log('[EAS] Using DID Index Address:', {
       subjectDID: data.data.subject,
       didIndex
     })
   } else {
-    didIndex = extractAddressFromDID(data.recipient)
-    logger.log('[EAS] Using extracted address from recipient:', {
-      recipient: data.recipient,
-      didIndex
-    })
+    throw new Error('Attestation data must include a subject DID field. All OMATrust schemas require subject.')
   }
 
   return {
@@ -586,7 +581,7 @@ export function useEASClient() {
 
       // Return result
       return {
-        transactionHash: tx.tx.hash || 'unknown',
+        transactionHash: tx.receipt?.hash || 'unknown',
         attestationId: newAttestationUID,
         blockNumber: 0, // EAS SDK doesn't return block number directly
         gasUsed: BigInt(0),

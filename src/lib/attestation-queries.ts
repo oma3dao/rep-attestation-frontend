@@ -4,7 +4,7 @@
  * Functions for efficiently querying attestations using DID Index Addresses
  */
 
-import { didToIndexAddress, validateDidIndex } from './did-index'
+import { didToAddress, validateDidAddress } from '@oma3/omatrust/identity'
 import logger from './logger'
 import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk'
 import { ethers } from 'ethers'
@@ -46,7 +46,7 @@ export async function getAttestationsForDID(
     options: AttestationQueryOptions
 ): Promise<AttestationQueryResult[]> {
     try {
-        const didIndex = didToIndexAddress(did)
+        const didIndex = didToAddress(did)
 
         logger.log('[Query] Querying attestations for DID:', {
             did,
@@ -120,7 +120,7 @@ export function verifyAttestationIntegrity(attestation: AttestationQueryResult):
         // const subject = decodedData.subject
         // 
         // if (subject && subject.startsWith('did:')) {
-        //   return validateDidIndex(subject, attestation.recipient)
+        //   return validateDidAddress(subject, attestation.recipient)
         // }
 
         // For now, assume valid
