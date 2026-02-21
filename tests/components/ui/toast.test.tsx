@@ -46,15 +46,23 @@ describe('toast (useToast)', () => {
     expect(screen.getByText('Success message')).toBeInTheDocument();
   });
 
-  it.skip('auto-dismisses toast after timeout', async () => {
-    vi.useFakeTimers();
+  it('auto-dismisses toast after timeout', async () => {
     render(<ToastTestComponent />);
     fireEvent.click(screen.getByText('Show Auto-dismiss'));
     expect(screen.getByText('Auto-dismiss')).toBeInTheDocument();
-    await act(async () => {
+
+    // Advance past the toast duration (500ms)
+    act(() => {
       vi.advanceTimersByTime(500);
     });
-    await waitForElementToBeRemoved(() => screen.queryByText('Auto-dismiss'));
+
+    // The Toast component has a 300ms fade-out animation delay before calling onClose
+    // which removes the toast from the DOM
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(screen.queryByText('Auto-dismiss')).not.toBeInTheDocument();
   }, 10000);
 
   it('can dismiss toast manually', async () => {

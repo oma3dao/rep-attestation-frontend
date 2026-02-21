@@ -31,15 +31,23 @@ vi.mock('@/components/ui/toast', () => ({
     dismissToast: vi.fn(),
   }),
 }));
+// Mock blockchain for EvidencePointerProofInput (used by witness schemas)
+vi.mock('@/lib/blockchain', () => ({
+  useWallet: vi.fn().mockReturnValue({
+    address: '0x1234567890abcdef1234567890abcdef12345678',
+    chainId: 1,
+    isConnected: true,
+  }),
+}));
 
 // Define test schema at the top for reuse
-const testSchema = {
+const testSchema: AttestationSchema = {
   id: 'test-schema',
   title: 'Test Schema',
   description: 'desc',
   deployedUIDs: { 97: '0x' + '1'.repeat(64) },
   fields: [
-    { name: 'recipient', type: 'string', required: true, label: 'Recipient' },
+    { name: 'recipient', type: 'string' as FieldType, required: true, label: 'Recipient' },
   ],
 };
 
@@ -98,16 +106,16 @@ describe('AttestationForm', () => {
 
   it('shows DID validation error for whitespace-only in non-required recipient', async () => {
     // Create a schema where recipient is not required
-    const optionalRecipientSchema = {
+    const optionalRecipientSchema: AttestationSchema = {
       id: 'optional-schema',
       title: 'Optional Schema',
       description: 'desc',
       deployedUIDs: { 97: '0x' + '1'.repeat(64) },
       fields: [
-        { name: 'recipient', type: 'string', required: false, label: 'Recipient' },
+        { name: 'recipient', type: 'string' as FieldType, required: false, label: 'Recipient' },
       ],
     };
-    render(<AttestationForm schema={optionalRecipientSchema as any} />);
+    render(<AttestationForm schema={optionalRecipientSchema} />);
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: '   ' } });
     fireEvent.click(screen.getByText(/submit/i));
     // This should reach line 219-221 - the DID format required error for empty recipient after trim
@@ -423,12 +431,12 @@ describe('validateField function', () => {
 });
 
 describe('AttestationForm uncovered branches', () => {
-  const schemaWithMinMax = {
+  const schemaWithMinMax: AttestationSchema = {
     id: 'minmax',
     title: 'MinMax',
     description: 'desc',
     fields: [
-      { name: 'age', label: 'Age', type: 'integer', required: true, min: 18, max: 30 },
+      { name: 'age', label: 'Age', type: 'integer' as FieldType, required: true, min: 18, max: 30 },
     ],
   };
   it('shows error for integer below min', async () => {
@@ -485,12 +493,12 @@ describe('AttestationForm uncovered branches', () => {
       }
     });
   });
-  const schemaWithURL = {
+  const schemaWithURL: AttestationSchema = {
     id: 'url',
     title: 'URL',
     description: 'desc',
     fields: [
-      { name: 'url', label: 'URL', type: 'uri', required: true },
+      { name: 'url', label: 'URL', type: 'uri' as FieldType, required: true },
     ],
   };
   it('shows error for invalid URL', async () => {
@@ -512,12 +520,12 @@ describe('AttestationForm uncovered branches', () => {
     });
   });
   it('shows error if no subject field in schema', async () => {
-    const noSubjectSchema = {
+    const noSubjectSchema: AttestationSchema = {
       id: 'no-subject',
       title: 'No Subject',
       description: 'desc',
       fields: [
-        { name: 'foo', label: 'Foo', type: 'string', required: true },
+        { name: 'foo', label: 'Foo', type: 'string' as FieldType, required: true },
       ],
     };
     render(<AttestationForm schema={noSubjectSchema} />);
@@ -535,32 +543,48 @@ describe('AttestationForm uncovered branches', () => {
       expect(screen.getByTestId('field-error').textContent).toMatch(/Subject is required/i);
     });
   });
-  // Skipped: async form submit / mock timing in jsdom
-  it.skip('submits with missing optional fields', async () => {
+  it('submits with missing optional fields', async () => {
+    // Use a schema with 'recipient' (not 'subject') to avoid the SubjectIdInput
+    // compound component which requires complex dropdown+input interaction
+    const schemaWithOptionals: AttestationSchema = {
+      id: 'test-schema',
+      title: 'Test Attestation',
+      description: 'A test schema',
+      fields: [
+        { name: 'recipient', label: 'Recipient', type: 'string' as FieldType, required: true },
+        { name: 'url', label: 'URL', type: 'uri' as FieldType, required: false },
+        { name: 'age', label: 'Age', type: 'integer' as FieldType, required: false },
+      ],
+    };
+
     mockSubmitAttestation.mockResolvedValueOnce({
       transactionHash: '0xabc',
       attestationId: 'attest123',
       blockNumber: 12345,
     });
-    render(<AttestationForm schema={schema} />);
-    const subjectInput = screen.getByLabelText(/^Subject/i);
-    fireEvent.change(subjectInput, { target: { value: 'did:web:example.com' } });
-    flushSync(() => {});
-    
-    const form = subjectInput.closest('form');
-    
+    render(<AttestationForm schema={schemaWithOptionals} />);
+
+    // Fill only the required field using act to flush state updates
     await act(async () => {
-      fireEvent.submit(form!);
-      // Wait for async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
     });
-    
+
+    // Submit via button click (more reliable than fireEvent.submit in jsdom)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+
     await waitFor(() => {
       expect(mockSubmitAttestation).toHaveBeenCalled();
-      expect(window.alert).toHaveBeenCalled();
-      const alertCall = (window.alert as any).mock.calls[0][0];
-      expect(alertCall).toContain('Attestation submitted successfully!');
     }, { timeout: 3000 });
+
+    // Verify the required field is submitted and optional fields get empty defaults
+    const calls = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls.length).toBeGreaterThan(0);
+    const callArgs = calls[0]![0];
+    expect(callArgs.data.recipient).toBe('did:web:example.com');
+    expect(callArgs.data.url).toBe('');
+    expect(callArgs.data.age).toBe('');
   });
 });
 
@@ -619,6 +643,219 @@ describe('AttestationForm array field handling', () => {
   it('renders array fields with empty array as default', () => {
     render(<AttestationForm schema={schemaWithArray} />);
     expect(screen.getByLabelText(/^Subject/i)).toBeInTheDocument();
+  });
+});
+
+describe('AttestationForm witness-enabled schema handling', () => {
+  // Use 'recipient' instead of 'subject' to avoid SubjectIdInput compound component
+  const witnessSchema: AttestationSchema = {
+    id: 'key-binding',
+    title: 'Key Binding',
+    description: 'Bind a key to a DID',
+    witness: { subjectField: 'recipient', controllerField: 'keyId' },
+    fields: [
+      { name: 'recipient', label: 'Recipient', type: 'string' as FieldType, required: true },
+      { name: 'keyId', label: 'Key Identifier', type: 'string' as FieldType, required: true },
+      { name: 'proofs', label: 'Proofs', type: 'array' as FieldType, required: false },
+      { name: 'issuedAt', label: 'Issued Date', type: 'integer' as FieldType, required: true, autoDefault: 'current-timestamp', subtype: 'timestamp' },
+      { name: 'effectiveAt', label: 'Effective Date', type: 'integer' as FieldType, required: false, autoDefault: 'current-timestamp', subtype: 'timestamp' },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.alert = vi.fn();
+    mockSubmitAttestation.mockResolvedValue({
+      transactionHash: '0xabc',
+      attestationId: 'attest123',
+      blockNumber: 12345,
+    });
+  });
+
+  it('renders EvidencePointerProofInput for proofs field when schema has witness config', () => {
+    render(<AttestationForm schema={witnessSchema} />);
+    // EvidencePointerProofInput renders a Proof URL label
+    expect(screen.getByText(/Proof URL/i)).toBeInTheDocument();
+  });
+
+  it('renders standard fields alongside evidence pointer proof', () => {
+    render(<AttestationForm schema={witnessSchema} />);
+    expect(screen.getByLabelText(/Recipient/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Key Identifier/i)).toBeInTheDocument();
+  });
+
+  it('wraps proof URL into evidence-pointer proof structure on submission', async () => {
+    render(<AttestationForm schema={witnessSchema} />);
+
+    // Fill required fields, wrapping in act to ensure useEffect for auto-populate runs
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+    });
+
+    // The proof URL input (Label doesn't use htmlFor, so find by placeholder)
+    const proofInputs = screen.getAllByRole('textbox');
+    const proofInput = proofInputs.find(el => el.getAttribute('placeholder')?.includes('dns.google') || el.getAttribute('placeholder')?.includes('did.json'));
+    expect(proofInput).toBeDefined();
+    await act(async () => {
+      fireEvent.change(proofInput!, { target: { value: 'https://dns.google/resolve?name=_omatrust.example.com&type=TXT' } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const calls = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls.length).toBeGreaterThan(0);
+    const callArgs = calls[0]![0];
+    // proofs should be wrapped in evidence-pointer structure
+    const proofs = JSON.parse(callArgs.data.proofs as string);
+    expect(proofs).toHaveLength(1);
+    expect(proofs[0].proofType).toBe('evidence-pointer');
+    expect(proofs[0].proofPurpose).toBe('shared-control');
+    expect(proofs[0].proofObject.url).toBe('https://dns.google/resolve?name=_omatrust.example.com&type=TXT');
+  });
+
+  it('applies grace period to effectiveAt for witness-enabled schemas', async () => {
+    render(<AttestationForm schema={witnessSchema} />);
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // Fill required fields with act to flush state updates
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const calls1 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls1.length).toBeGreaterThan(0);
+    const callArgs = calls1[0]![0];
+    // effectiveAt should be current time + 120 seconds grace period (approximately)
+    const effectiveAt = callArgs.data.effectiveAt;
+    expect(Number(effectiveAt)).toBeGreaterThanOrEqual(now + 100); // Allow some tolerance
+    expect(Number(effectiveAt)).toBeLessThanOrEqual(now + 200);
+  });
+
+  it('does not apply grace period when user explicitly sets effectiveAt on witness schema', async () => {
+    // Use a plain integer field for effectiveAt (no subtype: 'timestamp') so it
+    // renders as a simple <Input type="number"> with a proper id/label association.
+    // The grace period logic only checks formData['effectiveAt'], not the subtype.
+    const witnessSchemaWithPlainEffective: AttestationSchema = {
+      ...witnessSchema,
+      fields: witnessSchema.fields.map(f =>
+        f.name === 'effectiveAt'
+          ? { name: 'effectiveAt', label: 'Effective Date', type: 'integer' as FieldType, required: false }
+          : f
+      ),
+    };
+
+    render(<AttestationForm schema={witnessSchemaWithPlainEffective} />);
+
+    const userTimestamp = '1700000000';
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Effective Date/i), { target: { value: userTimestamp } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const calls2 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls2.length).toBeGreaterThan(0);
+    const callArgs2 = calls2[0]![0];
+    // effectiveAt should be the user's explicit value, NOT auto-grace-period
+    expect(callArgs2.data.effectiveAt).toBe(userTimestamp);
+  });
+
+  it('does not apply grace period to witness schema whose id is not in graceSchemaIds', async () => {
+    // 'controller-witness' is NOT in graceSchemaIds (['key-binding', 'linked-identifier'])
+    const nonGraceWitnessSchema: AttestationSchema = {
+      ...witnessSchema,
+      id: 'controller-witness',
+    };
+
+    render(<AttestationForm schema={nonGraceWitnessSchema} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+    });
+
+    const now = Math.floor(Date.now() / 1000);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const calls3 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls3.length).toBeGreaterThan(0);
+    const callArgs3 = calls3[0]![0];
+    // effectiveAt should be auto-default current-timestamp (no grace period added)
+    // It should be close to 'now', NOT 'now + 120'
+    const effectiveAt = callArgs3.data.effectiveAt;
+    expect(Number(effectiveAt)).toBeGreaterThanOrEqual(now - 5);
+    expect(Number(effectiveAt)).toBeLessThanOrEqual(now + 10);
+  });
+
+  it('sets proofs to empty array when proof URL is empty on witness schema', async () => {
+    // Use a non-did:web recipient so auto-populate doesn't set proofs
+    const nonWebWitnessSchema: AttestationSchema = {
+      ...witnessSchema,
+      id: 'linked-identifier',
+    };
+
+    render(<AttestationForm schema={nonWebWitnessSchema} />);
+
+    // Fill required fields with non did:web recipient (no auto-populate for proofs)
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:pkh:eip155:1:0x1234567890abcdef1234567890abcdef12345678' } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+    });
+    // Don't enter a proof URL
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    });
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    const calls4 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
+    expect(calls4.length).toBeGreaterThan(0);
+    const callArgs4 = calls4[0]![0];
+    // Empty proofs should be set to empty array, not wrapped
+    expect(callArgs4.data.proofs).toEqual([]);
   });
 });
 
