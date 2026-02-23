@@ -313,6 +313,9 @@ async function readSchemasFromDirectory(directoryPath) {
     const schemas = {}
 
     for (const file of files) {
+      // Skip non-JSON files (e.g., README.md)
+      if (!file.endsWith('.json')) continue
+
       try {
         const filePath = path.join(fullPath, file)
         const content = await fs.readFile(filePath, 'utf8')
