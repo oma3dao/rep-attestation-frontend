@@ -187,19 +187,62 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
           // Apply auto-default for timestamp fields the user didn't touch
           completeData[field.name] = Math.floor(Date.now() / 1000)
         } else {
-          // Use empty string for missing optional fields to maintain search compatibility
-          completeData[field.name] = field.type === 'array' ? [] : ''
+          // Default must match the EAS Solidity type:
+          //   uint256 → 0, string[] → [], string → ''
+          completeData[field.name] = field.type === 'array' ? [] : field.type === 'integer' ? 0 : ''
         }
       })
 
-      // For witness-enabled schemas, wrap the proof URL into the full
-      // evidence-pointer proof structure before submission
-      if (isWitnessSchema && completeData['proofs']) {
-        const proofUrl = typeof completeData['proofs'] === 'string' ? completeData['proofs'] : ''
-        if (proofUrl) {
-          completeData['proofs'] = JSON.stringify([createEvidencePointerProof(proofUrl)])
-        } else {
-          completeData['proofs'] = []
+      // Fields in the EAS schema that aren't exposed as form fields
+      // (e.g., payload, payloadVersion, payloadSpecURI, payloadSpecDigest
+      // on certification/endorsement) still need defaults for encoding.
+      if (schema.easSchemaString) {
+        const easFields = schema.easSchemaString.split(',').map(f => f.trim().split(/\s+/))
+        for (const [type, name] of easFields) {
+          if (name && completeData[name] === undefined) {
+            if (type.endsWith('[]')) {
+              completeData[name] = []
+            } else if (type.startsWith('uint') || type.startsWith('int')) {
+              completeData[name] = 0
+            } else {
+              completeData[name] = ''
+            }
+          }
+        }
+      }
+
+      // For witness-enabled schemas the proofs field holds a raw URL
+      // from EvidencePointerProofInput — wrap it into a proof object.
+      if (isWitnessSchema && typeof completeData['proofs'] === 'string' && completeData['proofs']) {
+        completeData['proofs'] = [createEvidencePointerProof(completeData['proofs'])]
+      }
+
+      // Normalize all string[] fields so the encoder receives a real
+      // string[] instead of a JSON blob.  Proof objects (and any other
+      // non-string items) are JSON-stringified individually.
+      if (schema.easSchemaString) {
+        const arrayFieldNames = schema.easSchemaString
+          .split(',')
+          .map(f => f.trim().split(/\s+/))
+          .filter(([type]) => type?.endsWith('[]'))
+          .map(([, name]) => name)
+
+        for (const name of arrayFieldNames) {
+          let arr = completeData[name]
+
+          // Parse JSON strings (e.g., from ProofInput storing JSON.stringify([proof]))
+          if (typeof arr === 'string') {
+            try { arr = JSON.parse(arr) } catch { arr = arr ? [arr] : [] }
+          }
+
+          if (!Array.isArray(arr)) {
+            arr = arr ? [arr] : []
+          }
+
+          // Each element must be a string for the EAS string[] type
+          completeData[name] = arr.map((item: unknown) =>
+            typeof item === 'string' ? item : JSON.stringify(item)
+          )
         }
       }
 
