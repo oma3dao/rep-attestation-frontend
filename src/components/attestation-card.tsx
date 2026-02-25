@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare } from "lucide-react"
-import type { AttestationQueryResult } from "@/lib/attestation-queries"
+import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 
 interface AttestationCardProps {
-  attestation: AttestationQueryResult
+  attestation: EnrichedAttestationResult
   onClick: () => void
 }
 

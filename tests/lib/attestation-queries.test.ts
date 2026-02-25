@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getContractAddress } from '@/config/attestation-services';
 import * as schemas from '@/config/schemas';
+import * as chains from '@/config/chains';
 import {
-  getAttestationsForDID,
-  getAttestationsByAttester,
-  getAttestationByUID,
-  verifyAttestationIntegrity,
-  getReviewsForApp,
-  getResponsesForReview,
-  getLatestAttestations,
-  type AttestationQueryResult,
+  getAttestationsForDIDWithMetadata,
+  getLatestAttestationsWithMetadata,
+  type EnrichedAttestationResult,
 } from '@/lib/attestation-queries';
 
 vi.mock('@/config/attestation-services', () => ({
@@ -21,78 +17,60 @@ vi.mock('@/config/attestation-services', () => ({
   },
 }));
 
+vi.mock('@oma3/omatrust/reputation', () => ({
+  decodeAttestationData: vi.fn().mockReturnValue({}),
+  getAttestation: vi.fn().mockRejectedValue(new Error('not found')),
+  getAttestationsForDid: vi.fn().mockResolvedValue([]),
+  getLatestAttestations: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('@oma3/omatrust/identity', () => ({
+  didToAddress: vi.fn().mockReturnValue('0x1234567890123456789012345678901234567890'),
+}));
+
+vi.mock('@/lib/blockchain', () => ({
+  getActiveChain: vi.fn().mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' }),
+}));
+
+vi.mock('ethers', () => ({
+  ethers: {
+    JsonRpcProvider: vi.fn().mockImplementation(() => ({})),
+  },
+}));
+
 describe('attestation-queries', () => {
   describe('getAttestationsForDID', () => {
-    it('throws placeholder error (not yet implemented)', async () => {
+    it('returns empty array when no attestations found', async () => {
+      vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
+      vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
+      const result = await getAttestationsForDIDWithMetadata('did:web:example.com', { schemaUID: '0x' + '1'.repeat(64) });
+      expect(result).toEqual([]);
+    });
+
+    it('throws when EAS not deployed', async () => {
+      vi.mocked(getContractAddress).mockReturnValue(null as unknown as string);
       await expect(
-        getAttestationsForDID('did:web:example.com', { schemaUID: '0x' + '1'.repeat(64) })
-      ).rejects.toThrow(/not yet implemented|placeholder/i);
+        getAttestationsForDIDWithMetadata('did:web:example.com', { schemaUID: '0x' + '1'.repeat(64) })
+      ).rejects.toThrow(/EAS not deployed/i);
     });
   });
 
-  describe('getAttestationsByAttester', () => {
-    it('throws placeholder error (not yet implemented)', async () => {
-      await expect(
-        getAttestationsByAttester('0x' + 'ab'.repeat(20), { schemaUID: '0x' + '1'.repeat(64) })
-      ).rejects.toThrow(/not yet implemented|placeholder/i);
-    });
-  });
-
-  describe('getAttestationByUID', () => {
-    it('throws placeholder error (not yet implemented)', async () => {
-      await expect(getAttestationByUID('0x' + '1'.repeat(64))).rejects.toThrow(
-        /not yet implemented|placeholder/i
-      );
-    });
-  });
-
-  describe('verifyAttestationIntegrity', () => {
-    it('returns true for valid-looking attestation (current placeholder behavior)', () => {
-      const attestation: AttestationQueryResult = {
-        uid: '0x' + '1'.repeat(64),
-        attester: '0x' + 'ab'.repeat(20),
-        recipient: '0x' + 'cd'.repeat(20),
-        data: '0x',
-        time: Math.floor(Date.now() / 1000),
-        expirationTime: 0,
-        revocationTime: 0,
-        refUID: '0x' + '0'.repeat(64),
-        revocable: false,
-      };
-      expect(verifyAttestationIntegrity(attestation)).toBe(true);
-    });
-  });
-
-  describe('getReviewsForApp', () => {
-    it('delegates to getAttestationsForDID and throws', async () => {
-      await expect(
-        getReviewsForApp('did:web:example.com', '0x' + '1'.repeat(64))
-      ).rejects.toThrow();
-    });
-  });
-
-  describe('getResponsesForReview', () => {
-    it('throws placeholder error (not yet implemented)', async () => {
-      await expect(
-        getResponsesForReview('0x' + '1'.repeat(64), '0x' + '2'.repeat(64))
-      ).rejects.toThrow(/not yet implemented|placeholder/i);
-    });
-  });
-
-  describe('getLatestAttestations', () => {
+  describe('getLatestAttestationsWithMetadata', () => {
     beforeEach(() => {
       vi.mocked(getContractAddress).mockReset();
     });
 
     it('throws when EAS is not deployed on chain', async () => {
       vi.mocked(getContractAddress).mockReturnValue(null as unknown as string);
-      await expect(getLatestAttestations(999)).rejects.toThrow(/EAS not deployed on chain 999/i);
+      vi.spyOn(chains, 'getChainById').mockReturnValue(undefined);
+      await expect(getLatestAttestationsWithMetadata(999)).rejects.toThrow(/EAS not deployed|Unknown chain/i);
     });
 
     it('returns empty array when no schemas are deployed on chain', async () => {
       vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
+      vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
       vi.spyOn(schemas, 'getAllSchemas').mockReturnValue([]);
-      const result = await getLatestAttestations(66238);
+      const result = await getLatestAttestationsWithMetadata(66238);
       expect(result).toEqual([]);
       vi.restoreAllMocks();
     });

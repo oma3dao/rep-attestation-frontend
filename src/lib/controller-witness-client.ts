@@ -1,68 +1,32 @@
 /**
  * Controller Witness API client
  *
- * Fires a best-effort POST to the Controller Witness gateway after a
- * successful attestation on a schema that declares x-oma3-witness.
- * The call is non-blocking — failures are logged, never thrown.
- *
- * Strategy: try dns-txt first, fall back to did-json if evidence not found.
+ * Thin wrapper around the SDK's callControllerWitness that injects the
+ * gateway URL from environment and adapts the return type for the frontend.
  */
 
+import * as reputation from '@oma3/omatrust/reputation'
+import type { Hex, Did } from '@oma3/omatrust/reputation'
 import logger from '@/lib/logger'
 
-/** Mirrors the x-oma3-witness block in the JSON schema */
-export interface WitnessConfig {
-  subjectField: string
-  controllerField: string
-}
+const WITNESS_GATEWAY_URL =
+  process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ?? '/api/controller-witness'
 
-/** Payload sent to POST /v1/controller-witness */
-export interface ControllerWitnessRequest {
+interface WitnessCallParams {
   attestationUid: string
   chainId: number
   easContract: string
   schemaUid: string
   subject: string
   controller: string
-  method: string
-}
-
-/** Evidence methods to try, in order */
-const METHODS: readonly string[] = ['dns-txt', 'did-json']
-
-const WITNESS_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ??
-  '/api/controller-witness'
-
-/**
- * POST a single witness request. Returns the response body on success,
- * or undefined on any failure.
- */
-async function postWitness(
-  req: ControllerWitnessRequest
-): Promise<Record<string, any> | undefined> {
-  const res = await fetch(WITNESS_GATEWAY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  })
-
-  const body = await res.json()
-
-  if (!res.ok) {
-    logger.log('[controller-witness] API error:', { status: res.status, code: body.code, method: req.method })
-    return undefined
-  }
-
-  return body
 }
 
 /**
- * Call the Controller Witness API, trying dns-txt first then did-json.
- * Returns the first successful response, or undefined if all methods fail.
+ * Call the Controller Witness API via the SDK.
+ * Returns the details object on success, or undefined if all methods fail.
  */
 export async function callControllerWitness(
-  params: Omit<ControllerWitnessRequest, 'method'>
+  params: WitnessCallParams
 ): Promise<Record<string, any> | undefined> {
   logger.log('[controller-witness] Starting witness call:', {
     attestationUid: params.attestationUid,
@@ -70,24 +34,31 @@ export async function callControllerWitness(
     controller: params.controller,
   })
 
-  for (const method of METHODS) {
-    try {
-      const result = await postWitness({ ...params, method })
-      if (result) {
-        logger.log('[controller-witness] Witness attestation created:', {
-          method,
-          uid: result.uid,
-          txHash: result.txHash,
-          observedAt: result.observedAt,
-          existing: result.existing,
-        })
-        return result
-      }
-    } catch (err) {
-      logger.log(`[controller-witness] ${method} failed:`, err)
-    }
-  }
+  try {
+    const result = await reputation.callControllerWitness({
+      gatewayUrl: WITNESS_GATEWAY_URL,
+      attestationUid: params.attestationUid as Hex,
+      chainId: params.chainId,
+      easContract: params.easContract as Hex,
+      schemaUid: params.schemaUid as Hex,
+      subject: params.subject as Did,
+      controller: params.controller as Did,
+    })
 
-  logger.log('[controller-witness] All methods failed (non-blocking)')
-  return undefined
+    if (result.ok) {
+      const details = result.details as Record<string, any> | undefined
+      logger.log('[controller-witness] Witness attestation created:', {
+        method: result.method,
+        uid: details?.uid,
+        txHash: details?.txHash,
+      })
+      return details ?? { method: result.method }
+    }
+
+    logger.log('[controller-witness] All methods failed (non-blocking)')
+    return undefined
+  } catch (err) {
+    logger.log('[controller-witness] Error (non-blocking):', err)
+    return undefined
+  }
 }

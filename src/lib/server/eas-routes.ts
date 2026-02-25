@@ -1,16 +1,16 @@
 /**
  * Server-side EAS route logic
- * 
+ *
  * Core business logic for EAS API routes, separated from HTTP handling
- * for testability. These functions can be unit tested directly without
- * mocking NextRequest/NextResponse.
+ * for testability. Accepts the SDK's PrepareDelegatedAttestationResult
+ * shape from the client.
  */
 
 import { keccak256, toUtf8Bytes, verifyTypedData, JsonRpcProvider, Wallet, Contract, isAddress } from 'ethers';
 import { getContractAddress } from '@/config/attestation-services';
 import { omachainTestnet, omachainMainnet } from '@/config/chains';
 import { isSubsidizedSchema } from '@/config/subsidized-schemas';
-import { buildDelegatedAttestationTypedData, splitSignature, type DelegatedAttestationData } from '@/lib/eas';
+import { splitSignature, type Hex, type PrepareDelegatedAttestationResult } from '@oma3/omatrust/reputation';
 import { loadEasDelegatePrivateKey } from '@/lib/server/eas-delegate-key';
 
 // ============================================================================
@@ -24,8 +24,9 @@ export interface GetNonceResult {
   easAddress: string;
 }
 
+/** Payload sent by the client (matches SDK's submitDelegatedAttestation body) */
 export interface DelegatedAttestationParams {
-  delegated: DelegatedAttestationData;
+  prepared: PrepareDelegatedAttestationResult;
   signature: string;
   attester: string;
 }
@@ -128,14 +129,11 @@ const EAS_WRITE_ABI = [
 // ============================================================================
 
 /**
- * Get the current EAS nonce for an attester address
- * 
- * @param attester - Ethereum address to get nonce for
- * @returns Nonce and chain information
+ * Get the current EAS nonce for an attester address.
+ *
  * @throws EasRouteError on validation or RPC failure
  */
 export async function getNonce(attester: string): Promise<GetNonceResult> {
-  // Validate attester
   if (!attester) {
     throw new EasRouteError('Missing required parameter: attester', 400);
   }
@@ -144,7 +142,6 @@ export async function getNonce(attester: string): Promise<GetNonceResult> {
     throw new EasRouteError('Invalid attester address format', 400);
   }
 
-  // Get chain configuration
   const chainConfig = getActiveChain();
   const chainId = chainConfig.id;
   const easAddress = getContractAddress('eas', chainId);
@@ -153,7 +150,6 @@ export async function getNonce(attester: string): Promise<GetNonceResult> {
     throw new EasRouteError(`EAS not configured for chain ${chainId}`, 500);
   }
 
-  // Fetch nonce from EAS contract
   const provider = new JsonRpcProvider(chainConfig.rpc);
   const easContract = new Contract(easAddress, EAS_READ_ABI, provider);
 
@@ -178,9 +174,9 @@ export async function getNonce(attester: string): Promise<GetNonceResult> {
 // Delegated Attestation
 // ============================================================================
 
-// Simple in-memory idempotency cache
-// Note: In serverless environments, each instance has its own cache.
-// This is acceptable because EAS itself rejects duplicate signatures.
+// Simple in-memory idempotency cache.
+// In serverless environments each instance has its own cache.
+// Acceptable because EAS itself rejects duplicate signatures.
 const processedSignatures = new Map<string, number>();
 
 function cleanIdempotencyCache() {
@@ -193,19 +189,18 @@ function cleanIdempotencyCache() {
 }
 
 /**
- * Submit a delegated attestation to EAS
- * 
- * Validates the signature, checks schema eligibility, and submits
- * the attestation on behalf of the attester (paying gas).
- * 
- * @param params - Delegated attestation parameters
- * @returns Transaction result with UID
+ * Submit a delegated attestation to EAS.
+ *
+ * Accepts the SDK's PrepareDelegatedAttestationResult (via `prepared`),
+ * verifies the signature, checks schema eligibility, and submits
+ * the attestation on-chain on behalf of the attester.
+ *
  * @throws EasRouteError on validation or submission failure
  */
 export async function submitDelegatedAttestation(
   params: DelegatedAttestationParams
 ): Promise<DelegatedAttestationResult> {
-  const { delegated, signature, attester } = params;
+  const { prepared, signature, attester } = params;
 
   // Get chain configuration
   const chainConfig = getActiveChain();
@@ -220,22 +215,30 @@ export async function submitDelegatedAttestation(
   }
 
   // 1. Validate request payload
-  if (!delegated || !signature || !attester) {
-    throw new EasRouteError('Missing required fields: delegated, signature, attester', 400);
+  if (!prepared || !signature || !attester) {
+    throw new EasRouteError('Missing required fields: prepared, signature, attester', 400);
+  }
+
+  const req = prepared.delegatedRequest;
+  const schemaUid = (req.schema ?? req.schemaUid) as string;
+
+  if (!schemaUid) {
+    throw new EasRouteError('Missing schema in prepared.delegatedRequest', 400);
   }
 
   // 2. Check schema allowlist
-  if (!isSubsidizedSchema(chainId, delegated.schema)) {
+  if (!isSubsidizedSchema(chainId, schemaUid)) {
     throw new EasRouteError('Schema not eligible for gas subsidy', 403, 'SCHEMA_NOT_SUBSIDIZED');
   }
 
   // 3. Check deadline
   const now = Math.floor(Date.now() / 1000);
-  if (Number(delegated.deadline) < now) {
+  const deadline = Number(req.deadline ?? 0);
+  if (deadline < now) {
     throw new EasRouteError('Signature expired', 400, 'SIGNATURE_EXPIRED');
   }
 
-  // 4. Fetch nonce for attester from EAS contract
+  // 4. Fetch nonce for attester from EAS contract (authoritative, not from client)
   const provider = new JsonRpcProvider(chainConfig.rpc);
   const easReadOnly = new Contract(easAddress, EAS_READ_ABI, provider);
   
@@ -260,7 +263,7 @@ export async function submitDelegatedAttestation(
       ['function getSchema(bytes32 uid) view returns (tuple(bytes32 uid, address resolver, bool revocable, string schema))'],
       provider
     );
-    const schemaRecord = await schemaRegistry.getSchema(delegated.schema);
+    const schemaRecord = await schemaRegistry.getSchema(schemaUid);
     console.log(`[delegated-attest] Schema record:`, {
       uid: schemaRecord.uid,
       resolver: schemaRecord.resolver,
@@ -271,21 +274,21 @@ export async function submitDelegatedAttestation(
     console.error(`[delegated-attest] Schema lookup failed:`, schemaError?.message);
   }
 
-  // 5. Verify signature and recover attester
-  const typedData = buildDelegatedAttestationTypedData(
-    chainId,
-    easAddress as `0x${string}`,
-    delegated,
-    attester as `0x${string}`,
-    BigInt(nonce)
-  );
+  // 5. Verify signature using the typed data the client signed.
+  //    We rebuild the message with the server-fetched nonce to prevent
+  //    the client from supplying a stale/malicious nonce.
+  const typedData = prepared.typedData;
+  const verifyMessage = {
+    ...typedData.message as Record<string, unknown>,
+    nonce,
+  };
 
   let recovered: string;
   try {
     recovered = verifyTypedData(
-      typedData.domain,
-      typedData.types,
-      typedData.message,
+      typedData.domain as Record<string, unknown>,
+      typedData.types as Record<string, Array<{ name: string; type: string }>>,
+      verifyMessage,
       signature
     );
   } catch (error) {
@@ -310,7 +313,6 @@ export async function submitDelegatedAttestation(
     throw new EasRouteError('Mainnet delegated attestations not yet available', 501, 'MAINNET_NOT_SUPPORTED');
   }
 
-  // TESTNET: Use private key from environment
   let delegateKey: `0x${string}`;
   try {
     delegateKey = loadEasDelegatePrivateKey();
@@ -326,24 +328,25 @@ export async function submitDelegatedAttestation(
   console.log(`[delegated-attest] EAS Contract address: ${easAddress}`);
   console.log(`[delegated-attest] EAS Delegate address: ${easDelegate.address}`);
   console.log(`[delegated-attest] Attester: ${attester}`);
-  console.log(`[delegated-attest] Schema: ${delegated.schema}`);
+  console.log(`[delegated-attest] Schema: ${schemaUid}`);
 
   const { v, r, s } = splitSignature(signature);
 
-  // Build the DelegatedAttestationRequest struct
+  // Build the on-chain DelegatedAttestationRequest struct from prepared data
+  const msg = typedData.message as Record<string, unknown>;
   const delegatedRequest = {
-    schema: delegated.schema,
+    schema: schemaUid,
     data: {
-      recipient: delegated.recipient,
-      expirationTime: BigInt(delegated.expirationTime || 0),
-      revocable: delegated.revocable,
-      refUID: delegated.refUID,
-      data: delegated.data,
-      value: BigInt(0),
+      recipient: msg.recipient as string,
+      expirationTime: BigInt(msg.expirationTime as string | number | bigint ?? 0),
+      revocable: msg.revocable as boolean,
+      refUID: msg.refUID as string,
+      data: msg.data as string,
+      value: BigInt(msg.value as string | number | bigint ?? 0),
     },
     signature: { v, r, s },
-    attester: attester,
-    deadline: BigInt(delegated.deadline),
+    attester,
+    deadline: BigInt(deadline),
   };
 
   // Estimate gas

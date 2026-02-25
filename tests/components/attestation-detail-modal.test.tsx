@@ -2,10 +2,10 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { AttestationDetailModal } from '@/components/attestation-detail-modal';
-import type { AttestationQueryResult } from '@/lib/attestation-queries';
+import type { EnrichedAttestationResult } from '@/lib/attestation-queries';
 
 describe('AttestationDetailModal', () => {
-  const baseAttestation: AttestationQueryResult = {
+  const baseAttestation: EnrichedAttestationResult = {
     uid: '0x' + '1'.repeat(64),
     attester: '0x' + 'ab'.repeat(20),
     recipient: '0x' + 'cd'.repeat(20),

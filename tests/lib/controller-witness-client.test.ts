@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   callControllerWitness,
-  type WitnessConfig,
-  type ControllerWitnessRequest,
 } from '@/lib/controller-witness-client'
 import * as loggerModule from '@/lib/logger'
 
@@ -315,31 +313,5 @@ describe('controller-witness-client', () => {
     expect(loggerModule.default.log).toHaveBeenCalledWith(
       '[controller-witness] All methods failed (non-blocking)'
     )
-  })
-
-  describe('WitnessConfig type', () => {
-    it('has correct shape', () => {
-      const config: WitnessConfig = {
-        subjectField: 'subject',
-        controllerField: 'keyId',
-      }
-      expect(config.subjectField).toBe('subject')
-      expect(config.controllerField).toBe('keyId')
-    })
-  })
-
-  describe('ControllerWitnessRequest type', () => {
-    it('has correct shape', () => {
-      const request: ControllerWitnessRequest = {
-        attestationUid: '0x1',
-        chainId: 66238,
-        easContract: '0xeas',
-        schemaUid: '0xschema',
-        subject: 'did:web:example.com',
-        controller: 'did:pkh:eip155:1:0xabc',
-        method: 'dns-txt',
-      }
-      expect(request.method).toBe('dns-txt')
-    })
   })
 })

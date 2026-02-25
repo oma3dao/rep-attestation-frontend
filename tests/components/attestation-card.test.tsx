@@ -2,10 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { AttestationCard } from '@/components/attestation-card';
-import type { AttestationQueryResult } from '@/lib/attestation-queries';
+import type { EnrichedAttestationResult } from '@/lib/attestation-queries';
 
 describe('AttestationCard', () => {
-  const baseAttestation: AttestationQueryResult = {
+  const baseAttestation: EnrichedAttestationResult = {
     uid: '0x' + '1'.repeat(64),
     attester: '0x1234567890123456789012345678901234567890',
     recipient: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',

@@ -11,7 +11,7 @@ vi.mock('@/lib/blockchain', () => ({
 }));
 
 vi.mock('@/lib/attestation-queries', () => ({
-  getLatestAttestations: vi.fn(),
+  getLatestAttestationsWithMetadata: vi.fn(),
 }));
 
 describe('LatestAttestations', () => {
@@ -26,7 +26,7 @@ describe('LatestAttestations', () => {
   });
 
   it('shows loading state initially', () => {
-    vi.mocked(attestationQueries.getLatestAttestations).mockImplementation(
+    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockImplementation(
       () => new Promise(() => {})
     );
     const { container } = render(
@@ -39,7 +39,7 @@ describe('LatestAttestations', () => {
   });
 
   it('shows empty state when no attestations', async () => {
-    vi.mocked(attestationQueries.getLatestAttestations).mockResolvedValue([]);
+    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockResolvedValue([]);
     render(
       <Providers>
         <LatestAttestations />
@@ -51,7 +51,7 @@ describe('LatestAttestations', () => {
   });
 
   it('shows error state when fetch fails', async () => {
-    vi.mocked(attestationQueries.getLatestAttestations).mockRejectedValue(
+    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockRejectedValue(
       new Error('Network error')
     );
     render(
@@ -66,7 +66,7 @@ describe('LatestAttestations', () => {
   });
 
   it('shows attestation cards when fetch succeeds', async () => {
-    vi.mocked(attestationQueries.getLatestAttestations).mockResolvedValue([
+    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockResolvedValue([
       {
         uid: '0x' + '1'.repeat(64),
         attester: '0x' + 'ab'.repeat(20),
@@ -92,7 +92,7 @@ describe('LatestAttestations', () => {
   });
 
   it('opens modal on card click and closes modal on close', async () => {
-    vi.mocked(attestationQueries.getLatestAttestations).mockResolvedValue([
+    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockResolvedValue([
       {
         uid: '0x' + '1'.repeat(64),
         attester: '0x' + 'ab'.repeat(20),

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     console.log('[delegated-attest] Body keys:', Object.keys(body));
     
     const result = await submitDelegatedAttestation({
-      delegated: body.delegated,
+      prepared: body.prepared,
       signature: body.signature,
       attester: body.attester,
     });

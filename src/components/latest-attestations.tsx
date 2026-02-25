@@ -3,16 +3,16 @@
 import { useEffect, useState } from 'react'
 import { AttestationCard } from './attestation-card'
 import { AttestationDetailModal } from './attestation-detail-modal'
-import { getLatestAttestations, type AttestationQueryResult } from '@/lib/attestation-queries'
+import { getLatestAttestationsWithMetadata, type EnrichedAttestationResult } from '@/lib/attestation-queries'
 import { useWallet } from '@/lib/blockchain'
 import logger from '@/lib/logger'
 import { ATTESTATION_QUERY_CONFIG } from '@/config/attestation-services'
 
 export function LatestAttestations() {
-  const [attestations, setAttestations] = useState<AttestationQueryResult[]>([])
+  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedAttestation, setSelectedAttestation] = useState<AttestationQueryResult | null>(null)
+  const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { chainId } = useWallet()
 
@@ -23,7 +23,7 @@ export function LatestAttestations() {
         setError(null)
         logger.log('[LatestAttestations] Fetching attestations for chain', chainId)
         
-        const results = await getLatestAttestations(chainId, ATTESTATION_QUERY_CONFIG.defaultLimit)
+        const results = await getLatestAttestationsWithMetadata(chainId, ATTESTATION_QUERY_CONFIG.defaultLimit)
         setAttestations(results)
         
         logger.log('[LatestAttestations] Loaded', results.length, 'attestations')
@@ -39,7 +39,7 @@ export function LatestAttestations() {
     fetchAttestations()
   }, [chainId])
 
-  const handleCardClick = (attestation: AttestationQueryResult) => {
+  const handleCardClick = (attestation: EnrichedAttestationResult) => {
     setSelectedAttestation(attestation)
     setIsModalOpen(true)
   }

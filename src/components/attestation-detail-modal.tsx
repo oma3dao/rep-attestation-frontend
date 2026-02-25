@@ -6,14 +6,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { AttestationQueryResult } from "@/lib/attestation-queries"
+import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
 import { omachainTestnet } from "@/config/chains"
 
 interface AttestationDetailModalProps {
   isOpen: boolean
   onClose: () => void
-  attestation: AttestationQueryResult | null
+  attestation: EnrichedAttestationResult | null
 }
 
 const schemaIcons: Record<string, any> = {

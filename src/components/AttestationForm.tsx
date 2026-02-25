@@ -12,6 +12,7 @@ import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
 import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
+import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
 import { useToast } from '@/components/ui/toast'
 import logger from '@/lib/logger';
 
@@ -196,11 +197,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       if (isWitnessSchema && completeData['proofs']) {
         const proofUrl = typeof completeData['proofs'] === 'string' ? completeData['proofs'] : ''
         if (proofUrl) {
-          completeData['proofs'] = JSON.stringify([{
-            proofType: 'evidence-pointer',
-            proofPurpose: 'shared-control',
-            proofObject: { url: proofUrl }
-          }])
+          completeData['proofs'] = JSON.stringify([createEvidencePointerProof(proofUrl)])
         } else {
           completeData['proofs'] = []
         }
