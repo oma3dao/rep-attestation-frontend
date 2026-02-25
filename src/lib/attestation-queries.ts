@@ -32,6 +32,7 @@ export interface EnrichedAttestationResult {
     revocationTime: number
     refUID: string
     revocable: boolean
+    txHash?: string
     schemaId?: string
     schemaTitle?: string
     decodedData?: Record<string, any>
@@ -89,6 +90,7 @@ function toFrontendResult(
         revocationTime: Number(att.revocationTime),
         refUID: att.refUID,
         revocable: att.revocable,
+        txHash: att.txHash,
         schemaId: schema?.id,
         schemaTitle: schema?.title,
         decodedData,

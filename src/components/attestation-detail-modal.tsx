@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
-import { omachainTestnet } from "@/config/chains"
+import { getActiveChain } from "@/lib/blockchain"
 
 interface AttestationDetailModalProps {
   isOpen: boolean
@@ -51,7 +51,14 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
 
   const Icon = schemaIcons[attestation.schemaId || ''] || Shield
   const date = new Date(attestation.time * 1000)
-  const explorerUrl = `${omachainTestnet.blockExplorers[0].url}/tx/${attestation.uid}`
+  const chain = getActiveChain()
+  const explorerBase = chain.blockExplorers?.[0]?.url
+  const explorerUrl = explorerBase
+    ? attestation.txHash
+      ? `${explorerBase}/tx/${attestation.txHash}`
+      : `${explorerBase}/address/${attestation.attester}`
+    : null
+  const explorerLabel = attestation.txHash ? 'View Transaction' : 'View Attester on Block Explorer'
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -87,6 +94,7 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
                 <p className="font-mono text-xs text-gray-600 break-all mt-1">{attestation.recipient}</p>
               </div>
 
+              {explorerUrl && (
               <div>
                 <a 
                   href={explorerUrl}
@@ -94,10 +102,11 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
                 >
-                  View on Block Explorer
+                  {explorerLabel}
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
+              )}
             </div>
           </div>
 
