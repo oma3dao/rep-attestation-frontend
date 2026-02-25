@@ -10,7 +10,7 @@ import { keccak256, toUtf8Bytes, verifyTypedData, JsonRpcProvider, Wallet, Contr
 import { getContractAddress } from '@/config/attestation-services';
 import { omachainTestnet, omachainMainnet } from '@/config/chains';
 import { isSubsidizedSchema } from '@/config/subsidized-schemas';
-import { splitSignature, type Hex, type PrepareDelegatedAttestationResult } from '@oma3/omatrust/reputation';
+import { splitSignature, buildDelegatedTypedDataFromEncoded, type Hex, type PrepareDelegatedAttestationResult } from '@oma3/omatrust/reputation';
 import { loadEasDelegatePrivateKey } from '@/lib/server/eas-delegate-key';
 
 // ============================================================================
@@ -274,21 +274,31 @@ export async function submitDelegatedAttestation(
     console.error(`[delegated-attest] Schema lookup failed:`, schemaError?.message);
   }
 
-  // 5. Verify signature using the typed data the client signed.
-  //    We rebuild the message with the server-fetched nonce to prevent
-  //    the client from supplying a stale/malicious nonce.
-  const typedData = prepared.typedData;
-  const verifyMessage = {
-    ...typedData.message as Record<string, unknown>,
+  // 5. Verify signature by independently rebuilding typed data server-side.
+  //    Uses buildDelegatedTypedDataFromEncoded with the server-fetched nonce
+  //    so we don't trust the client's nonce or typed data.
+  const msg = prepared.typedData.message as Record<string, unknown>;
+  const typedData = buildDelegatedTypedDataFromEncoded({
+    chainId,
+    easContractAddress: easAddress as Hex,
+    schemaUid: schemaUid as Hex,
+    encodedData: msg.data as Hex,
+    recipient: msg.recipient as Hex,
+    attester: attester as Hex,
     nonce,
-  };
+    revocable: msg.revocable as boolean,
+    expirationTime: msg.expirationTime != null ? BigInt(msg.expirationTime as string | number) : undefined,
+    refUid: msg.refUID as Hex | undefined,
+    value: msg.value != null ? BigInt(msg.value as string | number) : undefined,
+    deadline: BigInt(deadline),
+  });
 
   let recovered: string;
   try {
     recovered = verifyTypedData(
       typedData.domain as Record<string, unknown>,
       typedData.types as Record<string, Array<{ name: string; type: string }>>,
-      verifyMessage,
+      typedData.message,
       signature
     );
   } catch (error) {
@@ -332,17 +342,17 @@ export async function submitDelegatedAttestation(
 
   const { v, r, s } = splitSignature(signature);
 
-  // Build the on-chain DelegatedAttestationRequest struct from prepared data
-  const msg = typedData.message as Record<string, unknown>;
+  // Build the on-chain DelegatedAttestationRequest struct from server-rebuilt typed data
+  const builtMsg = typedData.message as Record<string, unknown>;
   const delegatedRequest = {
     schema: schemaUid,
     data: {
-      recipient: msg.recipient as string,
-      expirationTime: BigInt(msg.expirationTime as string | number | bigint ?? 0),
-      revocable: msg.revocable as boolean,
-      refUID: msg.refUID as string,
-      data: msg.data as string,
-      value: BigInt(msg.value as string | number | bigint ?? 0),
+      recipient: builtMsg.recipient as string,
+      expirationTime: BigInt(builtMsg.expirationTime as string | number | bigint ?? 0),
+      revocable: builtMsg.revocable as boolean,
+      refUID: builtMsg.refUID as string,
+      data: builtMsg.data as string,
+      value: BigInt(builtMsg.value as string | number | bigint ?? 0),
     },
     signature: { v, r, s },
     attester,

@@ -87,7 +87,7 @@ export function useBASClient() {
 
     // SDK extracts expiration from common field names
     const expiration = extractExpirationTime(data.data)
-    const expirationTime = expiration !== undefined ? BigInt(expiration) : 0n
+    const expirationTime = expiration !== undefined ? BigInt(expiration) : BigInt(0)
 
     const revocable = schema.revocable ?? false
 

@@ -56,6 +56,33 @@ vi.mock('@/lib/server/eas-delegate-key', () => ({
 
 vi.mock('@oma3/omatrust/reputation', () => ({
   splitSignature: vi.fn(() => ({ v: 27, r: '0x' + 'a'.repeat(64), s: '0x' + 'b'.repeat(64) })),
+  buildDelegatedTypedDataFromEncoded: vi.fn((params: any) => ({
+    domain: { name: 'EAS', version: '1.4.0', chainId: params.chainId, verifyingContract: params.easContractAddress },
+    types: { Attest: [
+      { name: 'attester', type: 'address' },
+      { name: 'schema', type: 'bytes32' },
+      { name: 'recipient', type: 'address' },
+      { name: 'expirationTime', type: 'uint64' },
+      { name: 'revocable', type: 'bool' },
+      { name: 'refUID', type: 'bytes32' },
+      { name: 'data', type: 'bytes' },
+      { name: 'value', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'deadline', type: 'uint64' },
+    ] },
+    message: {
+      attester: params.attester,
+      schema: params.schemaUid,
+      recipient: params.recipient,
+      expirationTime: BigInt(params.expirationTime ?? 0),
+      revocable: params.revocable ?? true,
+      refUID: params.refUid ?? '0x' + '0'.repeat(64),
+      data: params.encodedData,
+      value: BigInt(params.value ?? 0),
+      nonce: BigInt(params.nonce ?? 0),
+      deadline: BigInt(params.deadline ?? 0),
+    },
+  })),
 }));
 
 // ============================================================================
