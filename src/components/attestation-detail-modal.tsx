@@ -3,6 +3,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -68,9 +69,9 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
             <Icon className="h-6 w-6 text-blue-600" />
             {attestation.schemaTitle}
           </DialogTitle>
-          <p className="text-sm text-gray-500">
+          <DialogDescription className="text-sm text-gray-500">
             {date.toLocaleString()}
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
