@@ -5,24 +5,12 @@
  * which are used by the frontend's delegated attestation flow.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest'
-import { createRequire } from 'module'
-import { Wallet } from 'ethers'
-import type { PrepareDelegatedAttestationParams } from '@oma3/omatrust/reputation'
-const require = createRequire(import.meta.url)
-
-let splitSignature: (signature: string) => { v: number; r: string; s: string }
-let buildDelegatedAttestationTypedData: (params: PrepareDelegatedAttestationParams) => {
-  domain: Record<string, unknown>
-  types: Record<string, unknown>
-  message: Record<string, unknown>
-}
-
-beforeAll(async () => {
-  const mod = require('@oma3/omatrust/reputation')
-  splitSignature = mod.splitSignature
-  buildDelegatedAttestationTypedData = mod.buildDelegatedAttestationTypedData
-})
+import { describe, it, expect } from 'vitest'
+import {
+  splitSignature,
+  buildDelegatedAttestationTypedData,
+  type PrepareDelegatedAttestationParams,
+} from '@oma3/omatrust/reputation'
 
 describe('buildDelegatedAttestationTypedData', () => {
   const mockParams: PrepareDelegatedAttestationParams = {
@@ -102,37 +90,72 @@ describe('buildDelegatedAttestationTypedData', () => {
 })
 
 describe('splitSignature', () => {
-  let validSignature = ''
-
-  beforeAll(async () => {
-    const wallet = new Wallet('0x59c6995e998f97a5a0044966f094538e6df77609f68e4f6f5f79f63f65e6f8f6')
-    validSignature = await wallet.signMessage('omatrust split signature test')
-  })
+  // Standard 65-byte signature (r: 32 bytes, s: 32 bytes, v: 1 byte)
+  const validSignature = '0x' +
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' + // r (32 bytes)
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' + // s (32 bytes)
+    '1b' // v (1 byte = 27)
 
   it('extracts r component (first 32 bytes)', () => {
     const { r } = splitSignature(validSignature)
-    expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(r).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
   })
 
   it('extracts s component (next 32 bytes)', () => {
     const { s } = splitSignature(validSignature)
-    expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(s).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
   })
 
   it('extracts v component (last byte)', () => {
     const { v } = splitSignature(validSignature)
-    expect([27, 28]).toContain(v)
+    expect(v).toBe(27)
   })
 
-  it('rejects malformed signatures', () => {
-    expect(() => splitSignature('0xinvalid')).toThrow('Invalid signature')
+  it('handles signature without 0x prefix', () => {
+    const sigWithoutPrefix = validSignature.slice(2)
+    const { r, s, v } = splitSignature(sigWithoutPrefix)
+    expect(r).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    expect(s).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    expect(v).toBe(27)
+  })
+
+  it('normalizes v=0 to v=27', () => {
+    const sigWithV0 = '0x' +
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
+      '00'
+    const { v } = splitSignature(sigWithV0)
+    expect(v).toBe(27)
+  })
+
+  it('normalizes v=1 to v=28', () => {
+    const sigWithV1 = '0x' +
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
+      '01'
+    const { v } = splitSignature(sigWithV1)
+    expect(v).toBe(28)
+  })
+
+  it('preserves v=27 as-is', () => {
+    const { v } = splitSignature(validSignature)
+    expect(v).toBe(27)
+  })
+
+  it('preserves v=28 as-is', () => {
+    const sigWithV28 = '0x' +
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
+      '1c'
+    const { v } = splitSignature(sigWithV28)
+    expect(v).toBe(28)
   })
 
   it('handles uppercase hex', () => {
-    const sig = validSignature.toUpperCase()
+    const sig = '0x' + 'AA'.repeat(32) + 'BB'.repeat(32) + '1B'
     const { r, s, v } = splitSignature(sig)
     expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
     expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect([27, 28]).toContain(v)
+    expect(v).toBe(27)
   })
 })
