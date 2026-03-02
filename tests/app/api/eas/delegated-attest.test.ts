@@ -40,15 +40,20 @@ const mockSignature = '0x' + 'aa'.repeat(32) + 'bb'.repeat(32) + '1b'
 const mockAttester = '0x1234567890123456789012345678901234567890'
 
 function createValidRequest(overrides: Partial<{
-  delegated: Partial<typeof mockDelegatedData>,
+  prepared: Record<string, unknown>,
   signature: string,
   attester: string,
 }> = {}): NextRequest {
+  const defaultPrepared = {
+    delegatedRequest: mockDelegatedData,
+    typedData: {},
+  }
+
   return new NextRequest('http://localhost/api/eas/delegated-attest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      delegated: { ...mockDelegatedData, ...overrides.delegated },
+      prepared: overrides.prepared ?? defaultPrepared,
       signature: overrides.signature ?? mockSignature,
       attester: overrides.attester ?? mockAttester,
     }),
@@ -104,7 +109,10 @@ describe('POST /api/eas/delegated-attest', () => {
       await POST(req)
 
       expect(mockSubmitDelegatedAttestation).toHaveBeenCalledWith({
-        delegated: mockDelegatedData,
+        prepared: {
+          delegatedRequest: mockDelegatedData,
+          typedData: {},
+        },
         signature: mockSignature,
         attester: mockAttester,
       })
@@ -112,7 +120,7 @@ describe('POST /api/eas/delegated-attest', () => {
   })
 
   describe('request validation errors (400)', () => {
-    it('returns 400 when delegated is missing', async () => {
+    it('returns 400 when prepared is missing', async () => {
       const { EasRouteError } = await import('@/lib/server/eas-routes')
       mockSubmitDelegatedAttestation.mockRejectedValue(
         new EasRouteError('Missing required fields: delegated, signature, attester', 400)
@@ -139,7 +147,13 @@ describe('POST /api/eas/delegated-attest', () => {
       const { POST } = await import('@/app/api/eas/delegated-attest/route')
       const req = new NextRequest('http://localhost/api/eas/delegated-attest', {
         method: 'POST',
-        body: JSON.stringify({ delegated: mockDelegatedData, attester: mockAttester }),
+        body: JSON.stringify({
+          prepared: {
+            delegatedRequest: mockDelegatedData,
+            typedData: {},
+          },
+          attester: mockAttester,
+        }),
       })
       const res = await POST(req)
 
@@ -155,7 +169,13 @@ describe('POST /api/eas/delegated-attest', () => {
       const { POST } = await import('@/app/api/eas/delegated-attest/route')
       const req = new NextRequest('http://localhost/api/eas/delegated-attest', {
         method: 'POST',
-        body: JSON.stringify({ delegated: mockDelegatedData, signature: mockSignature }),
+        body: JSON.stringify({
+          prepared: {
+            delegatedRequest: mockDelegatedData,
+            typedData: {},
+          },
+          signature: mockSignature,
+        }),
       })
       const res = await POST(req)
 
@@ -170,7 +190,13 @@ describe('POST /api/eas/delegated-attest', () => {
 
       const { POST } = await import('@/app/api/eas/delegated-attest/route')
       const req = createValidRequest({
-        delegated: { deadline: Math.floor(Date.now() / 1000) - 3600 },
+        prepared: {
+          delegatedRequest: {
+            ...mockDelegatedData,
+            deadline: Math.floor(Date.now() / 1000) - 3600,
+          },
+          typedData: {},
+        },
       })
       const res = await POST(req)
 

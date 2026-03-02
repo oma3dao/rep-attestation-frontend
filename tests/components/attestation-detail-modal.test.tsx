@@ -51,7 +51,7 @@ describe('AttestationDetailModal', () => {
     expect(screen.getByText(baseAttestation.uid)).toBeInTheDocument();
   });
 
-  it('renders View on Block Explorer link', () => {
+  it('renders View Attester on Block Explorer link', () => {
     render(
       <AttestationDetailModal
         isOpen={true}
@@ -59,9 +59,9 @@ describe('AttestationDetailModal', () => {
         attestation={baseAttestation}
       />
     );
-    const link = screen.getByRole('link', { name: /view on block explorer/i });
+    const link = screen.getByRole('link', { name: /view attester on block explorer/i });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', expect.stringContaining('/tx/'));
+    expect(link).toHaveAttribute('href', expect.stringContaining('/address/'));
     expect(link).toHaveAttribute('target', '_blank');
   });
 
