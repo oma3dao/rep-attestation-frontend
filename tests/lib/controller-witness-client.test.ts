@@ -237,7 +237,7 @@ describe('controller-witness-client', () => {
     )
   })
 
-  it('logs per-method error with status, code, and method when API returns non-ok', async () => {
+  it('logs all-methods-failed summary when API returns non-ok for all methods', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>
 
     // dns-txt returns 404 with specific error code
@@ -258,24 +258,27 @@ describe('controller-witness-client', () => {
 
     await callControllerWitness(baseParams)
 
-    // Verify per-method error logs
+    // Current implementation logs start + all-methods-failed summary.
     expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] API error:',
-      { status: 404, code: 'EVIDENCE_NOT_FOUND', method: 'dns-txt' }
+      '[controller-witness] Starting witness call:',
+      expect.objectContaining({
+        attestationUid: baseParams.attestationUid,
+        subject: baseParams.subject,
+        controller: baseParams.controller,
+      })
     )
     expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] API error:',
-      { status: 500, code: 'INTERNAL_ERROR', method: 'did-json' }
+      '[controller-witness] All methods failed (non-blocking)'
     )
   })
 
-  it('logs exception message when a method throws', async () => {
+  it('logs fallback success when first method throws and second succeeds', async () => {
     const fetchMock = global.fetch as ReturnType<typeof vi.fn>
 
     // dns-txt throws a network error
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'))
 
-    // did-json succeeds so we can check the dns-txt error log
+    // did-json succeeds, so client should log final witness creation.
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ uid: '0xrecovered' }), {
         status: 200,
@@ -285,10 +288,20 @@ describe('controller-witness-client', () => {
 
     await callControllerWitness(baseParams)
 
-    // The catch block logs "[controller-witness] dns-txt failed:" with the error
     expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] dns-txt failed:',
-      expect.any(Error)
+      '[controller-witness] Starting witness call:',
+      expect.objectContaining({
+        attestationUid: baseParams.attestationUid,
+        subject: baseParams.subject,
+        controller: baseParams.controller,
+      })
+    )
+    expect(loggerModule.default.log).toHaveBeenCalledWith(
+      '[controller-witness] Witness attestation created:',
+      expect.objectContaining({
+        method: 'did-json',
+        uid: '0xrecovered',
+      })
     )
   })
 

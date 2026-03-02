@@ -6,9 +6,13 @@ import * as attestationQueries from '@/lib/attestation-queries';
 import * as blockchain from '@/lib/blockchain';
 import { Providers } from '@/components/providers';
 
-vi.mock('@/lib/blockchain', () => ({
-  useWallet: vi.fn(),
-}));
+vi.mock('@/lib/blockchain', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/blockchain')>();
+  return {
+    ...actual,
+    useWallet: vi.fn(),
+  };
+});
 
 vi.mock('@/lib/attestation-queries', () => ({
   getLatestAttestationsWithMetadata: vi.fn(),

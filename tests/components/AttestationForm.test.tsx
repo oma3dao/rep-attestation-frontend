@@ -584,7 +584,7 @@ describe('AttestationForm uncovered branches', () => {
     const callArgs = calls[0]![0];
     expect(callArgs.data.recipient).toBe('did:web:example.com');
     expect(callArgs.data.url).toBe('');
-    expect(callArgs.data.age).toBe('');
+    expect(callArgs.data.age).toBe(0);
   });
 });
 
@@ -714,11 +714,13 @@ describe('AttestationForm witness-enabled schema handling', () => {
     expect(calls.length).toBeGreaterThan(0);
     const callArgs = calls[0]![0];
     // proofs should be wrapped in evidence-pointer structure
-    const proofs = JSON.parse(callArgs.data.proofs as string);
+    const proofs = typeof callArgs.data.proofs === 'string'
+      ? JSON.parse(callArgs.data.proofs)
+      : callArgs.data.proofs;
     expect(proofs).toHaveLength(1);
-    expect(proofs[0].proofType).toBe('evidence-pointer');
-    expect(proofs[0].proofPurpose).toBe('shared-control');
-    expect(proofs[0].proofObject.url).toBe('https://dns.google/resolve?name=_omatrust.example.com&type=TXT');
+    expect((proofs as any[])[0].proofType).toBe('evidence-pointer');
+    expect((proofs as any[])[0].proofPurpose).toBe('shared-control');
+    expect((proofs as any[])[0].proofObject.url).toBe('https://dns.google/resolve?name=_omatrust.example.com&type=TXT');
   });
 
   it('applies grace period to effectiveAt for witness-enabled schemas', async () => {

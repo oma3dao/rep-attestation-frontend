@@ -8,6 +8,22 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.js'],
+    server: {
+      deps: {
+        inline: [
+          '@ethereum-attestation-service/eas-sdk',
+          /@ethereum-attestation-service\/eas-sdk/,
+        ],
+        fallbackCJS: true,
+      },
+    },
+    deps: {
+      optimizer: {
+        web: {
+          include: ['@ethereum-attestation-service/eas-sdk'],
+        },
+      },
+    },
     exclude: [
       'node_modules/**',
       'tests/lib/bas.test.ts', // BAS is deprecated, no longer supported
@@ -35,6 +51,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@ethereum-attestation-service/eas-sdk': path.resolve(
+        __dirname,
+        './node_modules/@ethereum-attestation-service/eas-sdk/dist/lib.commonjs/index.js'
+      ),
+      '@oma3/omatrust/reputation': path.resolve(
+        __dirname,
+        './node_modules/@oma3/omatrust/dist/reputation/index.cjs'
+      ),
     },
   },
 }) 
