@@ -170,7 +170,32 @@ export const mainnet = {
   contracts: {}
 };
 
-export const SUPPORTED_CHAINS = [omachainTestnet, bscTestnet, bscMainnet, sepolia, mainnet];
+/**
+ * Base Mainnet
+ * Chain ID: 8453
+ */
+export const base = {
+  id: 8453,
+  chainId: 8453,
+  rpc: "https://mainnet.base.org",
+  name: "Base",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  blockExplorers: [
+    {
+      name: "BaseScan",
+      url: "https://basescan.org",
+      apiUrl: "https://api.basescan.org/api",
+    },
+  ],
+  testnet: false,
+  contracts: {}
+};
+
+export const SUPPORTED_CHAINS = [omachainTestnet, bscTestnet, bscMainnet, sepolia, mainnet, base];
 export const DEFAULT_CHAIN = omachainTestnet;
 
 /**
@@ -183,6 +208,7 @@ export const CHAIN_IDS = {
   BSC_MAINNET: 56,
   SEPOLIA: 11155111,
   MAINNET: 1,
+  BASE: 8453,
 };
 
 /**
@@ -195,6 +221,7 @@ export const CHAIN_NAMES = {
   [CHAIN_IDS.BSC_MAINNET]: 'BSC Mainnet',
   [CHAIN_IDS.SEPOLIA]: 'Sepolia',
   [CHAIN_IDS.MAINNET]: 'Ethereum Mainnet',
+  [CHAIN_IDS.BASE]: 'Base',
 };
 
 /**

@@ -63,7 +63,7 @@ describe('useWallet', () => {
     expect(result.current.isAttestationSupported).toBe(true)
     expect(result.current.account).toEqual(mockAccount)
     expect(result.current.chain.id).toBe(97) // Active chain from environment
-    expect(result.current.supportedChainIds).toEqual([66238, 6623, 97, 56, 11155111, 1])
+    expect(result.current.supportedChainIds).toEqual([66238, 6623, 97, 56, 11155111, 1, 8453])
   })
 
   it('returns not connected and null address if no account', () => {
