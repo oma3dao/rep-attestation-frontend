@@ -276,6 +276,19 @@ async function transformFields(properties, required = [], schemaId = '') {
         field.format = prop.format
       }
 
+      // Extract x-oma3-enum from array items as options (supports both flat strings and rich objects)
+      if (prop.type === 'array' && prop.items && prop.items['x-oma3-enum']) {
+        const enumValues = prop.items['x-oma3-enum']
+        if (Array.isArray(enumValues) && enumValues.length > 0) {
+          // Rich objects have a 'value' property; flat strings are just strings
+          field.options = enumValues.map(item =>
+            typeof item === 'object' && item.value
+              ? { value: item.value, label: item.label || item.value, ...(item.description ? { description: item.description } : {}) }
+              : item
+          )
+        }
+      }
+
     fields.push(field)
   }
 
@@ -662,6 +675,13 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
 // Schema definitions for attestation forms
 export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object' | 'json'
 
+/** A rich option with a human-readable label and optional description */
+export interface RichOption {
+  value: string
+  label: string
+  description?: string
+}
+
 export interface FormField {
   name: string
   type: FieldType
@@ -669,7 +689,7 @@ export interface FormField {
   description?: string
   required: boolean
   placeholder?: string
-  options?: (string | number)[] // for enum fields (strings or integers)
+  options?: (string | number | RichOption)[] // for enum fields (strings or integers) or rich options with labels/descriptions
   format?: string // for validation (uri, date-time, etc.)
   pattern?: string // regex pattern for string validation
   min?: number // for integer fields
