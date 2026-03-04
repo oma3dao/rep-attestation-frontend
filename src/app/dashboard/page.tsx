@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AttestationDetailModal } from "@/components/attestation-detail-modal"
+import { RevokeConfirmationDialog } from "@/components/revoke-confirmation-dialog"
 import { getAttestationsByAttesterWithMetadata, type EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { getActiveThirdwebChain, useWallet } from "@/lib/blockchain"
 import { getContractAddress } from "@/config/attestation-services"
@@ -52,6 +53,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [revokingUid, setRevokingUid] = useState<string | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<EnrichedAttestationResult | null>(null)
   const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -94,11 +96,6 @@ export default function DashboardPage() {
       return
     }
 
-    const approved = window.confirm("This will permanently revoke this attestation. Continue?")
-    if (!approved) {
-      return
-    }
-
     try {
       setRevokingUid(attestation.uid)
       setError(null)
@@ -124,6 +121,7 @@ export default function DashboardPage() {
       setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
     } finally {
       setRevokingUid(null)
+      setRevokeTarget(null)
     }
   }, [account, address, easContractAddress, loadAttestations])
 
@@ -237,7 +235,7 @@ export default function DashboardPage() {
                                 disabled={revokingUid === attestation.uid}
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  void handleRevoke(attestation)
+                                  setRevokeTarget(attestation)
                                 }}
                               >
                                 {revokingUid === attestation.uid ? "Revoking..." : "Revoke"}
@@ -273,6 +271,14 @@ export default function DashboardPage() {
         isOpen={isModalOpen}
         onClose={closeDetailModal}
         attestation={selectedAttestation}
+      />
+
+      <RevokeConfirmationDialog
+        isOpen={revokeTarget !== null}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={() => { if (revokeTarget) void handleRevoke(revokeTarget) }}
+        attestationUid={revokeTarget?.uid ?? ""}
+        isRevoking={revokingUid !== null}
       />
     </div>
   )

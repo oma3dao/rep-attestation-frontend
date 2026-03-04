@@ -169,7 +169,7 @@ export async function getLatestAttestationsWithMetadata(
             try {
                 const decoded = reputation.decodeAttestationData(schema.easSchemaString, att.raw)
                 enriched = { ...att, data: decoded }
-            } catch { /* keep raw */ }
+            } catch (err) { logger.warn('[Query] Failed to decode attestation data', att.uid, err) }
         }
         return toFrontendResult(enriched, chainId, schema)
     })
@@ -211,7 +211,7 @@ export async function getAttestationsByAttesterWithMetadata(
             try {
                 const decoded = reputation.decodeAttestationData(schema.easSchemaString, att.raw)
                 enriched = { ...att, data: decoded }
-            } catch { /* keep raw */ }
+            } catch (err) { logger.warn('[Query] Failed to decode attestation data', att.uid, err) }
         }
         return toFrontendResult(enriched, chainId, schema)
     })
