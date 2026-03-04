@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare } from "lucide-react"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 
@@ -21,6 +22,7 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
   const Icon = schemaIcons[attestation.schemaId || ''] || Shield
   const date = new Date(attestation.time * 1000).toLocaleDateString()
   const attesterShort = `${attestation.attester.slice(0, 6)}...${attestation.attester.slice(-4)}`
+  const revoked = attestation.revocationTime > 0
   
   // Get subject from decoded data if available
   const subject = attestation.decodedData?.subject || attestation.recipient
@@ -38,6 +40,11 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
           <div className="flex items-center gap-2">
             <Icon className="h-5 w-5 text-blue-600" />
             <CardTitle className="text-lg">{attestation.schemaTitle}</CardTitle>
+            {revoked ? (
+              <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Revoked</Badge>
+            ) : (
+              <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
+            )}
           </div>
           <span className="text-sm text-gray-500">{date}</span>
         </div>

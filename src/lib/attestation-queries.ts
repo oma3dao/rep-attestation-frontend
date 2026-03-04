@@ -24,6 +24,7 @@ export interface AttestationQueryOptions {
 
 export interface EnrichedAttestationResult {
     uid: string
+    schema: string
     attester: string
     recipient: string
     data: string
@@ -82,6 +83,7 @@ function toFrontendResult(
 
     return {
         uid: att.uid,
+        schema: att.schema,
         attester: att.attester,
         recipient: att.recipient,
         data: att.raw ?? '',
@@ -162,6 +164,48 @@ export async function getLatestAttestationsWithMetadata(
     return results.map(att => {
         const schema = findSchemaByUid(att.schema, chainId)
         // Decode raw data if we have the schema string
+        let enriched = att
+        if (schema?.easSchemaString && att.raw) {
+            try {
+                const decoded = reputation.decodeAttestationData(schema.easSchemaString, att.raw)
+                enriched = { ...att, data: decoded }
+            } catch { /* keep raw */ }
+        }
+        return toFrontendResult(enriched, chainId, schema)
+    })
+}
+
+/**
+ * Query attestations created by a specific attester wallet address.
+ * Used by the "My Attestations" dashboard page.
+ */
+export async function getAttestationsByAttesterWithMetadata(
+    attester: string,
+    chainId: number = getActiveChain().id,
+    limit: number = ATTESTATION_QUERY_CONFIG.defaultLimit
+): Promise<EnrichedAttestationResult[]> {
+    const { provider, easContractAddress } = getProviderAndEas(chainId)
+
+    const schemas = getAllSchemas()
+    const deployedSchemaUids = schemas
+        .map(s => s.deployedUIDs?.[chainId])
+        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+
+    if (deployedSchemaUids.length === 0) {
+        logger.log('[Query] No schemas deployed on chain', chainId)
+        return []
+    }
+
+    const results = await reputation.getAttestationsByAttester({
+        attester: attester as Hex,
+        provider,
+        easContractAddress,
+        schemas: deployedSchemaUids,
+        limit,
+    })
+
+    return results.map(att => {
+        const schema = findSchemaByUid(att.schema, chainId)
         let enriched = att
         if (schema?.easSchemaString && att.raw) {
             try {

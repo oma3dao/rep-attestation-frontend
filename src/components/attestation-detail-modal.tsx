@@ -75,6 +75,16 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
+          {/* Revocation Status */}
+          {attestation.revocationTime > 0 && (
+            <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+              <p className="text-sm text-red-800 font-medium">
+                ⚠️ This attestation was revoked on{' '}
+                {new Date(attestation.revocationTime * 1000).toLocaleString()}
+              </p>
+            </div>
+          )}
+
           {/* Attestation Info */}
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-900">Attestation Details</h3>
@@ -139,15 +149,6 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
             </div>
           )}
 
-          {/* Revocation Status */}
-          {attestation.revocationTime > 0 && (
-            <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
-              <p className="text-sm text-red-800 font-medium">
-                ⚠️ This attestation was revoked on{' '}
-                {new Date(attestation.revocationTime * 1000).toLocaleString()}
-              </p>
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>
