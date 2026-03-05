@@ -34,6 +34,15 @@ describe('Header', () => {
     expect(screen.getByText('Docs')).not.toBeNull();
   });
 
+  it('renders My Attestations nav link pointing to /dashboard', async () => {
+    await act(async () => {
+      render(<Header />);
+    });
+    const link = screen.getByText('My Attestations');
+    expect(link).not.toBeNull();
+    expect(link.closest('a')).toHaveAttribute('href', '/dashboard');
+  });
+
   it('renders wallet connect button', async () => {
     await act(async () => {
       render(<Header />);

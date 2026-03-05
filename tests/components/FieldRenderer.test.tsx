@@ -92,15 +92,36 @@ describe('FieldRenderer', () => {
     expect(input).toHaveValue('https://example.com');
   });
 
-  it('renders an enum select with options', () => {
+  it('renders enum as radio buttons when ≤7 options', () => {
+    const handleChange = vi.fn();
     render(
-      <FieldRenderer field={{ ...baseField, type: 'enum', options: ['A', 'B', 'C'] }} value="B" onChange={() => {}} />
+      <FieldRenderer field={{ ...baseField, type: 'enum', options: ['A', 'B', 'C'] }} value="B" onChange={handleChange} />
+    );
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    // B should be checked
+    expect(radios[1]).toBeChecked();
+    expect(radios[0]).not.toBeChecked();
+    expect(radios[2]).not.toBeChecked();
+    // Labels rendered
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('B')).toBeInTheDocument();
+    expect(screen.getByText('C')).toBeInTheDocument();
+    // Clicking a radio triggers onChange
+    fireEvent.click(radios[2]);
+    expect(handleChange).toHaveBeenCalledWith('C');
+  });
+
+  it('renders enum as select dropdown when >7 options', () => {
+    const manyOptions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'enum', options: manyOptions }} value="C" onChange={() => {}} />
     );
     const select = screen.getByLabelText(/Test Field/i);
     expect(select.tagName).toBe('SELECT');
-    expect(select).toHaveValue('B');
+    expect(select).toHaveValue('C');
     const options = screen.getAllByRole('option');
-    expect(options).toHaveLength(4); // 1 placeholder + 3 options
+    expect(options).toHaveLength(9); // 1 placeholder + 8 options
     expect(options[0]).toHaveTextContent(/select test field/i);
   });
 
@@ -115,16 +136,43 @@ describe('FieldRenderer', () => {
     expect(options).toHaveLength(1); // Only placeholder
   });
 
-  it('renders an array input and allows adding/removing items', async () => {
+  it('renders array as checkboxes when options provided (≤7)', () => {
     const handleChange = vi.fn();
     render(
       <FieldRenderer field={{ ...baseField, type: 'array', options: ['X', 'Y', 'Z'] }} value={['X']} onChange={handleChange} />
     );
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(3);
+    // X should be checked
+    expect(checkboxes[0]).toBeChecked();
+    expect(checkboxes[1]).not.toBeChecked();
+    expect(checkboxes[2]).not.toBeChecked();
+    // Toggle Y on
+    fireEvent.click(checkboxes[1]);
+    expect(handleChange).toHaveBeenCalledWith(['X', 'Y']);
+  });
+
+  it('renders array as checkboxes and allows unchecking', () => {
+    const handleChange = vi.fn();
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'array', options: ['X', 'Y', 'Z'] }} value={['X', 'Z']} onChange={handleChange} />
+    );
+    const checkboxes = screen.getAllByRole('checkbox');
+    // Uncheck X
+    fireEvent.click(checkboxes[0]);
+    expect(handleChange).toHaveBeenCalledWith(['Z']);
+  });
+
+  it('renders array free-text input when no options provided', async () => {
+    const handleChange = vi.fn();
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'array' }} value={['A']} onChange={handleChange} />
+    );
     const input = screen.getByPlaceholderText(/add item/i);
-    await userEvent.type(input, 'Y');
+    await userEvent.type(input, 'B');
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     await waitFor(() => {
-      expect(handleChange).toHaveBeenCalledWith(['X', 'Y']);
+      expect(handleChange).toHaveBeenCalledWith(['A', 'B']);
     });
     // Remove item
     const removeBtn = screen.getByRole('button', { name: /remove/i });

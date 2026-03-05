@@ -5,6 +5,7 @@ import * as chains from '@/config/chains';
 import {
   getAttestationsForDIDWithMetadata,
   getLatestAttestationsWithMetadata,
+  getAttestationsByAttesterWithMetadata,
   type EnrichedAttestationResult,
 } from '@/lib/attestation-queries';
 
@@ -22,6 +23,7 @@ vi.mock('@oma3/omatrust/reputation', () => ({
   getAttestation: vi.fn().mockRejectedValue(new Error('not found')),
   getAttestationsForDid: vi.fn().mockResolvedValue([]),
   getLatestAttestations: vi.fn().mockResolvedValue([]),
+  getAttestationsByAttester: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@oma3/omatrust/identity', () => ({
@@ -69,10 +71,40 @@ describe('attestation-queries', () => {
     it('returns empty array when no schemas are deployed on chain', async () => {
       vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
       vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
-      vi.spyOn(schemas, 'getAllSchemas').mockReturnValue([]);
+      const getAllSchemasSpy = vi.spyOn(schemas, 'getAllSchemas').mockReturnValue([]);
       const result = await getLatestAttestationsWithMetadata(66238);
       expect(result).toEqual([]);
-      vi.restoreAllMocks();
+      getAllSchemasSpy.mockRestore();
+    });
+  });
+
+  describe('getAttestationsByAttesterWithMetadata', () => {
+    beforeEach(() => {
+      vi.mocked(getContractAddress).mockReset();
+    });
+
+    it('throws when EAS is not deployed on chain', async () => {
+      vi.mocked(getContractAddress).mockReturnValue(null as unknown as string);
+      vi.spyOn(chains, 'getChainById').mockReturnValue(undefined);
+      await expect(
+        getAttestationsByAttesterWithMetadata('0x' + '1'.repeat(40), 999)
+      ).rejects.toThrow(/EAS not deployed|Unknown chain/i);
+    });
+
+    it('returns empty array when no schemas are deployed on chain', async () => {
+      vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
+      vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
+      const getAllSchemasSpy = vi.spyOn(schemas, 'getAllSchemas').mockReturnValue([]);
+      const result = await getAttestationsByAttesterWithMetadata('0x' + '1'.repeat(40), 66238);
+      expect(result).toEqual([]);
+      getAllSchemasSpy.mockRestore();
+    });
+
+    it('returns empty array when SDK returns no results', async () => {
+      vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
+      vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
+      const result = await getAttestationsByAttesterWithMetadata('0x' + '1'.repeat(40), 66238);
+      expect(result).toEqual([]);
     });
   });
 });
