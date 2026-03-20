@@ -52,7 +52,7 @@ export function validateField(field: any, value: any): string | undefined {
         if (!regex.test(trimmedValue)) {
           // Provide helpful error message based on subtype
           if (field.subtype === 'semver') {
-            return `${field.label} must be a valid semantic version (e.g., 1.2.3)`;
+            return `${field.label} must be a valid version (e.g., 1, 1.2, or 1.2.3)`;
           }
           return `${field.label} format is invalid`;
         }

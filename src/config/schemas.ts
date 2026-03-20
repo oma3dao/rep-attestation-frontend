@@ -293,7 +293,7 @@ const endorsementFields: FormField[] = [
     "placeholder": "Enter version",
     "subtype": "semver",
     "maxLength": 50,
-    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    "pattern": "^\\d+(\\.\\d+){0,2}$"
   },
   {
     "name": "policyURI",
@@ -542,7 +542,7 @@ const securityAssessmentFields: FormField[] = [
     "placeholder": "Enter version",
     "subtype": "semver",
     "maxLength": 50,
-    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    "pattern": "^\\d+(\\.\\d+){0,2}$"
   },
   {
     "name": "versionHW",
@@ -726,7 +726,7 @@ const userReviewFields: FormField[] = [
     "placeholder": "Enter version",
     "subtype": "semver",
     "maxLength": 50,
-    "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    "pattern": "^\\d+(\\.\\d+){0,2}$"
   },
   {
     "name": "ratingValue",
