@@ -11,7 +11,8 @@ import { getContractAddress } from '@/config/attestation-services';
 import { omachainTestnet, omachainMainnet } from '@/config/chains';
 import { isSubsidizedSchema } from '@/config/subsidized-schemas';
 import { splitSignature, buildDelegatedTypedDataFromEncoded, type Hex, type PrepareDelegatedAttestationResult } from '@oma3/omatrust/reputation';
-import { loadEasDelegatePrivateKey } from '@/lib/server/eas-delegate-key';
+import { loadEasDelegatePrivateKey, getThirdwebManagedWallet } from '@/lib/server/eas-delegate-key';
+import { createThirdwebClient, getContract, prepareContractCall, defineChain, waitForReceipt, Engine } from 'thirdweb';
 
 // ============================================================================
 // Types
@@ -323,23 +324,6 @@ export async function submitDelegatedAttestation(
     throw new EasRouteError('Mainnet delegated attestations not yet available', 501, 'MAINNET_NOT_SUPPORTED');
   }
 
-  let delegateKey: `0x${string}`;
-  try {
-    delegateKey = loadEasDelegatePrivateKey();
-  } catch (error) {
-    console.error('[delegated-attest] Failed to load EAS delegate key:', error);
-    throw new EasRouteError('Server misconfigured - EAS delegate key not available', 500, 'NO_DELEGATE_KEY');
-  }
-
-  const easDelegate = new Wallet(delegateKey, provider);
-  const eas = new Contract(easAddress, EAS_WRITE_ABI, easDelegate);
-
-  console.log(`[delegated-attest] Submitting attestation on ${chainConfig.name}`);
-  console.log(`[delegated-attest] EAS Contract address: ${easAddress}`);
-  console.log(`[delegated-attest] EAS Delegate address: ${easDelegate.address}`);
-  console.log(`[delegated-attest] Attester: ${attester}`);
-  console.log(`[delegated-attest] Schema: ${schemaUid}`);
-
   const { v, r, s } = splitSignature(signature);
 
   // Build the on-chain DelegatedAttestationRequest struct from server-rebuilt typed data
@@ -359,40 +343,108 @@ export async function submitDelegatedAttestation(
     deadline: BigInt(deadline),
   };
 
-  // Estimate gas
-  let gasLimit = maxGas;
-  try {
-    const gasEstimate = await eas.attestByDelegation.estimateGas(delegatedRequest);
-    console.log(`[delegated-attest] Gas estimate: ${gasEstimate}`);
-    const estimateWithBuffer = (BigInt(gasEstimate) * BigInt(120)) / BigInt(100);
-    const maxLimit = BigInt(1000000);
-    gasLimit = Number(estimateWithBuffer < maxLimit ? estimateWithBuffer : maxLimit);
-  } catch (estimateError: any) {
-    console.error(`[delegated-attest] Gas estimation failed:`, estimateError?.reason || estimateError?.message);
+  console.log(`[delegated-attest] Submitting attestation on ${chainConfig.name}`);
+  console.log(`[delegated-attest] EAS Contract address: ${easAddress}`);
+  console.log(`[delegated-attest] Attester: ${attester}`);
+  console.log(`[delegated-attest] Schema: ${schemaUid}`);
+
+  // Submit via Thirdweb server wallet if configured, otherwise fall back to private key
+  let txHash: string;
+  let blockNumber: number;
+  let logs: Array<{ topics: readonly string[]; data: string }>;
+
+  const managedWallet = getThirdwebManagedWallet();
+
+  if (managedWallet) {
+    // Thirdweb server wallet path — private key never leaves Vault
+    console.log(`[delegated-attest] Using Thirdweb server wallet: ${managedWallet.walletAddress}`);
+
+    const client = createThirdwebClient({ secretKey: managedWallet.secretKey });
+    const chain = defineChain({ id: chainConfig.id, rpc: chainConfig.rpc });
+
+    const easContract = getContract({ client, chain, address: easAddress });
+    const serverWallet = Engine.serverWallet({
+      client,
+      address: managedWallet.walletAddress,
+      executionOptions: { type: 'EOA', from: managedWallet.walletAddress },
+    });
+
+    const transaction = prepareContractCall({
+      contract: easContract,
+      method: 'function attestByDelegation((bytes32 schema, (address recipient, uint64 expirationTime, bool revocable, bytes32 refUID, bytes data, uint256 value) data, (uint8 v, bytes32 r, bytes32 s) signature, address attester, uint64 deadline) delegatedRequest) payable returns (bytes32)',
+      params: [delegatedRequest as any],
+      gas: BigInt(maxGas),
+    });
+
+    const { transactionId } = await serverWallet.enqueueTransaction({ transaction });
+    console.log(`[delegated-attest] Enqueued transaction: ${transactionId}`);
+
+    const txResult = await Engine.waitForTransactionHash({ client, transactionId });
+    console.log(`[delegated-attest] Transaction sent: ${txResult.transactionHash}`);
+
+    const receipt = await waitForReceipt({ client, chain, transactionHash: txResult.transactionHash });
+    console.log(`[delegated-attest] Transaction confirmed in block ${receipt.blockNumber}`);
+
+    txHash = receipt.transactionHash;
+    blockNumber = Number(receipt.blockNumber);
+    logs = receipt.logs as Array<{ topics: readonly string[]; data: string }>;
+  } else {
+    // Fallback: direct private key signing via ethers
+    console.log('[delegated-attest] Using private key fallback');
+
+    let delegateKey: `0x${string}`;
+    try {
+      delegateKey = loadEasDelegatePrivateKey();
+    } catch (error) {
+      console.error('[delegated-attest] Failed to load EAS delegate key:', error);
+      throw new EasRouteError('Server misconfigured - no server wallet or delegate key available', 500, 'NO_DELEGATE_KEY');
+    }
+
+    const easDelegate = new Wallet(delegateKey, provider);
+    const eas = new Contract(easAddress, EAS_WRITE_ABI, easDelegate);
+    console.log(`[delegated-attest] EAS Delegate address: ${easDelegate.address}`);
+
+    let gasLimit = maxGas;
+    try {
+      const gasEstimate = await eas.attestByDelegation.estimateGas(delegatedRequest);
+      console.log(`[delegated-attest] Gas estimate: ${gasEstimate}`);
+      const estimateWithBuffer = (BigInt(gasEstimate) * BigInt(120)) / BigInt(100);
+      const maxLimit = BigInt(1000000);
+      gasLimit = Number(estimateWithBuffer < maxLimit ? estimateWithBuffer : maxLimit);
+    } catch (estimateError: any) {
+      console.error(`[delegated-attest] Gas estimation failed:`, estimateError?.reason || estimateError?.message);
+    }
+
+    const tx = await eas.attestByDelegation(delegatedRequest, { gasLimit });
+    console.log(`[delegated-attest] Transaction sent: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[delegated-attest] Transaction confirmed in block ${receipt.blockNumber}`);
+
+    txHash = receipt.hash;
+    blockNumber = receipt.blockNumber;
+    logs = receipt.logs;
   }
 
-  // Submit transaction
-  const tx = await eas.attestByDelegation(delegatedRequest, { gasLimit });
-  console.log(`[delegated-attest] Transaction sent: ${tx.hash}`);
-  
-  const receipt = await tx.wait();
-  console.log(`[delegated-attest] Transaction confirmed in block ${receipt.blockNumber}`);
-
-  // Parse attestation UID from logs
+  // Parse attestation UID from logs (shared by both paths)
+  // Attested event: Attested(address indexed recipient, address indexed attester, bytes32 uid, bytes32 indexed schemaUID)
+  // uid is non-indexed → first 32 bytes of log data (not in topics)
+  // topics[0] = event sig, topics[1] = recipient, topics[2] = attester, topics[3] = schemaUID
+  const ATTESTED_EVENT_TOPIC = '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35';
   let uid: string | null = null;
-  for (const log of receipt.logs) {
-    // Attested event topic: keccak256("Attested(address,address,bytes32,bytes32)")
-    if (log.topics[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35') {
-      uid = log.topics[1];
+  for (const log of logs) {
+    if (log.topics[0] === ATTESTED_EVENT_TOPIC) {
+      // uid is the only non-indexed param → first 32 bytes of data
+      uid = log.data.slice(0, 66) ?? null; // 0x + 64 hex chars
       break;
     }
   }
 
   return {
     success: true,
-    txHash: receipt.hash,
+    txHash,
     uid,
-    blockNumber: receipt.blockNumber,
+    blockNumber,
     chain: chainConfig.name,
   };
 }
