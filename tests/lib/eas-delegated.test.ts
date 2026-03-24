@@ -109,30 +109,35 @@ describe('splitSignature', () => {
     validSignature = await wallet.signMessage('omatrust split signature test')
   })
 
-  it('extracts r component (first 32 bytes)', () => {
+  it('extracts r component (first 32 bytes) matching the signature', () => {
     const { r } = splitSignature(validSignature)
-    expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    const expectedR = '0x' + validSignature.slice(2, 66)
+    expect(r).toBe(expectedR)
   })
 
-  it('extracts s component (next 32 bytes)', () => {
+  it('extracts s component (next 32 bytes) matching the signature', () => {
     const { s } = splitSignature(validSignature)
-    expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    const expectedS = '0x' + validSignature.slice(66, 130)
+    expect(s).toBe(expectedS)
   })
 
-  it('extracts v component (last byte)', () => {
+  it('extracts v component (last byte) matching the signature', () => {
     const { v } = splitSignature(validSignature)
-    expect([27, 28]).toContain(v)
+    const rawV = parseInt(validSignature.slice(130, 132), 16)
+    const expectedV = rawV < 27 ? rawV + 27 : rawV
+    expect(v).toBe(expectedV)
   })
 
   it('rejects malformed signatures', () => {
     expect(() => splitSignature('0xinvalid')).toThrow('Invalid signature')
   })
 
-  it('handles uppercase hex', () => {
+  it('handles uppercase hex and produces same components', () => {
     const sig = validSignature.toUpperCase()
     const { r, s, v } = splitSignature(sig)
-    expect(r).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(s).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect([27, 28]).toContain(v)
+    const lowerResult = splitSignature(validSignature)
+    expect(r.toLowerCase()).toBe(lowerResult.r.toLowerCase())
+    expect(s.toLowerCase()).toBe(lowerResult.s.toLowerCase())
+    expect(v).toBe(lowerResult.v)
   })
 })

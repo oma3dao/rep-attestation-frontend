@@ -52,6 +52,7 @@ vi.mock('@/config/subsidized-schemas', () => ({
 
 vi.mock('@/lib/server/eas-delegate-key', () => ({
   loadEasDelegatePrivateKey: vi.fn(),
+  getThirdwebManagedWallet: vi.fn(() => null),
 }));
 
 vi.mock('@oma3/omatrust/reputation', () => ({
@@ -95,6 +96,28 @@ const validSchema = '0x' + 'b'.repeat(64);
 const validRecipient = '0x' + 'c'.repeat(40);
 const futureDeadline = Math.floor(Date.now() / 1000) + 3600;
 const pastDeadline = Math.floor(Date.now() / 1000) - 3600;
+
+// Issue #32: Fixtures with distinct recipient vs UID so semantic assertions
+// catch the topics[1]-vs-data bug. The Attested event layout is:
+//   topics[0] = event sig, topics[1] = recipient, topics[2] = attester, topics[3] = schemaUID
+//   data = uid (non-indexed)
+const ATTESTED_EVENT_TOPIC = '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35';
+const MOCK_RECIPIENT  = '0x000000000000000000000000aaaaaaaabbbbbbbbccccccccddddddddeeeeeeee';
+const MOCK_ATTESTER   = '0x0000000000000000000000001111111122222222333333334444444455555555';
+const MOCK_SCHEMA_UID = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const MOCK_UID        = '0x9999999988888888777777776666666655555555444444443333333322222222';
+
+function makeMockAttestedLog(overrides: { data?: string } = {}) {
+  return {
+    topics: [ATTESTED_EVENT_TOPIC, MOCK_RECIPIENT, MOCK_ATTESTER, MOCK_SCHEMA_UID],
+    data: overrides.data ?? MOCK_UID,
+  };
+}
+
+const MOCK_UNRELATED_LOG = {
+  topics: ['0x0000000000000000000000000000000000000000000000000000000000000000'],
+  data: '0x',
+};
 
 function makePrepared(overrides: Record<string, unknown> = {}) {
   const deadline = overrides.deadline ?? futureDeadline;
@@ -412,7 +435,7 @@ describe('submitDelegatedAttestation', () => {
         wait: vi.fn().mockResolvedValue({
           hash: '0xtxhash',
           blockNumber: 12345,
-          logs: [{ topics: ['0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35', '0xuid123'] }],
+          logs: [makeMockAttestedLog()],
         }),
       };
 
@@ -497,7 +520,7 @@ describe('submitDelegatedAttestation', () => {
   });
 
   describe('successful submission', () => {
-    it('returns success with txHash and uid', async () => {
+    it('returns success with txHash and uid from log.data (TC-1, TC-2)', async () => {
       const { loadEasDelegatePrivateKey } = await import('@/lib/server/eas-delegate-key');
       (loadEasDelegatePrivateKey as any).mockReturnValue('0x' + 'f'.repeat(64));
 
@@ -506,14 +529,13 @@ describe('submitDelegatedAttestation', () => {
       (Wallet as any).mockReturnValue({ address: '0xdelegateaddress' });
 
       const expectedTxHash = '0x' + 'e'.repeat(64);
-      const expectedUid = '0x' + 'f'.repeat(64);
 
       const mockTx = {
         hash: expectedTxHash,
         wait: vi.fn().mockResolvedValue({
           hash: expectedTxHash,
           blockNumber: 99999,
-          logs: [{ topics: ['0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35', expectedUid] }],
+          logs: [makeMockAttestedLog()],
         }),
       };
 
@@ -539,7 +561,8 @@ describe('submitDelegatedAttestation', () => {
       const result = await submitDelegatedAttestation(validParams);
       expect(result.success).toBe(true);
       expect(result.txHash).toBe(expectedTxHash);
-      expect(result.uid).toBe(expectedUid);
+      expect(result.uid).toBe(MOCK_UID);
+      expect(result.uid).not.toBe(MOCK_RECIPIENT);
       expect(result.blockNumber).toBe(99999);
       expect(result.chain).toBe('OMAchain Testnet');
     });
@@ -557,7 +580,7 @@ describe('submitDelegatedAttestation', () => {
         hash: '0xtxhash',
         wait: vi.fn().mockResolvedValue({
           hash: '0xtxhash', blockNumber: 12345,
-          logs: [{ topics: ['0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35', '0xuid123'] }],
+          logs: [makeMockAttestedLog()],
         }),
       };
 
@@ -602,6 +625,83 @@ describe('submitDelegatedAttestation', () => {
         expect((error as EasRouteError).statusCode).toBe(500);
         expect((error as EasRouteError).message).toContain('Failed to fetch nonce');
       }
+    });
+  });
+
+  describe('UID parsing from event logs (Issue #32)', () => {
+    function setupSuccessfulSubmission() {
+      return async (logs: Array<{ topics: string[]; data: string }>) => {
+        const { loadEasDelegatePrivateKey } = await import('@/lib/server/eas-delegate-key');
+        (loadEasDelegatePrivateKey as any).mockReturnValue('0x' + 'f'.repeat(64));
+
+        const { Wallet, Contract, keccak256 } = await import('ethers');
+        (keccak256 as any).mockReturnValue('0xuidparsetest_' + Date.now());
+        (Wallet as any).mockReturnValue({ address: '0xdelegateaddress' });
+
+        const expectedTxHash = '0x' + 'e'.repeat(64);
+        const mockTx = {
+          hash: expectedTxHash,
+          wait: vi.fn().mockResolvedValue({
+            hash: expectedTxHash,
+            blockNumber: 99999,
+            logs,
+          }),
+        };
+
+        let contractCallCount = 0;
+        (Contract as any).mockImplementation(() => {
+          contractCallCount++;
+          if (contractCallCount <= 2) {
+            return {
+              getNonce: vi.fn().mockResolvedValue(BigInt(0)),
+              getSchemaRegistry: vi.fn().mockResolvedValue('0x' + 'd'.repeat(40)),
+              getSchema: vi.fn().mockResolvedValue({
+                uid: validSchema, resolver: '0x' + '0'.repeat(40), revocable: false, schema: 'string test',
+              }),
+            };
+          }
+          return {
+            attestByDelegation: Object.assign(vi.fn().mockResolvedValue(mockTx), {
+              estimateGas: vi.fn().mockResolvedValue(BigInt(100000)),
+            }),
+          };
+        });
+
+        return submitDelegatedAttestation(validParams);
+      };
+    }
+
+    it('TC-3: returns null uid when no Attested event in logs', async () => {
+      const submit = setupSuccessfulSubmission();
+      const result = await submit([MOCK_UNRELATED_LOG]);
+      expect(result.success).toBe(true);
+      expect(result.uid).toBeNull();
+    });
+
+    it('TC-4: returns null uid for empty logs', async () => {
+      const submit = setupSuccessfulSubmission();
+      const result = await submit([]);
+      expect(result.success).toBe(true);
+      expect(result.uid).toBeNull();
+    });
+
+    it('TC-5: finds Attested event when it is not the first log', async () => {
+      const submit = setupSuccessfulSubmission();
+      const result = await submit([MOCK_UNRELATED_LOG, MOCK_UNRELATED_LOG, makeMockAttestedLog()]);
+      expect(result.success).toBe(true);
+      expect(result.uid).toBe(MOCK_UID);
+      expect(result.uid).not.toBe(MOCK_RECIPIENT);
+    });
+
+    it('TC-6: returns null uid when Attested log has empty data', async () => {
+      const submit = setupSuccessfulSubmission();
+      const logWithEmptyData = {
+        topics: [ATTESTED_EVENT_TOPIC, MOCK_RECIPIENT, MOCK_ATTESTER, MOCK_SCHEMA_UID],
+        data: '0x',
+      };
+      const result = await submit([logWithEmptyData]);
+      expect(result.success).toBe(true);
+      expect(result.uid).toBe('0x');
     });
   });
 });

@@ -9,7 +9,7 @@ describe('caip10/validators/evm', () => {
     it('returns valid and normalized address for valid EVM CAIP-10', () => {
       const result = validateEvm('1', validAddress);
       expect(result.valid).toBe(true);
-      expect(result.normalizedAddress).toBeDefined();
+      expect(result.normalizedAddress).toBe(validAddress);
       expect(result.chainId).toBe(1);
     });
 
@@ -54,7 +54,7 @@ describe('caip10/validators/evm', () => {
     it('returns checksummed address for valid input', () => {
       const result = toEip55(validAddress.toLowerCase());
       expect(result).not.toBeInstanceOf(Error);
-      expect(result).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      expect(result).toBe(validAddress);
     });
 
     it('returns Error for invalid address', () => {

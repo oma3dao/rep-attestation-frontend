@@ -68,9 +68,7 @@ describe('attestation-services config', () => {
     });
 
     it('has contract addresses for OMAchain', () => {
-      expect(EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toBeDefined();
-      expect(typeof EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toBe('string');
-      expect(EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      expect(EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
     });
 
     it('has OMAchain native feature', () => {
@@ -202,9 +200,9 @@ describe('attestation-services config', () => {
     });
 
     it('returns contract address for EAS on OMAchain', () => {
-      const easContract = getContractAddress('eas', CHAIN_IDS.OMACHAIN_TESTNET);
-      expect(easContract).toBeDefined();
-      expect(easContract).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      expect(getContractAddress('eas', CHAIN_IDS.OMACHAIN_TESTNET)).toBe(
+        '0x8835AF90f1537777F52E482C8630cE4e947eCa32'
+      );
     });
 
     it('returns undefined for invalid service', () => {
@@ -237,15 +235,22 @@ describe('attestation-services config', () => {
   });
 
   describe('service validation', () => {
-    it('all services have valid contract addresses for supported chains', () => {
-      Object.values(ATTESTATION_SERVICES).forEach(service => {
-        service.supportedChains.forEach(chainId => {
-          const contractAddress = service.contracts[chainId];
-          expect(contractAddress).toBeDefined();
-          expect(typeof contractAddress).toBe('string');
-          expect(contractAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
-        });
-      });
+    it('all services have correct contract addresses for supported chains', () => {
+      const expectedContracts: Record<string, Record<number, string>> = {
+        bas: {
+          97: '0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD',
+          56: '0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC',
+        },
+        eas: {
+          [CHAIN_IDS.OMACHAIN_TESTNET]: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
+        },
+      };
+      for (const [serviceId, chains] of Object.entries(expectedContracts)) {
+        const service = getAttestationService(serviceId);
+        for (const [chainId, expectedAddr] of Object.entries(chains)) {
+          expect(service!.contracts[Number(chainId)]).toBe(expectedAddr);
+        }
+      }
     });
 
     it('all services have estimated gas costs for supported chains', () => {

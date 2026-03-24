@@ -52,15 +52,11 @@ describe('@oma3/omatrust/identity integration', () => {
   })
 
   describe('computeDidHash', () => {
-    it('returns a 32-byte hex string', () => {
+    it('returns a consistent 32-byte hex hash for a known DID', () => {
       const hash = computeDidHash('did:web:example.com')
       expect(hash).toMatch(/^0x[a-f0-9]{64}$/)
-    })
-
-    it('returns consistent hash for same DID', () => {
-      const hash1 = computeDidHash('did:web:example.com')
       const hash2 = computeDidHash('did:web:example.com')
-      expect(hash1).toBe(hash2)
+      expect(hash).toBe(hash2)
     })
 
     it('returns different hash for different DIDs', () => {
@@ -77,11 +73,9 @@ describe('@oma3/omatrust/identity integration', () => {
   })
 
   describe('computeDidAddress', () => {
-    it('returns a valid Ethereum address (simple truncation)', () => {
+    it('returns last 20 bytes of hash as address', () => {
       const hash = computeDidHash('did:web:example.com')
       const addr = computeDidAddress(hash)
-      expect(addr).toMatch(/^0x[a-f0-9]{40}$/)
-      // Simple truncation: last 20 bytes of the hash
       expect(addr).toBe('0x' + hash.slice(-40))
     })
 
@@ -94,22 +88,16 @@ describe('@oma3/omatrust/identity integration', () => {
   })
 
   describe('didToAddress', () => {
-    it('converts DID directly to address', () => {
+    it('converts DID to address via hash truncation', () => {
+      const hash = computeDidHash('did:web:example.com')
       const address = didToAddress('did:web:example.com')
-      expect(address).toMatch(/^0x[a-f0-9]{40}$/)
+      expect(address).toBe('0x' + hash.slice(-40))
     })
 
     it('returns consistent address for same DID', () => {
       const addr1 = didToAddress('did:web:example.com')
       const addr2 = didToAddress('did:web:example.com')
       expect(addr1).toBe(addr2)
-    })
-
-    it('uses simple truncation (not domain-separated prefix)', () => {
-      const hash = computeDidHash('did:web:example.com')
-      const addr = didToAddress('did:web:example.com')
-      // The correct algorithm: last 20 bytes of the DID hash
-      expect(addr).toBe('0x' + hash.slice(-40))
     })
 
     it('handles different DID methods', () => {
