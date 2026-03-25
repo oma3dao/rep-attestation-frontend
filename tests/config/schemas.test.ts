@@ -54,7 +54,7 @@ describe('schemas config', () => {
       expect(uniqueIds.size).toBe(ids.length);
     });
 
-    it('each schema has deployedUIDs and deployedBlocks', () => {
+    it('each schema has deployedUIDs and deployedBlocks as objects', () => {
       const schemas = getAllSchemas();
       
       schemas.forEach(schema => {
@@ -63,6 +63,23 @@ describe('schemas config', () => {
         expect(typeof schema.deployedUIDs).toBe('object');
         expect(typeof schema.deployedBlocks).toBe('object');
       });
+    });
+
+    it('schemas with OMAchain Testnet deployments have correct UIDs', () => {
+      const expectedDeployedUIDs: Record<string, string> = {
+        'certification': '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805',
+        'controller-witness': '0xc81419f828755c0be2c49091dcad0887b5ca7342316dfffb4314aadbf8205090',
+        'endorsement': '0xb0cf93ef0f3feb858aa5d07a54f6589da5852883f378dfd0cae5315da1d679ac',
+        'key-binding': '0x807b38ce9aa23fdde4457de01db9c5e8d6ec7c8feebee242e52be70847b7b966',
+        'linked-identifier': '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453',
+        'security-assessment': '0x67bcc2424e3721d56e85bb650c6aba8bf7f1711d9c9a434c3afae3a22d23eed7',
+        'user-review-response': '0x53498ae8ae4928a8789e09663f44d6e3c77daeb703c3765aa184b958c3ca41be',
+        'user-review': '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47',
+      };
+      for (const [schemaId, expectedUid] of Object.entries(expectedDeployedUIDs)) {
+        const schema = getSchema(schemaId);
+        expect(schema?.deployedUIDs?.[66238]).toBe(expectedUid);
+      }
     });
   });
 
@@ -296,12 +313,9 @@ describe('schemas config', () => {
   describe('priorUIDs', () => {
     it('key-binding has priorUIDs for backward compatibility', () => {
       expect(keyBindingSchema.priorUIDs).toBeDefined();
-      const priorUIDs66238 = keyBindingSchema.priorUIDs?.[66238];
-      expect(Array.isArray(priorUIDs66238)).toBe(true);
-      expect(priorUIDs66238!.length).toBeGreaterThan(0);
-      priorUIDs66238!.forEach(uid => {
-        expect(uid).toMatch(/^0x[a-fA-F0-9]{64}$/);
-      });
+      expect(keyBindingSchema.priorUIDs?.[66238]).toEqual([
+        '0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d',
+      ]);
     });
   });
 

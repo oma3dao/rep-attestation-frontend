@@ -18,7 +18,7 @@ describe('caip10/parse', () => {
       if (result instanceof Error) return;
       expect(result.namespace).toBe('eip155');
       expect(result.reference).toBe('137');
-      expect(result.address).toMatch(/^0x/i);
+      expect(result.address).toBe('0xAbC1234567890123456789012345678901234567');
     });
 
     it('trims whitespace', () => {

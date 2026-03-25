@@ -6,17 +6,19 @@ describe('subsidized-schemas', () => {
   const OMACHAIN_TESTNET = 66238;
 
   describe('isSubsidizedSchema', () => {
+    const EXPECTED_USER_REVIEW_UID = '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47';
+    const EXPECTED_LINKED_ID_UID = '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453';
+    const EXPECTED_CERT_UID = '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805';
+
     it('returns true for user-review schema UID on OMAchain Testnet', () => {
-      const userReviewSchema = getSchema('user-review');
-      const uid = userReviewSchema?.deployedUIDs?.[OMACHAIN_TESTNET];
-      expect(uid).toBeDefined();
+      const uid = getSchema('user-review')?.deployedUIDs?.[OMACHAIN_TESTNET];
+      expect(uid).toBe(EXPECTED_USER_REVIEW_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!)).toBe(true);
     });
 
     it('returns true for linked-identifier schema UID on OMAchain Testnet', () => {
-      const linkedSchema = getSchema('linked-identifier');
-      const uid = linkedSchema?.deployedUIDs?.[OMACHAIN_TESTNET];
-      expect(uid).toBeDefined();
+      const uid = getSchema('linked-identifier')?.deployedUIDs?.[OMACHAIN_TESTNET];
+      expect(uid).toBe(EXPECTED_LINKED_ID_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!)).toBe(true);
     });
 
@@ -25,29 +27,28 @@ describe('subsidized-schemas', () => {
     });
 
     it('returns false for certification schema UID (not subsidized)', () => {
-      const certSchema = getSchema('certification');
-      const uid = certSchema?.deployedUIDs?.[OMACHAIN_TESTNET];
-      expect(uid).toBeDefined();
+      const uid = getSchema('certification')?.deployedUIDs?.[OMACHAIN_TESTNET];
+      expect(uid).toBe(EXPECTED_CERT_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!)).toBe(false);
     });
 
     it('normalizes UID to lowercase for comparison', () => {
-      const userReviewSchema = getSchema('user-review');
-      const uid = userReviewSchema?.deployedUIDs?.[OMACHAIN_TESTNET];
-      expect(uid).toBeDefined();
+      const uid = getSchema('user-review')?.deployedUIDs?.[OMACHAIN_TESTNET];
+      expect(uid).toBe(EXPECTED_USER_REVIEW_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!.toUpperCase())).toBe(true);
     });
   });
 
   describe('getSubsidizedSchemaUIDs', () => {
-    it('returns array of subsidized UIDs for a chain', () => {
+    it('returns the exact subsidized UIDs for OMAchain Testnet', () => {
       const uids = getSubsidizedSchemaUIDs(OMACHAIN_TESTNET);
-      expect(Array.isArray(uids)).toBe(true);
-      expect(uids.length).toBe(2); // user-review and linked-identifier
-      uids.forEach(uid => {
-        expect(typeof uid).toBe('string');
-        expect(uid).toMatch(/^0x[a-fA-F0-9]+$/);
-      });
+      expect(uids).toHaveLength(2);
+      expect(uids).toContain(
+        '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47' // user-review
+      );
+      expect(uids).toContain(
+        '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453' // linked-identifier
+      );
     });
 
     it('excludes zero UIDs', () => {
