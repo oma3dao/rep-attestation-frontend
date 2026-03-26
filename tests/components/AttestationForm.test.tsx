@@ -385,7 +385,7 @@ describe('validateField function', () => {
 
   it('validates pattern with semver subtype', () => {
     const field = { name: 'version', label: 'Version', type: 'string', pattern: '^\\d+\\.\\d+\\.\\d+$', subtype: 'semver' };
-    expect(validateField(field, 'invalid')).toBe('Version must be a valid semantic version (e.g., 1.2.3)');
+    expect(validateField(field, 'invalid')).toBe('Version must be a valid version (e.g., 1, 1.2, or 1.2.3)');
     expect(validateField(field, '1.2.3')).toBeUndefined();
   });
 
