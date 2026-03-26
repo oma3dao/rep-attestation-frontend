@@ -15,7 +15,7 @@ export function Header() {
     { href: "/", label: "Home", external: false },
     { href: "/dashboard", label: "My Attestations", external: false },
     { href: "https://registry.omatrust.org", label: "Registry", external: true },
-    { href: "https://docs.oma3.org/attestations", label: "Docs", external: true },
+    { href: "https://docs.omatrust.org/reputation/reputation-model", label: "Docs", external: true },
     // { href: "/attest", label: "Create Attestation" }, // Redundant with home page
   ]
 
