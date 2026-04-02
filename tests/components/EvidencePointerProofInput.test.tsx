@@ -99,7 +99,7 @@ describe('EvidencePointerProofInput', () => {
         />
       )
       expect(onChange).toHaveBeenCalledWith(
-        'https://dns.google/resolve?name=_omatrust.example.com&type=TXT'
+        'https://dns.google/resolve?name=_controllers.example.com&type=TXT'
       )
     })
 
@@ -113,7 +113,7 @@ describe('EvidencePointerProofInput', () => {
         />
       )
       expect(onChange).toHaveBeenCalledWith(
-        'https://dns.google/resolve?name=_omatrust.example.com&type=TXT'
+        'https://dns.google/resolve?name=_controllers.example.com&type=TXT'
       )
     })
 
@@ -127,7 +127,7 @@ describe('EvidencePointerProofInput', () => {
         />
       )
       expect(onChange).toHaveBeenCalledWith(
-        'https://dns.google/resolve?name=_omatrust.example.com:8080&type=TXT'
+        'https://dns.google/resolve?name=_controllers.example.com:8080&type=TXT'
       )
     })
 
@@ -144,7 +144,7 @@ describe('EvidencePointerProofInput', () => {
 
       // First render auto-populates
       expect(onChange).toHaveBeenCalledWith(
-        'https://dns.google/resolve?name=_omatrust.example.com&type=TXT'
+        'https://dns.google/resolve?name=_controllers.example.com&type=TXT'
       )
       onChange.mockClear()
 
@@ -180,7 +180,7 @@ describe('EvidencePointerProofInput', () => {
         // Since "https://my-custom-resolver.com/check" !== lastAutoUrl (example.com URL),
         // auto-populate should NOT overwrite
         expect(onChange).not.toHaveBeenCalledWith(
-          'https://dns.google/resolve?name=_omatrust.other-domain.org&type=TXT'
+          'https://dns.google/resolve?name=_controllers.other-domain.org&type=TXT'
         )
       }
     })
@@ -385,7 +385,7 @@ describe('EvidencePointerProofInput', () => {
       const input = getProofUrlInput()
       expect(input).toHaveAttribute(
         'placeholder',
-        'https://dns.google/resolve?name=_omatrust.example.com&type=TXT'
+        'https://dns.google/resolve?name=_controllers.example.com&type=TXT'
       )
     })
 

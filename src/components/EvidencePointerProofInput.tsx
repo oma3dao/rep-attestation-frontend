@@ -31,10 +31,10 @@ function extractDomainFromDidWeb(did: string): string | null {
 }
 
 /**
- * Generates the Google DNS-over-HTTPS resolver URL for _omatrust.<domain>
+ * Generates the Google DNS-over-HTTPS resolver URL for _controllers.<domain>
  */
 function generateDnsResolverUrl(domain: string): string {
-  return `https://dns.google/resolve?name=_omatrust.${domain}&type=TXT`
+  return `https://dns.google/resolve?name=_controllers.${domain}&type=TXT`
 }
 
 /**
@@ -42,7 +42,7 @@ function generateDnsResolverUrl(domain: string): string {
  *
  * A simplified proof input for key-binding and linked-identifier attestations.
  * For did:web subjects, auto-generates a DNS resolver URL pointing at the
- * _omatrust.<domain> TXT record. For other DID methods, shows an empty
+ * _controllers.<domain> TXT record. For other DID methods, shows an empty
  * text field for manual entry.
  *
  * The user always sees the URL and can edit it. The parent component wraps
@@ -108,7 +108,7 @@ export function EvidencePointerProofInput({
                 <p className="font-medium mb-2 text-blue-900 dark:text-blue-100">DNS TXT Record Setup</p>
                 <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
                   <li>Go to your DNS provider for <strong>{domain}</strong></li>
-                  <li>Add a TXT record at <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">_omatrust.{domain}</code></li>
+                  <li>Add a TXT record at <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">_controllers.{domain}</code></li>
                   <li>Set the value to the verification string below</li>
                 </ol>
                 <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
@@ -169,7 +169,7 @@ export function EvidencePointerProofInput({
         <Input
           type="text"
           placeholder={isDidWeb
-            ? "https://dns.google/resolve?name=_omatrust.example.com&type=TXT"
+            ? "https://dns.google/resolve?name=_controllers.example.com&type=TXT"
             : "https://example.com/.well-known/did.json"
           }
           value={value}

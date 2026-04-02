@@ -700,7 +700,7 @@ describe('AttestationForm witness-enabled schema handling', () => {
     const proofInput = proofInputs.find(el => el.getAttribute('placeholder')?.includes('dns.google') || el.getAttribute('placeholder')?.includes('did.json'));
     expect(proofInput).toBeDefined();
     await act(async () => {
-      fireEvent.change(proofInput!, { target: { value: 'https://dns.google/resolve?name=_omatrust.example.com&type=TXT' } });
+      fireEvent.change(proofInput!, { target: { value: 'https://dns.google/resolve?name=_controllers.example.com&type=TXT' } });
     });
 
     await act(async () => {
@@ -720,7 +720,7 @@ describe('AttestationForm witness-enabled schema handling', () => {
     expect(proofs).toHaveLength(1);
     expect((proofs as any[])[0].proofType).toBe('evidence-pointer');
     expect((proofs as any[])[0].proofPurpose).toBe('shared-control');
-    expect((proofs as any[])[0].proofObject.url).toBe('https://dns.google/resolve?name=_omatrust.example.com&type=TXT');
+    expect((proofs as any[])[0].proofObject.url).toBe('https://dns.google/resolve?name=_controllers.example.com&type=TXT');
   });
 
   it('applies grace period to effectiveAt for witness-enabled schemas', async () => {
