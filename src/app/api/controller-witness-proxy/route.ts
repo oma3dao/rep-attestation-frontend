@@ -7,7 +7,7 @@ const UPSTREAM_URL =
 const MAX_REDIRECTS = 3
 
 /**
- * Proxy POST /api/controller-witness to the upstream witness API.
+ * Proxy POST /api/controller-witness-proxy to the upstream witness API.
  * This avoids CORS issues when calling cross-origin from the browser.
  *
  * Uses `redirect: 'manual'` so that 302s don't silently convert POST → GET

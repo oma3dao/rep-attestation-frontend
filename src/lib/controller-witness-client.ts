@@ -10,7 +10,7 @@ import type { Hex, Did } from '@oma3/omatrust/reputation'
 import logger from '@/lib/logger'
 
 const WITNESS_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ?? '/api/controller-witness'
+  process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ?? '/api/controller-witness-proxy'
 
 interface WitnessCallParams {
   attestationUid: string

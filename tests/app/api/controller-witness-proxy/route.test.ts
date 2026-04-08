@@ -5,14 +5,14 @@ import { NextRequest } from 'next/server'
 const ORIGINAL_ENV = process.env
 
 describe('controller-witness proxy route', () => {
-  let POST: typeof import('@/app/api/controller-witness/route').POST
+  let POST: typeof import('@/app/api/controller-witness-proxy/route').POST
 
   beforeEach(async () => {
     vi.resetModules()
     // Reset fetch mock before each test
     global.fetch = vi.fn()
     // Fresh import so env changes take effect
-    const mod = await import('@/app/api/controller-witness/route')
+    const mod = await import('@/app/api/controller-witness-proxy/route')
     POST = mod.POST
   })
 
@@ -22,7 +22,7 @@ describe('controller-witness proxy route', () => {
   })
 
   function makeRequest(body: Record<string, unknown>): NextRequest {
-    return new NextRequest('http://localhost:3000/api/controller-witness', {
+    return new NextRequest('http://localhost:3000/api/controller-witness-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -50,7 +50,7 @@ describe('controller-witness proxy route', () => {
   it('uses CONTROLLER_WITNESS_URL env variable when set', async () => {
     vi.resetModules()
     process.env.CONTROLLER_WITNESS_URL = 'https://custom-witness.example.com/api/cw'
-    const mod = await import('@/app/api/controller-witness/route')
+    const mod = await import('@/app/api/controller-witness-proxy/route')
 
     ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       new Response(JSON.stringify({ ok: true }), {
