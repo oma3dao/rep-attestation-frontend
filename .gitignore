@@ -46,3 +46,7 @@ next-env.d.ts
 
 # instructions
 /instructions
+
+# pnpm (local dev only - Vercel should use npm via package-lock.json)
+pnpm-lock.yaml
+pnpm-workspace.yaml
