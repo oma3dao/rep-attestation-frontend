@@ -1,15 +1,19 @@
 "use client"
 
+import React, { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { MessageSquarePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DEFAULT_CHAIN } from "@/config/chains"
 import { useWallet } from "@/lib/blockchain"
+import { ReviewWidgetModal } from "@/components/review-widget-modal"
 
 export function Header() {
   const pathname = usePathname()
   const { isConnected, isChainSupported } = useWallet()
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const navItems = [
     { href: "/", label: "Home", external: false },
@@ -63,6 +67,17 @@ export function Header() {
                 </span>
               </div>
             )}
+            {isConnected && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-md px-3"
+                onClick={() => setReviewOpen(true)}
+              >
+                <MessageSquarePlus className="h-4 w-4 mr-1.5" />
+                Review
+              </Button>
+            )}
             <div id="header-connect">
               <Button 
                 isConnectButton 
@@ -88,6 +103,7 @@ export function Header() {
           </div>
         </div>
       </div>
+      <ReviewWidgetModal open={reviewOpen} onOpenChange={setReviewOpen} />
     </header>
   )
 }

@@ -1,14 +1,4 @@
 {
-  "rewrites": [
-    {
-      "source": "/widgets/:path*",
-      "destination": "https://omatrust-widgets.vercel.app/widgets/:path*"
-    },
-    {
-      "source": "/api/proof/:path*",
-      "destination": "https://omatrust-widgets.vercel.app/api/proof/:path*"
-    }
-  ],
   "headers": [
     {
       "source": "/widgets/reviews/embed",

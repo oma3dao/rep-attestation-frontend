@@ -1,0 +1,2 @@
+overrides:
+  '@oma3/omatrust': link:../omatrust-sdk
