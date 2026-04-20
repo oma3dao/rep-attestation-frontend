@@ -24,9 +24,9 @@ export function Header() {
   ]
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-20">
+        <div className="flex h-16 items-center">
           <Link href="/" className="flex items-center">
             <Image 
               src="/oma3_logo.svg" 
@@ -39,14 +39,14 @@ export function Header() {
 
           <div className="flex-1" />
 
-          <div className="flex items-center space-x-8">
-            <nav className="hidden md:flex space-x-6">
+          <div className="flex items-center space-x-6">
+            <nav className="hidden md:flex space-x-5">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`text-lg font-medium transition-colors hover:text-blue-600 ${
-                    pathname === item.href ? "text-blue-600" : "text-gray-600"
+                  className={`text-base font-medium transition-colors hover:text-foreground ${
+                    pathname === item.href ? "text-foreground" : "text-muted-foreground"
                   }`}
                   target={item.external ? "_blank" : undefined}
                   rel={item.external ? "noopener noreferrer" : undefined}
@@ -58,11 +58,11 @@ export function Header() {
 
             {/* Network mismatch warning */}
             {isConnected && !isChainSupported && (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-100 border border-orange-300 rounded-md">
-                <span className="text-orange-800 text-sm font-medium">
+              <div className="flex items-center space-x-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-1">
+                <span className="text-sm font-medium text-warning-foreground">
                   Wrong Network
                 </span>
-                <span className="text-orange-600 text-xs">
+                <span className="text-xs text-warning-foreground/80">
                   Please disconnect your wallet, switch to {DEFAULT_CHAIN.name} in your wallet, and then reconnect.  
                 </span>
               </div>
@@ -81,24 +81,9 @@ export function Header() {
             <div id="header-connect">
               <Button 
                 isConnectButton 
-                className="bg-black text-white hover:bg-black/80 rounded-md px-4 py-2"
+                className="rounded-md px-4 py-2"
                 connectButtonProps={{ label: "Sign In" }}
               />
-              <style>{`
-                #header-connect .tw-connect-wallet {
-                  height: 2.25rem !important;
-                  padding: 0 0.75rem !important;
-                  background-color: rgb(0 0 0) !important;
-                  color: white !important;
-                  border-radius: 0.375rem !important;
-                  font-weight: 500 !important;
-                  font-size: 0.875rem !important;
-                  border: none !important;
-                }
-                #header-connect .tw-connect-wallet:hover {
-                  background-color: rgb(0 0 0 / 0.8) !important;
-                }
-              `}</style>
             </div>
           </div>
         </div>

@@ -43,15 +43,15 @@ export function FormField({
   return (
     <div className="space-y-2">
       <div className="flex items-center space-x-2">
-        <Label htmlFor={name} className="text-sm font-medium text-gray-700">
+        <Label htmlFor={name} className="text-sm font-medium text-foreground">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="ml-1 text-destructive">*</span>}
         </Label>
         {description && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger>
-                <HelpCircle className="h-4 w-4 text-gray-400" />
+                <HelpCircle className="h-4 w-4 text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent>
                 <p className="max-w-xs">{description}</p>
@@ -68,7 +68,7 @@ export function FormField({
           value={value as string}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={error ? "border-red-500" : ""}
+          className={error ? "field-error" : ""}
           rows={3}
         />
       ) : type === "array" ? (
@@ -78,7 +78,7 @@ export function FormField({
           value={arrayValue}
           onChange={(e) => handleArrayChange(e.target.value)}
           placeholder={placeholder || "Enter items separated by commas"}
-          className={error ? "border-red-500" : ""}
+          className={error ? "field-error" : ""}
         />
       ) : (
         <Input
@@ -88,11 +88,11 @@ export function FormField({
           value={value as string}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={error ? "border-red-500" : ""}
+          className={error ? "field-error" : ""}
         />
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }

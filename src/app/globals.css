@@ -4,31 +4,37 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 33% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 213 72% 46%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 28% 93%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 24% 95%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 210 30% 94%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --success: 148 44% 34%;
+    --success-foreground: 138 76% 97%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 31 92% 14%;
+    --info: 213 72% 46%;
+    --info-foreground: 210 40% 98%;
+    --border: 214 23% 88%;
+    --input: 214 23% 88%;
+    --ring: 213 72% 46%;
+    --radius: 0.75rem;
+    --chart-1: 213 72% 46%;
+    --chart-2: 191 80% 34%;
+    --chart-3: 158 58% 36%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 8 72% 57%;
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -63,6 +69,91 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top, hsl(var(--primary) / 0.08), transparent 34%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
+    min-height: 100vh;
+  }
+  p {
+    @apply leading-relaxed;
+  }
+  code,
+  pre,
+  kbd,
+  samp {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  .status-panel-error {
+    @apply rounded-lg border border-destructive/20 bg-destructive/10 text-destructive;
+  }
+
+  .status-panel-warning {
+    @apply rounded-lg border border-warning/30 bg-warning/10 text-warning-foreground;
+  }
+
+  .status-panel-info {
+    @apply rounded-lg border border-primary/15 bg-primary/5 text-foreground;
+  }
+
+  .status-panel-success {
+    @apply rounded-lg border border-success/20 bg-success/10 text-success;
+  }
+
+  .technical-label {
+    @apply font-mono text-xs tracking-widest text-muted-foreground;
+  }
+
+  .field-error {
+    @apply border-destructive focus-visible:ring-destructive/30;
+  }
+
+  .feedback-error {
+    @apply flex items-start gap-2 text-sm text-destructive;
+  }
+
+  .feedback-success {
+    @apply flex items-start gap-2 text-sm text-success;
+  }
+
+  .info-panel {
+    @apply rounded-md border border-primary/20 bg-primary/5 text-foreground;
+  }
+
+  .warning-panel {
+    @apply rounded-md border border-warning/30 bg-warning/10 text-warning-foreground;
+  }
+
+  .muted-panel {
+    @apply rounded-md border border-border bg-muted/50 text-foreground;
+  }
+
+  #header-connect .tw-connect-wallet {
+    height: 2.25rem !important;
+    padding: 0 0.75rem !important;
+    background-color: hsl(var(--foreground)) !important;
+    color: hsl(var(--background)) !important;
+    border-radius: calc(var(--radius) - 2px) !important;
+    font-weight: 600 !important;
+    font-size: 0.875rem !important;
+    border: 1px solid hsl(var(--foreground)) !important;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease,
+      border-color 150ms ease !important;
+  }
+
+  #header-connect .tw-connect-wallet:hover {
+    background-color: hsl(var(--primary)) !important;
+    border-color: hsl(var(--primary)) !important;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }

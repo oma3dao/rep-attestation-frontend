@@ -62,9 +62,9 @@ export default function HomePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Hero Section */}
-      <div className="text-center mb-16">
-        <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">OMATrust Reputation Portal</h1>
-        <p className="text-3xl text-gray-600 mb-8 max-w-3xl mx-auto">
+      <div className="mb-16 px-4 py-10 text-center">
+        <h1 className="text-balance mb-6 text-4xl font-semibold tracking-tight text-foreground md:text-6xl">OMATrust Reputation Portal</h1>
+        <p className="text-balance mx-auto mb-8 max-w-3xl text-2xl text-muted-foreground md:text-3xl">
           Submit verifiable attestations on apps and services
         </p>
       </div>
@@ -72,18 +72,16 @@ export default function HomePage() {
       {/* Features Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
         {features.map((feature, index) => (
-          <Card key={index} className="hover:shadow-lg transition-shadow flex flex-col">
+          <Card key={index} className="flex flex-col border-border/70 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-950/10">
             <CardHeader>
-              <feature.icon className="h-8 w-8 text-blue-600 mb-2" />
-              <CardTitle className="text-lg">{feature.title}</CardTitle>
+              <feature.icon className="mb-2 h-8 w-8 text-primary" />
+              <CardTitle className="text-lg tracking-tight">{feature.title}</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col">
               <CardDescription className="flex-1">{feature.description}</CardDescription>
               <div className="flex justify-center mt-4">
                 <Link href={feature.href}>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Submit
-                  </Button>
+                  <Button>Submit</Button>
                 </Link>
               </div>
             </CardContent>
@@ -96,16 +94,16 @@ export default function HomePage() {
       <div className="bg-white rounded-lg shadow-sm border p-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
           <div>
-            <div className="text-3xl font-bold text-blue-600 mb-2">1,234</div>
-            <div className="text-gray-600">Total Attestations</div>
+            <div className="text-3xl font-bold text-primary mb-2">1,234</div>
+            <div className="text-muted-foreground">Total Attestations</div>
           </div>
           <div>
-            <div className="text-3xl font-bold text-blue-600 mb-2">567</div>
-            <div className="text-gray-600">Verified Applications</div>
+            <div className="text-3xl font-bold text-primary mb-2">567</div>
+            <div className="text-muted-foreground">Verified Applications</div>
           </div>
           <div>
-            <div className="text-3xl font-bold text-blue-600 mb-2">89</div>
-            <div className="text-gray-600">Active Attestors</div>
+            <div className="text-3xl font-bold text-primary mb-2">89</div>
+            <div className="text-muted-foreground">Active Attestors</div>
           </div>
         </div>
       </div>

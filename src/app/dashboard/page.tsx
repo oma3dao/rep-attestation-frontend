@@ -152,8 +152,8 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Attestations</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">My Attestations</h1>
+          <p className="mt-1 text-muted-foreground">
             Wallet {truncateMiddle(address || "")} on {chain?.name || `Chain ${chainId}`}
           </p>
         </div>
@@ -169,8 +169,8 @@ export default function DashboardPage() {
       </div>
 
       {error && (
-        <Card className="mb-4 border-red-200">
-          <CardContent className="pt-6 text-red-700">{error}</CardContent>
+        <Card className="mb-4 border-destructive/20 bg-destructive/10">
+          <CardContent className="pt-6 text-destructive">{error}</CardContent>
         </Card>
       )}
 
@@ -183,14 +183,14 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="py-12 text-center text-gray-600">Loading attestations...</div>
+            <div className="py-12 text-center text-muted-foreground">Loading attestations...</div>
           ) : attestations.length === 0 ? (
-            <div className="py-12 text-center text-gray-600">No attestations found for this wallet.</div>
+            <div className="py-12 text-center text-muted-foreground">No attestations found for this wallet.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-gray-500">
+                  <tr className="border-b text-left text-muted-foreground">
                     <th className="py-3 pr-4 font-medium">Schema</th>
                     <th className="py-3 pr-4 font-medium">Recipient</th>
                     <th className="py-3 pr-4 font-medium">Date</th>
@@ -206,24 +206,24 @@ export default function DashboardPage() {
                     return (
                       <tr
                         key={attestation.uid}
-                        className="border-b align-top cursor-pointer hover:bg-gray-50"
+                        className="cursor-pointer border-b align-top transition-colors hover:bg-muted/50"
                         onClick={() => openDetailModal(attestation)}
                       >
                         <td className="py-4 pr-4">
-                          <div className="font-medium text-gray-900">{attestation.schemaTitle || attestation.schemaId || "Unknown schema"}</div>
-                          <div className="text-xs text-gray-500 mt-1 font-mono">{truncateMiddle(attestation.uid, 10, 6)}</div>
+                          <div className="font-medium text-foreground">{attestation.schemaTitle || attestation.schemaId || "Unknown schema"}</div>
+                          <div className="mt-1 font-mono text-xs text-muted-foreground">{truncateMiddle(attestation.uid, 10, 6)}</div>
                         </td>
                         <td className="py-4 pr-4">
-                          <div className="font-mono text-gray-700" title={recipientLabel}>
+                          <div className="font-mono text-foreground/80" title={recipientLabel}>
                             {truncateMiddle(recipientLabel, 20, 10)}
                           </div>
                         </td>
-                        <td className="py-4 pr-4 text-gray-700">{new Date(attestation.time * 1000).toLocaleString()}</td>
+                        <td className="py-4 pr-4 text-foreground/80">{new Date(attestation.time * 1000).toLocaleString()}</td>
                         <td className="py-4 pr-4">
                           {revoked ? (
-                            <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Revoked</Badge>
+                            <Badge variant="destructive">Revoked</Badge>
                           ) : (
-                            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
+                            <Badge variant="success">Active</Badge>
                           )}
                         </td>
                         <td className="py-4 pr-4">
@@ -241,14 +241,14 @@ export default function DashboardPage() {
                                 {revokingUid === attestation.uid ? "Revoking..." : "Revoke"}
                               </Button>
                             ) : (
-                              <span className="text-gray-400">-</span>
+                              <span className="text-muted-foreground">-</span>
                             )}
                             {attestation.txHash && chain?.blockExplorers?.[0]?.url && (
                               <a
                                 href={`${chain.blockExplorers[0].url}/tx/${attestation.txHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800"
+                                className="text-primary hover:text-primary/80"
                                 title="View transaction"
                                 onClick={(event) => event.stopPropagation()}
                               >

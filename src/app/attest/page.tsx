@@ -12,7 +12,7 @@ export default function AttestPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-4">Create Attestation</h1>
+          <h1 className="mb-4 text-3xl font-semibold tracking-tight">Create Attestation</h1>
           <p className="text-lg text-muted-foreground">
             Choose the type of attestation you want to create
           </p>
@@ -22,7 +22,7 @@ export default function AttestPage() {
           {schemas.map((schema) => {
             return (
               <Link key={schema.id} href={`/attest/${schema.id}`}>
-                <Card className="h-full transition-all duration-200 cursor-pointer bg-blue-50 border-blue-200 hover:bg-blue-100">
+                <Card className="h-full cursor-pointer border-border/70 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-lg hover:shadow-slate-950/5">
                   <CardHeader className="pb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">

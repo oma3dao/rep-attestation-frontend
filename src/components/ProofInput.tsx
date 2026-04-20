@@ -172,7 +172,7 @@ export function ProofInput({
       {proofType && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Purpose:</span>
-          <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+          <span className="rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
             {defaultPurpose === "commercial-tx" ? "Commercial Transaction" : "Shared Control"}
           </span>
         </div>
@@ -185,7 +185,7 @@ export function ProofInput({
           <button
             type="button"
             onClick={() => setShowInstructions(!showInstructions)}
-            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
           >
             <InfoIcon size={16} />
             {showInstructions ? "Hide" : "Show"} instructions
@@ -193,14 +193,14 @@ export function ProofInput({
           </button>
 
           {showInstructions && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm">
+            <div className="info-panel p-3 text-sm">
               <p className="font-medium mb-2">How to provide a transaction proof:</p>
-              <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                 <li>Find a transaction where you interacted with the service</li>
                 <li>Select the blockchain where the transaction occurred</li>
                 <li>Paste the transaction hash below</li>
               </ol>
-              <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+              <p className="mt-2 text-xs text-muted-foreground">
                 The transaction must be from your wallet to the service&apos;s contract.
               </p>
             </div>
@@ -224,7 +224,7 @@ export function ProofInput({
               placeholder="0x..."
               value={txHash}
               onChange={handleTxHashChange}
-              className={`font-mono text-sm ${error ? "border-red-500" : ""}`}
+              className={`font-mono text-sm ${error ? "field-error" : ""}`}
             />
             <p className="text-xs text-muted-foreground">
               The transaction hash proving your interaction with the service.
@@ -240,7 +240,7 @@ export function ProofInput({
           <button
             type="button"
             onClick={() => setShowInstructions(!showInstructions)}
-            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
           >
             <InfoIcon size={16} />
             {showInstructions ? "Hide" : "Show"} instructions
@@ -248,10 +248,10 @@ export function ProofInput({
           </button>
 
           {showInstructions && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm space-y-3">
+            <div className="info-panel space-y-3 p-3 text-sm">
               <div>
                 <p className="font-medium mb-2">How to provide an evidence pointer:</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                   <li>Copy the verification string below</li>
                   <li>Post it on a platform you control (profile bio, status, pinned post, etc.)</li>
                   <li>Paste the public URL to your proof below</li>
@@ -260,37 +260,37 @@ export function ProofInput({
 
               {/* Evidence String to Copy */}
               {controllerDid ? (
-                <div className="mt-3 p-2 bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 rounded">
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+                <div className="mt-3 rounded border border-primary/20 bg-background p-2">
+                  <p className="mb-1 text-xs text-primary">
                     Verification string to post:
                   </p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs font-mono break-all text-blue-900 dark:text-blue-100">
+                    <code className="flex-1 break-all text-xs font-mono text-foreground">
                       {evidenceString}
                     </code>
                     <button
                       type="button"
                       onClick={handleCopyEvidenceString}
-                      className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
+                      className="rounded p-1.5 transition-colors hover:bg-primary/10"
                       title="Copy to clipboard"
                     >
                       {copied ? (
-                        <CheckIcon size={14} className="text-green-600" />
+                        <CheckIcon size={14} className="text-success" />
                       ) : (
-                        <CopyIcon size={14} className="text-blue-600 dark:text-blue-400" />
+                        <CopyIcon size={14} className="text-primary" />
                       )}
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 dark:border-yellow-700 rounded">
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                <div className="warning-panel mt-3 p-2">
+                  <p className="text-xs">
                     Connect your wallet to generate the verification string.
                   </p>
                 </div>
               )}
 
-              <p className="text-xs text-blue-600 dark:text-blue-400">
+              <p className="text-xs text-muted-foreground">
                 The URL must be publicly accessible without authentication.
               </p>
             </div>
@@ -304,7 +304,7 @@ export function ProofInput({
               placeholder="https://twitter.com/username or https://github.com/username"
               value={url}
               onChange={handleUrlChange}
-              className={error ? "border-red-500" : ""}
+              className={error ? "field-error" : ""}
             />
             <p className="text-xs text-muted-foreground">
               Public URL where your verification string is posted (e.g., Twitter profile, GitHub bio, personal website).
@@ -313,7 +313,7 @@ export function ProofInput({
         </div>
       )}
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }

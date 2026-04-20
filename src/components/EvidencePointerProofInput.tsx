@@ -99,27 +99,27 @@ export function EvidencePointerProofInput({
   return (
     <div className="space-y-4">
       {/* Instructions */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md text-sm space-y-3">
+      <div className="info-panel space-y-3 p-3 text-sm">
         <div className="flex gap-2 items-start">
-          <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+          <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-primary" />
           <div className="flex-1">
             {isDidWeb ? (
               <>
-                <p className="font-medium mb-2 text-blue-900 dark:text-blue-100">DNS TXT Record Setup</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                <p className="mb-2 font-medium">DNS TXT Record Setup</p>
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                   <li>Go to your DNS provider for <strong>{domain}</strong></li>
-                  <li>Add a TXT record at <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">_controllers.{domain}</code></li>
+                  <li>Add a TXT record at <code className="rounded bg-primary/10 px-1 text-primary">_controllers.{domain}</code></li>
                   <li>Set the value to the verification string below</li>
                 </ol>
-                <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                <p className="mt-2 text-xs text-muted-foreground">
                   The proof URL below points to a public DNS resolver that verifiers will use to check your TXT record.
                   You can change it to any resolver or a did.json URL if you prefer.
                 </p>
               </>
             ) : (
               <>
-                <p className="font-medium mb-2 text-blue-900 dark:text-blue-100">Evidence Pointer Proof</p>
-                <p className="text-blue-800 dark:text-blue-200">
+                <p className="mb-2 font-medium">Evidence Pointer Proof</p>
+                <p className="text-muted-foreground">
                   Enter a public URL where verifiers can find evidence of your control assertion.
                   This could be a DNS resolver URL, a .well-known/did.json path, a social profile, or any publicly accessible location.
                 </p>
@@ -130,31 +130,31 @@ export function EvidencePointerProofInput({
 
         {/* Evidence string to copy */}
         {effectiveController ? (
-          <div className="p-2 bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 rounded">
-            <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+          <div className="rounded border border-primary/20 bg-background p-2">
+            <p className="mb-1 text-xs text-primary">
               {isDidWeb ? "TXT record value:" : "Verification string to post:"}
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs font-mono break-all text-blue-900 dark:text-blue-100">
+              <code className="flex-1 break-all text-xs font-mono text-foreground">
                 {evidenceString}
               </code>
               <button
                 type="button"
                 onClick={handleCopy}
-                className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
+                className="rounded p-1.5 transition-colors hover:bg-primary/10"
                 title="Copy to clipboard"
               >
                 {copied ? (
-                  <CheckIcon size={14} className="text-green-600" />
+                  <CheckIcon size={14} className="text-success" />
                 ) : (
-                  <CopyIcon size={14} className="text-blue-600 dark:text-blue-400" />
+                  <CopyIcon size={14} className="text-primary" />
                 )}
               </button>
             </div>
           </div>
         ) : (
-          <div className="p-2 bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 dark:border-yellow-700 rounded">
-            <p className="text-xs text-yellow-700 dark:text-yellow-300">
+          <div className="warning-panel p-2">
+            <p className="text-xs">
               {controllerDid
                 ? "Enter the controller field above to generate the verification string."
                 : "Connect your wallet or enter the controller field to generate the verification string."}
@@ -174,7 +174,7 @@ export function EvidencePointerProofInput({
           }
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`font-mono text-sm ${error ? "border-red-500" : ""}`}
+          className={`font-mono text-sm ${error ? "field-error" : ""}`}
         />
         <p className="text-xs text-muted-foreground">
           Public URL where verifiers can retrieve evidence of your control assertion.

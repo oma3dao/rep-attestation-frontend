@@ -347,7 +347,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         <div key={field.name} className="space-y-2">
           <Label htmlFor={field.name} className="text-sm font-medium">
             {field.label}
-            {field.required && <span className="text-red-500 ml-1">*</span>}
+            {field.required && <span className="ml-1 text-destructive">*</span>}
           </Label>
           {field.description && (
             <p className="text-sm text-muted-foreground">{field.description}</p>
@@ -359,7 +359,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
             onChange={(url) => handleFieldChange('proofs', url)}
             error={errors[field.name]}
           />
-          {errors[field.name] && <p className="text-sm text-red-500" data-testid="field-error">{errors[field.name]}</p>}
+          {errors[field.name] && <p className="text-sm text-destructive" data-testid="field-error">{errors[field.name]}</p>}
         </div>
       )
     }
@@ -383,13 +383,13 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       <div className="max-w-4xl mx-auto">
         <ToastContainer position="center" />
         {(generalError || lastError) && (
-          <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4" data-testid="form-error">
+          <div className="status-panel-error mb-4 px-4 py-2" data-testid="form-error">
             {generalError || lastError}
           </div>
         )}
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4">{schema.title}</h1>
+          <h1 className="mb-4 text-3xl font-semibold tracking-tight">{schema.title}</h1>
 
           <p className="text-lg text-muted-foreground">
             {schema.description}
@@ -450,8 +450,8 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
 
               {/* Wallet Connection Status */}
               {!canSubmit && (
-                <div className="mt-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium mb-2">Connection Required</h4>
+                <div className="muted-panel mt-4 p-4">
+                  <h4 className="mb-2 font-medium">Connection Required</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
                     {!isConnected && (
                       <p>• Please connect your wallet using the button in the header</p>

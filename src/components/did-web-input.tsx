@@ -79,7 +79,7 @@ export function DidWebInput({
             onChange={handleChange}
             onBlur={handleBlur}
             placeholder="example.com"
-            className={`border-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${showError ? "border-red-500" : ""}`}
+            className={`border-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${showError ? "field-error" : ""}`}
           />
         </div>
 
@@ -89,7 +89,7 @@ export function DidWebInput({
 
         {/* Error */}
         {showError && (
-          <div className="flex gap-2 items-start text-red-600 dark:text-red-400 text-sm">
+          <div className="feedback-error">
             <AlertCircleIcon size={16} className="mt-0.5 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -97,7 +97,7 @@ export function DidWebInput({
 
         {/* Success */}
         {!showError && domain && (
-          <div className="flex gap-2 items-start text-green-600 dark:text-green-400 text-sm">
+          <div className="feedback-success">
             <CheckIcon size={16} className="mt-0.5 flex-shrink-0" />
             <span>Valid domain format</span>
           </div>
@@ -106,14 +106,14 @@ export function DidWebInput({
 
       {/* Complete DID Preview */}
       {completeDid && (
-        <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+        <div className="info-panel p-3">
           <div className="flex gap-2 items-start">
-            <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+            <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-primary" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
+              <p className="mb-1 text-xs font-medium">
                 Complete DID:
               </p>
-              <code className="text-xs text-blue-700 dark:text-blue-300 break-all block font-mono">
+              <code className="block break-all text-xs font-mono text-muted-foreground">
                 {completeDid}
               </code>
             </div>
@@ -123,4 +123,3 @@ export function DidWebInput({
     </div>
   );
 }
-

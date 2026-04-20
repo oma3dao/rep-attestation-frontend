@@ -114,7 +114,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
               placeholder={field.placeholder}
               value={typeof effectiveValue === 'string' ? effectiveValue : ''}
               onChange={(e) => onChange(e.target.value)}
-              className={error ? 'border-red-500' : ''}
+              className={error ? 'field-error' : ''}
               rows={4}
             />
           )
@@ -126,7 +126,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
               placeholder={field.placeholder}
               value={typeof effectiveValue === 'string' ? effectiveValue : ''}
               onChange={(e) => onChange(e.target.value)}
-              className={error ? 'border-red-500' : ''}
+              className={error ? 'field-error' : ''}
             />
           )
         }
@@ -153,7 +153,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
               placeholder={field.placeholder}
               value={typeof effectiveValue === 'string' || typeof effectiveValue === 'number' ? effectiveValue : ''}
               onChange={(e) => onChange(e.target.value)}
-              className={error ? 'border-red-500' : ''}
+              className={error ? 'field-error' : ''}
               min={field.min}
               max={field.max}
             />
@@ -168,7 +168,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
             type="datetime-local"
             value={typeof effectiveValue === 'string' ? effectiveValue : ''}
             onChange={(e) => onChange(e.target.value)}
-            className={error ? 'border-red-500' : ''}
+            className={error ? 'field-error' : ''}
           />
         )
         break
@@ -181,7 +181,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
             placeholder={field.placeholder || 'https://example.com'}
             value={typeof effectiveValue === 'string' ? effectiveValue : ''}
             onChange={(e) => onChange(e.target.value)}
-            className={error ? 'border-red-500' : ''}
+            className={error ? 'field-error' : ''}
           />
         )
         break
@@ -218,7 +218,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                       value={optValue}
                       checked={checked}
                       onChange={() => onChange(optValue)}
-                      className="mt-0.5 h-4 w-4 border-gray-300"
+                      className="mt-0.5 h-4 w-4 border-border"
                     />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium">{optLabel}</span>
@@ -238,7 +238,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
               id={field.name}
               value={enumValue}
               onChange={(e) => onChange(e.target.value)}
-              className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500' : ''}`}
+              className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'field-error' : ''}`}
             >
               <option value="">{`Select ${field.label.toLowerCase()}`}</option>
               {enumOptions.map((opt) => {
@@ -294,7 +294,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                         id={checkboxId}
                         checked={checked}
                         onChange={() => handleToggle(optValue)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                        className="mt-0.5 h-4 w-4 rounded border-border"
                       />
                       <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{optLabel}</span>
@@ -306,7 +306,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                   )
                 })}
                 {error && arrayValue.length === 0 && (
-                  <p className="text-xs text-red-500">At least one option must be selected</p>
+                  <p className="text-xs text-destructive">At least one option must be selected</p>
                 )}
               </div>
             )
@@ -322,7 +322,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                     const selected = Array.from(e.target.selectedOptions).map(o => o.value)
                     onChange(selected)
                   }}
-                  className={`flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500' : ''}`}
+                  className={`flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'field-error' : ''}`}
                   size={Math.min(field.options.length, 10)}
                 >
                   {field.options.map((opt) => {
@@ -333,7 +333,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                 </select>
                 <p className="text-xs text-muted-foreground">Hold Ctrl / Cmd to select multiple</p>
                 {error && arrayValue.length === 0 && (
-                  <p className="text-xs text-red-500">At least one option must be selected</p>
+                  <p className="text-xs text-destructive">At least one option must be selected</p>
                 )}
               </div>
             )
@@ -353,7 +353,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                       handleArrayAdd()
                     }
                   }}
-                  className={error ? 'border-red-500' : ''}
+                  className={error ? 'field-error' : ''}
                 />
                 <button
                   type="button"
@@ -371,7 +371,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                       <button
                         type="button"
                         onClick={() => handleArrayRemove(index)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive hover:text-destructive/80"
                       >
                         Remove
                       </button>
@@ -427,7 +427,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
               placeholder={field.placeholder}
               value={typeof value === 'string' ? value : ''}
               onChange={(e) => onChange(e.target.value)}
-              className={error ? 'border-red-500' : ''}
+              className={error ? 'field-error' : ''}
             />
           )
         }
@@ -439,13 +439,13 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
     <div className="space-y-2">
       <Label htmlFor={field.name} className="text-sm font-medium">
         {field.label}
-        {field.required && <span className="text-red-500 ml-1">*</span>}
+        {field.required && <span className="ml-1 text-destructive">*</span>}
       </Label>
       {field.description && (
         <p className="text-sm text-muted-foreground">{field.description}</p>
       )}
       {fieldElement}
-      {error && <p className="text-sm text-red-500" data-testid="field-error">{error}</p>}
+      {error && <p className="text-sm text-destructive" data-testid="field-error">{error}</p>}
     </div>
   )
 } 

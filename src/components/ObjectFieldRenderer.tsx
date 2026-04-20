@@ -97,7 +97,7 @@ export function ObjectFieldRenderer({
         <div className="space-y-1">
           <Label className="text-base font-semibold">
             {field.label}
-            {field.required && <span className="text-red-500 ml-1">*</span>}
+            {field.required && <span className="ml-1 text-destructive">*</span>}
           </Label>
           {field.description && (
             <p className="text-sm text-muted-foreground">{field.description}</p>
@@ -119,7 +119,7 @@ export function ObjectFieldRenderer({
 
         {/* Show error if it's a string (general error) */}
         {typeof error === 'string' && error && (
-          <p className="text-sm text-red-500" data-testid="field-error">
+          <p className="text-sm text-destructive" data-testid="field-error">
             {error}
           </p>
         )}
@@ -143,7 +143,7 @@ export function ObjectFieldRenderer({
 
       {/* Show error if it's a string (general error) */}
       {typeof error === 'string' && error && (
-        <p className="text-sm text-red-500" data-testid="field-error">
+        <p className="text-sm text-destructive" data-testid="field-error">
           {error}
         </p>
       )}
