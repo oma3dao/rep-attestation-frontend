@@ -1,0 +1,154 @@
+# Subscription-Gated Attestation — Frontend Plan
+
+Status: Planned
+
+## Scope
+
+Integrate `rep-attestation-frontend` with `omatrust-backend` so that users can submit any attestation without holding OMA. Users pay for a subscription; the backend relay pays gas on their behalf.
+
+This is the primary user-facing change. Premium RPC, nonce routing, and transport details are infrastructure that supports this but is hidden from the user.
+
+## Why
+
+The frontend currently only subsidizes gas for two schemas (`user-review` and `linked-identifier`) via a hardcoded allowlist. All other attestations require the user to hold OMA and pay gas directly. This blocks non-crypto users from using the system.
+
+With `omatrust-backend`, any attestation can be submitted through the relay if the user has an active subscription. The frontend needs to support account creation, subscription management, and routing attestation submissions through the backend relay.
+
+## V1 transport decision
+
+For V1, `rep-attestation-frontend` calls `omatrust-backend` directly for session, subscription, and relay flows.
+
+- browser requests go directly to `backend.omatrust.org` or the matching preview backend origin
+- requests use `fetch(..., { credentials: "include" })` for cookie-based session auth
+- `omatrust-api-gateway` is not in the request path for these V1 browser flows
+- `omatrust-backend` supports credentialed CORS for the allowed frontend origins
+
+## Backend dependency
+
+This feature depends on `omatrust-backend` exposing:
+
+- `POST /api/private/session/wallet/challenge` and `POST /api/private/session/wallet/verify` — SIWE auth
+- `GET /api/private/session/me` — session context
+- `GET /api/private/subscriptions/current` — subscription status
+- `POST /api/private/subscriptions/checkout-session` — Stripe upgrade
+- `POST /api/private/subscriptions/stripe-webhook` — payment confirmation
+- `POST /api/private/relay/eas/delegated-attest` — subscription-gated attestation submission
+- `POST /api/private/rpc-premium` — metered premium RPC proxy (used internally, not user-facing)
+
+## Frontend workstreams
+
+### 0. Design system alignment
+
+Before building new components, align the design token system with the omatrust-landing brand language. The current frontend bypasses its own CSS variable system by hardcoding Tailwind color classes (`bg-blue-600`, `text-gray-600`, `bg-gray-50`). This must be fixed first so every subsequent component uses tokens correctly.
+
+The goal is not to copy the landing page's dark-theme marketing aesthetic. The portal should feel like the same brand but optimized for professional readability on a light background.
+
+Adopt from omatrust-landing:
+
+- token discipline: replace all hardcoded color classes with semantic tokens (`bg-primary`, `text-foreground`, `text-muted-foreground`, `bg-muted`)
+- font setup: Inter via CSS variable (`--font-inter`), add JetBrains Mono (`--font-jetbrains-mono`) for wallet addresses, schema UIDs, and technical labels. Register both in tailwind.config.ts.
+- typography hierarchy: `tracking-tight` on headings, `leading-relaxed` on body text, `font-mono tracking-widest` for small technical labels
+- border radius: bump `--radius` from `0.5rem` to `0.75rem`
+- shadcn baseColor: change from `"slate"` to `"neutral"` in components.json (cleaner grays, less blue tint)
+- body rendering: add `antialiased` to body class
+- global paragraph styling: add `p { @apply leading-relaxed; }` to globals.css
+
+Leave behind (marketing flourishes that don't belong in a portal):
+
+- cyan as primary color — keep a professional, slightly desaturated blue
+- glow shadows — look cheap on light backgrounds
+- pill-shaped CTA buttons — too casual for a portal
+- noise overlays, grid backgrounds, animated gradients
+- backdrop blur effects
+- billboard heading sizes (`text-7xl`, `text-8xl`)
+
+Cleanup:
+
+- move inline `<style>` tag for ThirdwebConnectButton from header.tsx to globals.css
+- add `text-balance` utility to globals.css
+- remove all hardcoded `bg-blue-*`, `text-blue-*`, `text-gray-*`, `bg-gray-*`, `bg-black` in favor of token references
+
+### 1. Sign In / Sign Up and backend session
+
+The entry point for all authenticated flows. The user needs a backend account and session before they can subscribe or submit attestations through the relay.
+
+- add Sign In and Sign Up buttons to the header/navigation
+- implement SIWE challenge/verify flow against `omatrust-backend`
+- store backend session via httpOnly cookie (set by the backend)
+- detect wallet provider via `useActiveWallet().id` and send `walletProviderId` to backend on verify
+- ensure every wallet creates or loads a backend account and session before attestation submission
+- establish wallet-scoped `executionMode` on first sign-in
+- delay wallet connection until the user wants to submit an attestation (not on page load)
+- on first attestation attempt by an unauthenticated user, prompt sign-in before proceeding
+
+### 2. Subscription and payment
+
+Once signed in, the user needs a way to see their plan and upgrade.
+
+- add an account page (`/account`) that shows all account information in one place:
+  - wallet address and provider type
+  - current plan (free / paid) and status
+  - subscription usage (sponsored writes used / limit, premium reads used / limit)
+  - entitlement period dates
+  - upgrade button (for free-tier users)
+- upgrade flow: call `POST /api/private/subscriptions/checkout-session`, redirect to Stripe
+- after Stripe redirect, poll `GET /api/private/subscriptions/current` to confirm upgrade
+- show subscription confirmation in the UI after successful payment
+- link to the account page from the header/navigation for signed-in users
+
+### 3. Subscription-execution delegated attestation
+
+The core feature. Route wallets in `subscription` execution mode through the backend relay.
+
+- for wallets in `subscription` execution mode: submit attestations via `POST /api/private/relay/eas/delegated-attest`
+- do not make a separate frontend nonce call for backend relay submissions; the backend delegated-attest endpoint handles nonce fetching internally
+- the backend verifies the signature, checks subscription entitlement, checks schema eligibility, and submits the transaction
+- handle backend error codes in the UI: `SPONSORED_WRITE_LIMIT_EXCEEDED`, `SCHEMA_NOT_ELIGIBLE`, `SUBSCRIPTION_INACTIVE`, `ATTESTER_MISMATCH`
+- when a wallet in `subscription` execution mode has no usable entitlement, route the user to upgrade rather than falling back per submission
+- for wallets in `native` execution mode: continue using the current frontend execution behavior outside the backend relay path
+
+### 4. Wallet provider and execution-mode routing
+
+How the frontend decides which execution path to use.
+
+- `walletProviderId` remains the raw technical field from Thirdweb
+- `walletProviderId === "inApp"`: constrain the wallet to `subscription` execution mode
+- other wallets: allow either `subscription` or `native` execution mode
+- persist `executionMode` on the wallet at first sign-in and read it from session context on later visits
+- use a single wallet picker with all supported wallets; route after connection based on persisted `executionMode`
+
+### 5. Current `native` flow coexistence
+
+The current frontend-hosted delegated-attest server continues to handle `user-review` and `linked-identifier` schemas for wallets in `native` execution mode during V1.
+
+- keep the current frontend code path for those two schemas when `executionMode === "native"`
+- use the backend relay for all schemas when `executionMode === "subscription"`
+- use the current direct transaction path for non-subsidized schemas when `executionMode === "native"`
+- no proxy from the backend to the current frontend-hosted delegated-attest server
+
+### 6. Premium RPC transport (internal)
+
+Hidden from the user. The backend uses the premium RPC endpoint for relay-adjacent reads.
+
+- the backend relay handles nonce lookups internally via premium RPC
+- V1 attestation queries on the landing page use the public RPC endpoint
+- premium read routing for attestation queries is deferred until a user dashboard is built
+- `POST /api/private/rpc-premium` is available for future premium reads but not used in V1 landing page flows
+- when premium read entitlement is exhausted, fall back to public RPC where appropriate
+
+Transport note: `ethers.JsonRpcProvider` against the backend URL is not sufficient for cookie-based auth. Use a custom fetch-based JSON-RPC transport with `credentials: "include"` when calling backend RPC endpoints.
+
+## Session initialization timing
+
+See the spec for the full session initialization flow, wallet type gating, and signing UX details.
+
+## Unauthenticated user experience
+
+See the spec for unauthenticated user behavior and the Sign In / Sign Up distinction.
+
+## Out of scope
+
+- replacing the public RPC endpoint
+- redesigning the attestation query SDK
+- migrating the current frontend-hosted delegated-attest server functionality
+- user dashboard with premium read features
