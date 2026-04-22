@@ -80,6 +80,7 @@ The entry point for all authenticated flows. The user needs a backend account an
 - establish wallet-scoped `executionMode` on first sign-in
 - delay wallet connection until the user wants to submit an attestation (not on page load)
 - on first attestation attempt by an unauthenticated user, prompt sign-in before proceeding
+- support `?action=signin` query parameter from the OMATrust landing page nav ("Sign In" button links to `https://app.omatrust.org?action=signin`). When this param is present on page load, automatically open a routing modal that asks the user whether they already have an account or are still exploring. "I have an account" opens the Thirdweb wallet connect modal; "I'm still exploring" dismisses the modal and drops the user into the landing page. Strip the query param from the URL after handling so it doesn't re-trigger on refresh.
 
 ### 2. Subscription and payment
 

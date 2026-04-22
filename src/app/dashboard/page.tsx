@@ -17,6 +17,7 @@ import { getAttestationsByAttesterWithMetadata, type EnrichedAttestationResult }
 import { getActiveThirdwebChain, useWallet } from "@/lib/blockchain"
 import { getContractAddress } from "@/config/attestation-services"
 import { getChainById } from "@/config/chains"
+import { dashboardActions } from "@/config/publish-options"
 
 const activeThirdwebChain = getActiveThirdwebChain()
 
@@ -140,9 +141,16 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Card>
           <CardHeader>
-            <CardTitle>My Attestations</CardTitle>
-            <CardDescription>Connect your wallet to view and revoke your attestations.</CardDescription>
+            <CardTitle>Manage Your Service Trust</CardTitle>
+            <CardDescription>
+              Sign in to manage keys, linked identities, review responses, and your published trust data.
+            </CardDescription>
           </CardHeader>
+          <CardContent>
+            <Link href="/dashboard?action=signin">
+              <Button>Sign In</Button>
+            </Link>
+          </CardContent>
         </Card>
       </div>
     )
@@ -152,7 +160,7 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">My Attestations</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Manage Your Service Trust</h1>
           <p className="mt-1 text-muted-foreground">
             Wallet {truncateMiddle(address || "")} on {chain?.name || `Chain ${chainId}`}
           </p>
@@ -162,11 +170,36 @@ export default function DashboardPage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Link href="/attest">
-            <Button>Create Attestation</Button>
+          <Link href="/publish">
+            <Button>Open Publish Page</Button>
           </Link>
         </div>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Service Management Actions</CardTitle>
+          <CardDescription>
+            Common actions for service operators and teams managing ongoing trust signals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {dashboardActions.map((action) => (
+            <div
+              key={action.href}
+              className="rounded-xl border border-border/70 bg-muted/40 p-4"
+            >
+              <h3 className="font-semibold tracking-tight text-foreground">{action.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{action.description}</p>
+              <Link href={action.href} className="mt-4 inline-flex">
+                <Button variant="outline" size="sm">
+                  Open
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {error && (
         <Card className="mb-4 border-destructive/20 bg-destructive/10">

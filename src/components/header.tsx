@@ -1,94 +1,193 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import Image from "next/image"
-import { usePathname } from "next/navigation"
-import { MessageSquarePlus } from "lucide-react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { DEFAULT_CHAIN } from "@/config/chains"
-import { useWallet } from "@/lib/blockchain"
-import { ReviewWidgetModal } from "@/components/review-widget-modal"
+import { AuthEntryDialog } from "@/components/auth-entry-dialog"
+import { useBackendSession } from "@/components/backend-session-provider"
+
+type NavLink = {
+  label: string
+  href: string
+  external?: boolean
+}
+
+const navLinks: NavLink[] = [
+  { label: "Activity", href: "/" },
+  { label: "Publish", href: "/publish" },
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Docs", href: "https://docs.omatrust.org/", external: true },
+]
 
 export function Header() {
   const pathname = usePathname()
-  const { isConnected, isChainSupported } = useWallet()
-  const [reviewOpen, setReviewOpen] = useState(false)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { session, authDialog, closeAuthDialog, openAuthDialog: openBackendAuthDialog } = useBackendSession()
+  const [scrolled, setScrolled] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  const navItems = [
-    { href: "/", label: "Home", external: false },
-    { href: "/dashboard", label: "My Attestations", external: false },
-    { href: "https://registry.omatrust.org", label: "Registry", external: true },
-    { href: "https://docs.omatrust.org/reputation/reputation-model", label: "Docs", external: true },
-    // { href: "/attest", label: "Create Attestation" }, // Redundant with home page
-  ]
+  const isSignedIn = !!session
+  const displayName = session?.account?.displayName
+  const walletAddress = session?.wallet?.did
+  const headerLabel = isSignedIn
+    ? displayName || (walletAddress ? `${walletAddress.slice(-8)}` : "Account")
+    : "Sign In"
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 40)
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  useEffect(() => {
+    if (searchParams.get("action") !== "signin") {
+      return
+    }
+
+    openBackendAuthDialog({ mode: "chooser" })
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("action")
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+    router.replace(nextUrl, { scroll: false })
+  }, [openBackendAuthDialog, pathname, router, searchParams])
+
+  const openAuthDialog = () => {
+    setMobileOpen(false)
+    openBackendAuthDialog({ mode: "chooser" })
+  }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center">
-          <Link href="/" className="flex items-center">
-            <Image 
-              src="/oma3_logo.svg" 
-              alt="OMA3 Logo" 
-              width={120} 
-              height={40} 
-              priority
-            />
+    <>
+      <nav
+        className={`sticky top-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? "bg-background/80 backdrop-blur-xl border-b border-border"
+          : "bg-transparent"
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <Link
+            href="https://www.omatrust.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-2"
+          >
+            <span className="text-xl font-bold tracking-tight text-foreground">
+              OMATrust
+            </span>
           </Link>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center space-x-6">
-            <nav className="hidden md:flex space-x-5">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-base font-medium transition-colors hover:text-foreground ${
-                    pathname === item.href ? "text-foreground" : "text-muted-foreground"
-                  }`}
-                  target={item.external ? "_blank" : undefined}
-                  rel={item.external ? "noopener noreferrer" : undefined}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-
-            {/* Network mismatch warning */}
-            {isConnected && !isChainSupported && (
-              <div className="flex items-center space-x-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-1">
-                <span className="text-sm font-medium text-warning-foreground">
-                  Wrong Network
-                </span>
-                <span className="text-xs text-warning-foreground/80">
-                  Please disconnect your wallet, switch to {DEFAULT_CHAIN.name} in your wallet, and then reconnect.  
-                </span>
-              </div>
-            )}
-            {isConnected && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-md px-3"
-                onClick={() => setReviewOpen(true)}
+          <div className="hidden items-center gap-8 md:flex">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className={`group relative text-sm font-medium transition-colors hover:text-foreground ${
+                  !link.external && pathname === link.href
+                    ? "text-foreground"
+                    : "text-foreground/70"
+                }`}
               >
-                <MessageSquarePlus className="h-4 w-4 mr-1.5" />
-                Review
+                {link.label}
+                <span
+                  className={`absolute -bottom-1 left-0 h-px bg-primary transition-all group-hover:w-full ${
+                    !link.external && pathname === link.href ? "w-full" : "w-0"
+                  }`}
+                />
+              </Link>
+            ))}
+            {isSignedIn ? (
+              <Link
+                href="/account"
+                className="ml-2 rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
+              >
+                {headerLabel}
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-2 border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                onClick={openAuthDialog}
+              >
+                Sign In
               </Button>
             )}
-            <div id="header-connect">
-              <Button 
-                isConnectButton 
-                className="rounded-md px-4 py-2"
-                connectButtonProps={{ label: "Sign In" }}
-              />
-            </div>
           </div>
+
+          <button
+            className="text-foreground md:hidden"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
-      </div>
-      <ReviewWidgetModal open={reviewOpen} onOpenChange={setReviewOpen} />
-    </header>
+
+        {mobileOpen && (
+          <div className="border-b border-border bg-background/95 px-6 pb-6 backdrop-blur-xl md:hidden">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className={`block border-b border-border/50 py-3 text-sm transition-colors hover:text-foreground ${
+                  !link.external && pathname === link.href
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            {isSignedIn ? (
+              <Link
+                href="/account"
+                className="mt-4 block w-full rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-center text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
+                onClick={() => setMobileOpen(false)}
+              >
+                {headerLabel}
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 w-full border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                onClick={openAuthDialog}
+              >
+                Sign In
+              </Button>
+            )}
+          </div>
+        )}
+      </nav>
+
+      <AuthEntryDialog
+        request={authDialog}
+        onOpenChange={(open) => {
+          if (open) {
+            openBackendAuthDialog({
+              mode: authDialog.mode,
+              reason: authDialog.reason,
+              schemaId: authDialog.schemaId,
+              schemaTitle: authDialog.schemaTitle,
+              subjectScoped: authDialog.subjectScoped,
+              subjectHint: authDialog.subjectHint,
+              onSubmitAfterAuth: authDialog.onSubmitAfterAuth,
+            })
+            return
+          }
+          closeAuthDialog()
+        }}
+      />
+    </>
   )
 }

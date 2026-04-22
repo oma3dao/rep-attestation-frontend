@@ -14,6 +14,8 @@ import { useAttestation } from '@/lib/service'
 import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
 import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
 import { useToast } from '@/components/ui/toast'
+import { useBackendSession } from '@/components/backend-session-provider'
+import { deriveSubjectUrlHint } from '@/lib/omatrust-backend'
 import logger from '@/lib/logger';
 
 interface AttestationFormProps {
@@ -23,6 +25,7 @@ interface AttestationFormProps {
 
 type FormData = Record<string, string | string[]>
 type FormErrors = Record<string, string>
+const SUBJECT_SCOPED_SCHEMA_IDS = new Set(['key-binding', 'linked-identifier', 'user-review-response'])
 
 export function validateField(field: any, value: any): string | undefined {
   if (field.required) {
@@ -89,6 +92,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
+  const { session, openAuthDialog } = useBackendSession()
 
   // Get attestation service - this handles all service selection and wallet management
   const {
@@ -167,6 +171,128 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     return Object.keys(newErrors).length === 0
   }
 
+  const buildCompleteData = () => {
+    const completeData: Record<string, any> = {}
+
+    schema.fields.forEach(field => {
+      const value = formData[field.name]
+      if (value !== undefined && value !== null && value !== '') {
+        completeData[field.name] = value
+      } else if (field.autoDefault === 'current-timestamp') {
+        completeData[field.name] = Math.floor(Date.now() / 1000)
+      } else {
+        completeData[field.name] = field.type === 'array' ? [] : field.type === 'integer' ? 0 : ''
+      }
+    })
+
+    if (schema.easSchemaString) {
+      const easFields = schema.easSchemaString.split(',').map(f => f.trim().split(/\s+/))
+      for (const [type, name] of easFields) {
+        if (name && completeData[name] === undefined) {
+          if (type.endsWith('[]')) {
+            completeData[name] = []
+          } else if (type.startsWith('uint') || type.startsWith('int')) {
+            completeData[name] = 0
+          } else {
+            completeData[name] = ''
+          }
+        }
+      }
+    }
+
+    if (isWitnessSchema && typeof completeData['proofs'] === 'string' && completeData['proofs']) {
+      completeData['proofs'] = [createEvidencePointerProof(completeData['proofs'])]
+    }
+
+    if (schema.easSchemaString) {
+      const arrayFieldNames = schema.easSchemaString
+        .split(',')
+        .map(f => f.trim().split(/\s+/))
+        .filter(([type]) => type?.endsWith('[]'))
+        .map(([, name]) => name)
+
+      for (const name of arrayFieldNames) {
+        let arr = completeData[name]
+
+        if (typeof arr === 'string') {
+          try { arr = JSON.parse(arr) } catch { arr = arr ? [arr] : [] }
+        }
+
+        if (!Array.isArray(arr)) {
+          arr = arr ? [arr] : []
+        }
+
+        completeData[name] = arr.map((item: unknown) =>
+          typeof item === 'string' ? item : JSON.stringify(item)
+        )
+      }
+    }
+
+    if (CONTROLLER_WITNESS_CONFIG.graceSchemaIds.includes(schema.id)) {
+      const userExplicitlySetEffectiveAt = formData['effectiveAt'] !== undefined && formData['effectiveAt'] !== ''
+      if (!userExplicitlySetEffectiveAt) {
+        completeData['effectiveAt'] = Math.floor(Date.now() / 1000) + CONTROLLER_WITNESS_CONFIG.graceSeconds
+      }
+    }
+
+    return completeData
+  }
+
+  const submitPreparedAttestation = async (completeData: Record<string, any>) => {
+    const subjectField = schema.fields.find(field =>
+      field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
+    )
+
+    if (!subjectField) {
+      throw new Error('No subject field found in schema')
+    }
+
+    const subjectValue = completeData[subjectField.name] as string
+    if (!subjectValue) {
+      throw new Error('Subject field is required')
+    }
+
+    const recipient = subjectValue
+
+    if (!recipient.startsWith('did:')) {
+      if (recipient.startsWith('0x') && recipient.length === 42) {
+        throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
+      }
+      else if (recipient.startsWith('eip155:')) {
+        throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
+      }
+      else if (recipient.includes('@') || recipient.includes('.')) {
+        throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
+      }
+      else if (recipient.trim().length > 0) {
+        throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
+      }
+      else {
+        throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
+      }
+    }
+
+    if (recipient.length < 7 || !recipient.includes(':')) {
+      throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
+    }
+
+    logger.log('Submitting attestation:', {
+      schema: schema.id,
+      recipient,
+      data: completeData
+    })
+
+    const result = await submitAttestation({
+      schemaId: schema.id,
+      recipient,
+      data: completeData
+    })
+
+    logger.log('Attestation created successfully:', result)
+    alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
+    setFormData({})
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setGeneralError(null)
@@ -175,154 +301,33 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
 
     try {
-      // Ensure all schema fields are present with empty strings for optional fields
-      // This maintains compatibility with BAS indexers and search functionality
-      const completeData: Record<string, any> = {}
+      const completeData = buildCompleteData()
 
-      schema.fields.forEach(field => {
-        const value = formData[field.name]
-        if (value !== undefined && value !== null && value !== '') {
-          completeData[field.name] = value
-        } else if (field.autoDefault === 'current-timestamp') {
-          // Apply auto-default for timestamp fields the user didn't touch
-          completeData[field.name] = Math.floor(Date.now() / 1000)
-        } else {
-          // Default must match the EAS Solidity type:
-          //   uint256 → 0, string[] → [], string → ''
-          completeData[field.name] = field.type === 'array' ? [] : field.type === 'integer' ? 0 : ''
-        }
-      })
+      if (!session) {
+        const subjectValue =
+          typeof completeData.subject === 'string'
+            ? completeData.subject
+            : typeof completeData.subjectId === 'string'
+              ? completeData.subjectId
+              : typeof completeData.recipient === 'string'
+                ? completeData.recipient
+                : ''
 
-      // Fields in the EAS schema that aren't exposed as form fields
-      // (e.g., payload, payloadVersion, payloadSpecURI, payloadSpecDigest
-      // on certification/endorsement) still need defaults for encoding.
-      if (schema.easSchemaString) {
-        const easFields = schema.easSchemaString.split(',').map(f => f.trim().split(/\s+/))
-        for (const [type, name] of easFields) {
-          if (name && completeData[name] === undefined) {
-            if (type.endsWith('[]')) {
-              completeData[name] = []
-            } else if (type.startsWith('uint') || type.startsWith('int')) {
-              completeData[name] = 0
-            } else {
-              completeData[name] = ''
-            }
+        openAuthDialog({
+          mode: 'signup',
+          reason: 'submission',
+          schemaId: schema.id,
+          schemaTitle: schema.title,
+          subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
+          subjectHint: deriveSubjectUrlHint(subjectValue),
+          onSubmitAfterAuth: async () => {
+            await submitPreparedAttestation(completeData)
           }
-        }
+        })
+        return
       }
 
-      // For witness-enabled schemas the proofs field holds a raw URL
-      // from EvidencePointerProofInput — wrap it into a proof object.
-      if (isWitnessSchema && typeof completeData['proofs'] === 'string' && completeData['proofs']) {
-        completeData['proofs'] = [createEvidencePointerProof(completeData['proofs'])]
-      }
-
-      // Normalize all string[] fields so the encoder receives a real
-      // string[] instead of a JSON blob.  Proof objects (and any other
-      // non-string items) are JSON-stringified individually.
-      if (schema.easSchemaString) {
-        const arrayFieldNames = schema.easSchemaString
-          .split(',')
-          .map(f => f.trim().split(/\s+/))
-          .filter(([type]) => type?.endsWith('[]'))
-          .map(([, name]) => name)
-
-        for (const name of arrayFieldNames) {
-          let arr = completeData[name]
-
-          // Parse JSON strings (e.g., from ProofInput storing JSON.stringify([proof]))
-          if (typeof arr === 'string') {
-            try { arr = JSON.parse(arr) } catch { arr = arr ? [arr] : [] }
-          }
-
-          if (!Array.isArray(arr)) {
-            arr = arr ? [arr] : []
-          }
-
-          // Each element must be a string for the EAS string[] type
-          completeData[name] = arr.map((item: unknown) =>
-            typeof item === 'string' ? item : JSON.stringify(item)
-          )
-        }
-      }
-
-      // For key-binding and linked-identifier schemas, if the user hasn't
-      // explicitly set effectiveAt (left at auto-default), add a grace period
-      // so the Controller Witness API can observe and attest the controller
-      // evidence before the attestation becomes effective.
-      if (CONTROLLER_WITNESS_CONFIG.graceSchemaIds.includes(schema.id)) {
-        const userExplicitlySetEffectiveAt = formData['effectiveAt'] !== undefined && formData['effectiveAt'] !== ''
-        if (!userExplicitlySetEffectiveAt) {
-          completeData['effectiveAt'] = Math.floor(Date.now() / 1000) + CONTROLLER_WITNESS_CONFIG.graceSeconds
-        }
-      }
-
-      // Extract subject field for recipient
-      const subjectField = schema.fields.find(field =>
-        field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
-      )
-
-      if (!subjectField) {
-        throw new Error('No subject field found in schema')
-      }
-
-      const subjectValue = completeData[subjectField.name] as string
-      if (!subjectValue) {
-        throw new Error('Subject field is required')
-      }
-
-      // Validate that recipient is in DID format (no automatic conversion)
-      const recipient = subjectValue
-
-      // Check if it's a valid DID format
-      if (!recipient.startsWith('did:')) {
-        // If it's an Ethereum address, tell user to convert it
-        if (recipient.startsWith('0x') && recipient.length === 42) {
-          throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
-        }
-        // If it's a CAIP-10 address, tell user to convert it
-        else if (recipient.startsWith('eip155:')) {
-          throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
-        }
-        // If it looks like an email or domain, suggest using proper DID format
-        else if (recipient.includes('@') || recipient.includes('.')) {
-          throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
-        }
-        // For other identifier formats, require DID format
-        else if (recipient.trim().length > 0) {
-          throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
-        }
-        else {
-          throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
-        }
-      }
-
-      // Basic DID format validation
-      if (recipient.length < 7 || !recipient.includes(':')) {
-        throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
-      }
-
-      logger.log('Submitting attestation:', {
-        schema: schema.id,
-        recipient,
-        data: completeData
-      })
-
-      // Use the service layer to submit attestation
-      const result = await submitAttestation({
-        schemaId: schema.id,
-        recipient,
-        data: completeData
-      })
-
-      logger.log('Attestation created successfully:', result)
-
-      // Show success message with transaction details
-      alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
-
-      // Reset form after successful submission
-      setFormData({})
-
+      await submitPreparedAttestation(completeData)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       setGeneralError(errorMessage)
@@ -376,7 +381,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   }
 
   // Determine if submit should be enabled
-  const canSubmit = isConnected && isNetworkSupported
+  const canSubmit = isNetworkSupported
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -425,6 +430,11 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                       Submitting...
                     </>
+                  ) : !session ? (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Create Account to Submit
+                    </>
                   ) : !isConnected ? (
                     <>
                       <Send className="h-4 w-4" />
@@ -444,7 +454,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                 </Button>
 
                 <Button type="button" variant="outline" asChild>
-                  <Link href="/attest">Cancel</Link>
+                  <Link href="/publish">Cancel</Link>
                 </Button>
               </div>
 
@@ -453,10 +463,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                 <div className="muted-panel mt-4 p-4">
                   <h4 className="mb-2 font-medium">Connection Required</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    {!isConnected && (
-                      <p>• Please connect your wallet using the button in the header</p>
-                    )}
-                    {isConnected && !isNetworkSupported && (
+                    {!isNetworkSupported && (
                       <p>• Please switch to a supported network for attestations</p>
                     )}
                   </div>

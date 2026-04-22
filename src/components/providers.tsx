@@ -4,6 +4,7 @@ import React from 'react'
 import { ReactNode } from 'react'
 import { ThirdwebProvider } from 'thirdweb/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BackendSessionProvider } from '@/components/backend-session-provider'
 
 interface ProvidersProps {
   children: ReactNode
@@ -16,7 +17,9 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThirdwebProvider>
-        {children}
+        <BackendSessionProvider>
+          {children}
+        </BackendSessionProvider>
       </ThirdwebProvider>
     </QueryClientProvider>
   )
