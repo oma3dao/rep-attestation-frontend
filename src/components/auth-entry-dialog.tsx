@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
-import { useActiveAccount, useActiveWallet, useActiveWalletChain, useDisconnect } from "thirdweb/react"
+import { useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,6 +31,7 @@ import {
   type WalletExecutionMode,
   verifyWalletSession,
 } from "@/lib/omatrust-backend"
+import { getActiveChain } from "@/lib/blockchain"
 
 interface AuthEntryDialogProps {
   request: AuthDialogRequest
@@ -143,7 +144,6 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
   const { refreshSession, session, setSession } = useBackendSession()
   const activeAccount = useActiveAccount()
   const activeWallet = useActiveWallet()
-  const activeWalletChain = useActiveWalletChain()
   const { disconnect } = useDisconnect()
 
   const isSubmissionFlow = request.reason === "submission"
@@ -193,10 +193,10 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
   }, [isSubjectScoped, request])
 
   const derivedDidWeb = useMemo(() => deriveDidWebFromInput(subjectUrl), [subjectUrl])
-  const activeChainId = activeWalletChain?.id ?? null
+  const activeChainId = getActiveChain().id
   const walletProviderId = activeWallet?.id ?? null
   const walletDid =
-    activeAccount?.address && activeChainId
+    activeAccount?.address
       ? buildWalletDid(activeAccount.address, activeChainId)
       : null
   const selectedExecutionMode = authIntent?.kind === "signup" ? authIntent.executionMode : null
@@ -262,7 +262,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     // If wallet is already connected, start the flow immediately.
     // If not (connectOnConnect callback), the wallet state isn't available yet.
     // The effect below will pick it up once the wallet hooks update.
-    if (activeAccount && activeChainId && walletProviderId && walletDid) {
+    if (activeAccount && walletProviderId && walletDid) {
       void performChallengeSignVerify(intent)
     }
   }
@@ -273,7 +273,6 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     if (
       !authIntent ||
       !activeAccount ||
-      !activeChainId ||
       !walletProviderId ||
       !walletDid ||
       session ||
@@ -292,7 +291,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
 
     console.debug("[auth-entry-dialog] wallet ready, starting deferred challenge flow")
     void performChallengeSignVerify(authIntent)
-  }, [activeAccount, activeChainId, walletProviderId, walletDid, authIntent, session, isBootstrappingChallenge, isAuthenticating, pendingChallenge, authenticatedWalletKey, errorMessage])
+  }, [activeAccount, walletProviderId, walletDid, authIntent, session, isBootstrappingChallenge, isAuthenticating, pendingChallenge, authenticatedWalletKey, errorMessage])
 
   const advanceAfterAuthenticatedFlow = () => {
     if (isSubmissionFlow) {
@@ -385,7 +384,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
    * Called directly from button callbacks, not from effects.
    */
   const performChallengeSignVerify = async (intent: AuthIntent) => {
-    if (!activeAccount || !activeChainId || !walletProviderId || !walletDid) {
+    if (!activeAccount || !walletProviderId || !walletDid) {
       setErrorMessage("Connect a wallet first.")
       return
     }

@@ -77,6 +77,12 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
       return
     }
 
+    // Don't check session while the auth dialog is open — the sign-in flow
+    // is in progress and will hydrate the session itself when complete.
+    if (authDialog.open) {
+      return
+    }
+
     let cancelled = false
 
     async function loadSession() {
@@ -106,7 +112,7 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
     return () => {
       cancelled = true
     }
-  }, [activeAddress, refreshSession])
+  }, [activeAddress, authDialog.open, refreshSession])
 
   // Auto-disconnect the Thirdweb wallet if there's no valid backend session.
   // This keeps wallet connection state in sync with the backend session.
