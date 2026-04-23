@@ -9,20 +9,18 @@ import {
   walletConnect
 } from "thirdweb/wallets"
 import { defineChain } from "thirdweb/chains"
-import { SUPPORTED_CHAINS } from "@/config/chains"
+import { DEFAULT_CHAIN } from "@/config/chains"
 
 import { cn } from "@/lib/utils"
 
-// Convert plain chain configs to thirdweb chains
-const thirdwebChains = SUPPORTED_CHAINS.map(chain => 
-  defineChain({
-    id: chain.id,
-    rpc: chain.rpc,
-    name: chain.name,
-    nativeCurrency: chain.nativeCurrency,
-    blockExplorers: chain.blockExplorers,
-  })
-)
+// The active chain for the app — wallet interactions are scoped to this chain
+const activeThirdwebChain = defineChain({
+  id: DEFAULT_CHAIN.id,
+  rpc: DEFAULT_CHAIN.rpc,
+  name: DEFAULT_CHAIN.name,
+  nativeCurrency: DEFAULT_CHAIN.nativeCurrency,
+  blockExplorers: DEFAULT_CHAIN.blockExplorers,
+})
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -111,7 +109,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className={className}
           autoConnect={{ timeout: 15000 }}
           wallets={wallets}
-          chains={thirdwebChains}
+          chain={activeThirdwebChain}
+          chains={[activeThirdwebChain]}
           connectModal={{
             size: "wide",
             showThirdwebBranding: false,

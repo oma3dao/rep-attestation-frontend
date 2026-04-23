@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
 import { useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react"
@@ -167,6 +167,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
   const [isSubmittingFinalStep, setIsSubmittingFinalStep] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [authenticatedWalletKey, setAuthenticatedWalletKey] = useState<string | null>(null)
+  const challengeFlowActiveRef = useRef(false)
 
   useEffect(() => {
     if (!request.open) {
@@ -280,7 +281,8 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       isAuthenticating ||
       pendingChallenge ||
       authenticatedWalletKey ||
-      errorMessage
+      errorMessage ||
+      challengeFlowActiveRef.current
     ) {
       return
     }
@@ -389,6 +391,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       return
     }
 
+    challengeFlowActiveRef.current = true
     setIsBootstrappingChallenge(true)
     setErrorMessage(null)
 
@@ -445,6 +448,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
         disconnect(activeWallet)
       }
     } finally {
+      challengeFlowActiveRef.current = false
       setIsBootstrappingChallenge(false)
       setIsAuthenticating(false)
     }

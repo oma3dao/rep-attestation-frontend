@@ -173,24 +173,26 @@ export function Header() {
         )}
       </nav>
 
-      <AuthEntryDialog
-        request={authDialog}
-        onOpenChange={(open) => {
-          if (open) {
-            openBackendAuthDialog({
-              mode: authDialog.mode,
-              reason: authDialog.reason,
-              schemaId: authDialog.schemaId,
-              schemaTitle: authDialog.schemaTitle,
-              subjectScoped: authDialog.subjectScoped,
-              subjectHint: authDialog.subjectHint,
-              onSubmitAfterAuth: authDialog.onSubmitAfterAuth,
-            })
-            return
-          }
-          closeAuthDialog()
-        }}
-      />
+      {authDialog.open && (
+        <AuthEntryDialog
+          request={authDialog}
+          onOpenChange={(open) => {
+            if (open) {
+              openBackendAuthDialog({
+                mode: authDialog.mode,
+                reason: authDialog.reason,
+                schemaId: authDialog.schemaId,
+                schemaTitle: authDialog.schemaTitle,
+                subjectScoped: authDialog.subjectScoped,
+                subjectHint: authDialog.subjectHint,
+                onSubmitAfterAuth: authDialog.onSubmitAfterAuth,
+              })
+              return
+            }
+            closeAuthDialog()
+          }}
+        />
+      )}
     </>
   )
 }
