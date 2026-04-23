@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { Suspense, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
@@ -32,7 +32,7 @@ const iconMap: Record<string, LucideIcon> = {
   "message-square": MessageSquare,
 }
 
-export default function PublishPage() {
+function PublishPageContent() {
   const { session } = useBackendSession()
   const searchParams = useSearchParams()
   const highlightedType = searchParams.get("type")
@@ -109,5 +109,13 @@ export default function PublishPage() {
         </Link>
       </div>
     </div>
+  )
+}
+
+export default function PublishPage() {
+  return (
+    <Suspense>
+      <PublishPageContent />
+    </Suspense>
   )
 }
