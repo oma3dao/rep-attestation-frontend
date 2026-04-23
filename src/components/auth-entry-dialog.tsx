@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
-import { useActiveAccount, useActiveWallet, useActiveWalletChain } from "thirdweb/react"
+import { useActiveAccount, useActiveWallet, useActiveWalletChain, useDisconnect } from "thirdweb/react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -144,6 +144,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
   const activeAccount = useActiveAccount()
   const activeWallet = useActiveWallet()
   const activeWalletChain = useActiveWalletChain()
+  const { disconnect } = useDisconnect()
 
   const isSubmissionFlow = request.reason === "submission"
   const isSubjectScoped =
@@ -439,6 +440,11 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       return currentSession
     } catch (error) {
       setErrorMessage(getFriendlyError(error))
+      // Disconnect the wallet on failure so the UI doesn't show a
+      // connected wallet with no session (confusing state)
+      if (activeWallet) {
+        disconnect(activeWallet)
+      }
     } finally {
       setIsBootstrappingChallenge(false)
       setIsAuthenticating(false)
