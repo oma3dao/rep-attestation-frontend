@@ -3,7 +3,7 @@ export interface PublishOption {
   title: string
   description: string
   href: string
-  icon: "star" | "shield" | "award" | "file-check" | "link" | "eye"
+  icon: "star" | "shield" | "award" | "file-check" | "link" | "eye" | "key-round" | "message-square"
   docsHref?: string
 }
 
@@ -15,11 +15,28 @@ export interface DashboardAction {
 
 export const publishOptions: PublishOption[] = [
   {
+    schemaId: "key-binding",
+    title: "Authorize a signing key",
+    description: "Bind a cryptographic key to a service identity so it can sign on behalf of that service. Example- x402 receipts.",
+    href: "/publish/key-binding",
+    icon: "key-round",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#key-binding",
+  },
+  {
     schemaId: "user-review",
     title: "Review an app or service",
     description: "Submit a public review with verifiable trust data for a service you have used.",
     href: "/publish/user-review",
     icon: "star",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#user-review",
+  },
+  {
+    schemaId: "user-review-response",
+    title: "Respond to a user review",
+    description: "Publish a public response to a user review on behalf of the reviewed service.",
+    href: "/publish/user-review-response",
+    icon: "message-square",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#user-review-response",
   },
   {
     schemaId: "security-assessment",
@@ -27,6 +44,7 @@ export const publishOptions: PublishOption[] = [
     description: "Publish an assessment that helps others understand a service's security posture.",
     href: "/publish/security-assessment",
     icon: "shield",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#security-assessment",
   },
   {
     schemaId: "certification",
@@ -34,6 +52,7 @@ export const publishOptions: PublishOption[] = [
     description: "Publish a certification for a service, product, or organization.",
     href: "/publish/certification",
     icon: "award",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#certification",
   },
   {
     schemaId: "endorsement",
@@ -41,6 +60,7 @@ export const publishOptions: PublishOption[] = [
     description: "Publish an endorsement or recommendation for a service or organization.",
     href: "/publish/endorsement",
     icon: "file-check",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#endorsement",
   },
   {
     schemaId: "linked-identifier",
@@ -48,6 +68,7 @@ export const publishOptions: PublishOption[] = [
     description: "Publish a trust record showing that two identifiers are controlled by the same entity.",
     href: "/publish/linked-identifier",
     icon: "link",
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#linked-identifier",
   },
   {
     schemaId: "controller-witness",
@@ -55,8 +76,8 @@ export const publishOptions: PublishOption[] = [
     description: "Publish a witness attestation for a controller assertion. See documentation for setup requirements.",
     href: "/publish/controller-witness",
     icon: "eye",
-    docsHref: "https://docs.omatrust.org/",
-  },
+    docsHref: "https://docs.omatrust.org/reputation/attestation-types#controller-witness",
+  }
 ]
 
 export const landingUseCases: string[] = [

@@ -655,24 +655,55 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     )
   }
 
+  const isManagedWallet = walletProviderId === "inApp"
+  const isSigningIn = authIntent?.kind === "signin"
+
   const renderBusyState = () => {
     if (!isBootstrappingChallenge && !isAuthenticating && !isVerifyingSubject && !isAddingSubject) {
       return null
     }
 
-    let message = "Preparing wallet sign-in…"
-    if (isAuthenticating) {
-      message = "Creating your OMATrust account…"
-    } else if (isVerifyingSubject) {
-      message = "Verifying subject ownership…"
-    } else if (isAddingSubject) {
-      message = "Saving subject to your account…"
+    if (isVerifyingSubject) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Verifying subject ownership…
+        </div>
+      )
     }
 
+    if (isAddingSubject) {
+      return (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Saving subject to your account…
+        </div>
+      )
+    }
+
+    if (isManagedWallet) {
+      return (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            {isSigningIn ? "Signing in…" : "Creating your account…"}
+          </div>
+        </div>
+      )
+    }
+
+    // Self-custody wallet — needs to sign the SIWE message
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {message}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          Check your wallet to continue
+        </div>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {isSigningIn
+            ? "Sign a message in your wallet app to verify ownership and sign in to your account. This is free — no gas required."
+            : "Sign a message in your wallet app to verify ownership and create your account. This is free — no gas required."}
+        </p>
       </div>
     )
   }

@@ -68,34 +68,33 @@ Cleanup:
 - add `text-balance` utility to globals.css
 - remove all hardcoded `bg-blue-*`, `text-blue-*`, `text-gray-*`, `bg-gray-*`, `bg-black` in favor of token references
 
-### 1. Sign In / Sign Up and backend session
+Completed:
 
-The entry point for all authenticated flows. The user needs a backend account and session before they can subscribe or submit attestations through the relay.
+Design token system aligned with omatrust-landing brand language. All hardcoded Tailwind color classes replaced with semantic tokens. Inter + JetBrains Mono fonts registered via CSS variables. Border radius bumped to 0.75rem. shadcn baseColor changed to neutral. Header redesigned to match landing page navigation style (sticky, scroll blur, active link indicators). ThirdwebConnectButton styles moved from inline to globals.css.
 
-- add Sign In and Sign Up buttons to the header/navigation
-- implement SIWE challenge/verify flow against `omatrust-backend`
-- store backend session via httpOnly cookie (set by the backend)
-- detect wallet provider via `useActiveWallet().id` and send `walletProviderId` to backend on verify
-- ensure every wallet creates or loads a backend account and session before attestation submission
-- establish wallet-scoped `executionMode` on first sign-in
-- delay wallet connection until the user wants to submit an attestation (not on page load)
-- on first attestation attempt by an unauthenticated user, prompt sign-in before proceeding
-- support `?action=signin` query parameter from the OMATrust landing page nav ("Sign In" button links to `https://app.omatrust.org?action=signin`). When this param is present on page load, automatically open a routing modal that asks the user whether they already have an account or are still exploring. "I have an account" opens the Thirdweb wallet connect modal; "I'm still exploring" dismisses the modal and drops the user into the landing page. Strip the query param from the URL after handling so it doesn't re-trigger on refresh.
+### 1. Sign In / Sign Up and backend session (implemented)
+
+The entry point for all authenticated flows.
+
+- header shows "Sign In" button when unauthenticated.  When authenticagted, the button shows the display name of the account and links to `/account`
+- Unauthenticated Sign In button opens an auth chooser modal with two options: "Existing account" (sign in) and "New account" (create account)
+- the Thirdweb ConnectButton only appears inside the auth modal and on the `/account` page — not in the header
+- SIWE challenge/verify flow uses an imperative async function (`performChallengeSignVerify`) triggered by button click, not React effects
+- wallet provider detected via `useActiveWallet().id` and sent as `walletProviderId` to backend on verify
+- `BackendSessionProvider` auto-disconnects the Thirdweb wallet when no backend session exists (keeps wallet and session state in sync)
+- session check uses `activeAddress` (string) as dependency, not `activeAccount` (object), to prevent re-render flooding
+- `?action=signin` query parameter from the landing page opens the auth modal automatically
+- wallet connection is delayed until the user initiates sign-in, not on page load
 
 ### 2. Subscription and payment
 
 Once signed in, the user needs a way to see their plan and upgrade.
 
-- add an account page (`/account`) that shows all account information in one place:
-  - wallet address and provider type
-  - current plan (free / paid) and status
-  - subscription usage (sponsored writes used / limit, premium reads used / limit)
-  - entitlement period dates
-  - upgrade button (for free-tier users)
-- upgrade flow: call `POST /api/private/subscriptions/checkout-session`, redirect to Stripe
-- after Stripe redirect, poll `GET /api/private/subscriptions/current` to confirm upgrade
-- show subscription confirmation in the UI after successful payment
-- link to the account page from the header/navigation for signed-in users
+- `/account` page implemented with: display name, wallet DID and provider, subscription plan/status, primary subject, and Thirdweb "Manage Wallet" button for disconnect
+- `/account` page redirects to `/` when session is lost (wallet disconnect, session expiry)
+- header links to `/account` when signed in
+- upgrade flow (Stripe checkout) not yet implemented
+- subscription usage display not yet implemented
 
 ### 3. Subscription-execution delegated attestation
 

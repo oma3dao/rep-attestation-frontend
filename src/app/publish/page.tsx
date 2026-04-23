@@ -1,13 +1,17 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   ArrowRight,
   Award,
   ExternalLink,
   Eye,
   FileCheck,
+  KeyRound,
   LinkIcon,
+  MessageSquare,
   Shield,
   Star,
   type LucideIcon,
@@ -24,11 +28,22 @@ const iconMap: Record<string, LucideIcon> = {
   "file-check": FileCheck,
   link: LinkIcon,
   eye: Eye,
+  "key-round": KeyRound,
+  "message-square": MessageSquare,
 }
 
 export default function PublishPage() {
   const { session } = useBackendSession()
+  const searchParams = useSearchParams()
+  const highlightedType = searchParams.get("type")
+  const highlightRef = useRef<HTMLDivElement>(null)
   const dashboardHref = session ? "/dashboard" : "/dashboard?action=signin"
+
+  useEffect(() => {
+    if (highlightedType && highlightRef.current) {
+      highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+  }, [highlightedType])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -39,11 +54,17 @@ export default function PublishPage() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {publishOptions.map((option) => {
           const Icon = iconMap[option.icon]
+          const isHighlighted = highlightedType === option.schemaId
 
           return (
           <Card
             key={option.schemaId}
-            className="flex h-full flex-col border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-lg hover:shadow-slate-950/10"
+            ref={isHighlighted ? highlightRef : undefined}
+            className={`flex h-full flex-col transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-950/10 ${
+              isHighlighted
+                ? "border-primary/50 bg-primary/5 ring-2 ring-primary/20"
+                : "border-border/70 hover:border-primary/30 hover:bg-primary/5"
+            }`}
           >
             <CardHeader>
               <Icon className="mb-3 h-8 w-8 text-primary" />

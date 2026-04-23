@@ -68,9 +68,24 @@ Example allowed origins:
 
 ## Sign-up wizard flow
 
-The backend session is not established on page load. Account creation and wallet connection are delayed until the user wants to submit an attestation.
+The backend session is not established on page load. Account creation and wallet connection are delayed until the user initiates sign-in.
 
-When an unauthenticated user clicks to file an attestation, the frontend launches a modal sign-up wizard.
+The frontend uses an auth chooser modal triggered by the "Sign In" button or `?action=signin` query parameter.
+
+### Auth chooser modal
+
+The modal presents two options:
+
+- **Existing account** — shows the Thirdweb ConnectButton for wallet sign-in. After wallet connects, the imperative challenge → sign → verify flow runs automatically.
+- **New account** — takes the user to the account creation form (display name, then wallet connection).
+
+The Thirdweb ConnectButton only appears inside this modal and on the `/account` page. It is never shown in the header navigation.
+
+### Implementation notes
+
+The challenge → sign → verify flow is implemented as a single imperative async function (`performChallengeSignVerify`) called from button callbacks. This replaces the previous effect-based approach which had race conditions with React re-renders during the wallet signing wait.
+
+The `BackendSessionProvider` auto-disconnects the Thirdweb wallet when no backend session exists and the auth dialog is not open. This keeps wallet connection state in sync with the backend session and prevents the confusing "wallet connected but not signed in" state.
 
 ### Wizard steps
 
@@ -154,15 +169,17 @@ If the user already has a backend session (cookie present and valid):
 
 Unauthenticated users can:
 
-- browse the landing page and view existing attestations (public RPC, no session needed)
-- see Sign In and Sign Up buttons in the navigation
+- browse the landing page, publish page, and view existing attestations (public RPC, no session needed)
+- see "Sign In" button in the header navigation
 
 Unauthenticated users cannot:
 
 - submit any attestation
 - access subscription, account, or session features
 
-When an unauthenticated user clicks to file an attestation, the sign-up wizard launches.
+The header "Sign In" button opens the auth chooser modal. The `?action=signin` query parameter (used by the OMATrust landing page) also opens the modal automatically on page load.
+
+When signed in, the header button changes to show the user's display name or truncated wallet address and links to `/account`.
 
 ### Sign In vs Sign Up
 
@@ -301,31 +318,31 @@ A smart RPC router could inspect the JSON-RPC method and route `eth_sendRawTrans
 
 ---
 
-## Account page
+## Account page (implemented)
 
-A single `/account` page shows all account information:
+The `/account` page shows:
 
-- wallet address and provider type
-- current plan (free / paid) and status
-- subscription usage (sponsored writes used / limit, premium reads used / limit)
+- display name
+- wallet DID and provider type
+- subscription plan and status
+- primary subject (if set)
+- Thirdweb "Manage Wallet" button for wallet management and disconnect
+
+The page redirects to `/` when the session is lost (wallet disconnect, session expiry).
+
+The header shows the user's display name or truncated wallet address when signed in, linking to `/account`. When not signed in, the header shows "Sign In".
+
+Not yet implemented:
+- subscription usage metrics (writes used / limit, reads used / limit)
 - entitlement period dates
-- upgrade button (for free-tier users)
-
-Linked from the header/navigation for signed-in users.
+- upgrade button / Stripe checkout flow
 
 ---
 
-## Files likely to change
-
-- `src/lib/attestation-queries.ts`
-- `src/lib/server/eas-routes.ts`
-- `src/lib/eas.ts` (attestation routing logic)
-- `src/config/chains.ts`
-- `src/components/header.tsx`
-- new: sign-up wizard modal component
-- new: account page (`/account`)
-- new: backend session context provider
-- new: custom JSON-RPC transport for premium RPC
+## Still to implement:
+- `src/lib/eas.ts` — attestation routing logic (backend relay path)
+- custom JSON-RPC transport for premium RPC
+- Stripe checkout integration
 
 ---
 

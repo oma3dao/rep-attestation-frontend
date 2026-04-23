@@ -47,13 +47,16 @@ export function Header() {
       return
     }
 
-    openBackendAuthDialog({ mode: "chooser" })
+    // Don't open the sign-in modal if the user already has a session
+    if (!isSignedIn) {
+      openBackendAuthDialog({ mode: "chooser" })
+    }
 
     const params = new URLSearchParams(searchParams.toString())
     params.delete("action")
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
     router.replace(nextUrl, { scroll: false })
-  }, [openBackendAuthDialog, pathname, router, searchParams])
+  }, [isSignedIn, openBackendAuthDialog, pathname, router, searchParams])
 
   const openAuthDialog = () => {
     setMobileOpen(false)
