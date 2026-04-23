@@ -279,7 +279,8 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       isBootstrappingChallenge ||
       isAuthenticating ||
       pendingChallenge ||
-      authenticatedWalletKey
+      authenticatedWalletKey ||
+      errorMessage
     ) {
       return
     }
@@ -290,7 +291,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
 
     console.debug("[auth-entry-dialog] wallet ready, starting deferred challenge flow")
     void performChallengeSignVerify(authIntent)
-  }, [activeAccount, activeChainId, walletProviderId, walletDid, authIntent, session, isBootstrappingChallenge, isAuthenticating, pendingChallenge, authenticatedWalletKey])
+  }, [activeAccount, activeChainId, walletProviderId, walletDid, authIntent, session, isBootstrappingChallenge, isAuthenticating, pendingChallenge, authenticatedWalletKey, errorMessage])
 
   const advanceAfterAuthenticatedFlow = () => {
     if (isSubmissionFlow) {
