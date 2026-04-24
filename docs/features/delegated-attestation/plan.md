@@ -126,6 +126,19 @@ The current frontend-hosted delegated-attest server continues to handle `user-re
 - use the current direct transaction path for non-subsidized schemas when `executionMode === "native"`
 - no proxy from the backend to the current frontend-hosted delegated-attest server
 
+#### Chain switching for `native` direct transactions
+
+The `ConnectButton` does not force the wallet onto OMAChain at connect time. This is intentional — the `chain` (singular) prop triggers `wallet_switchEthereumChain` through WalletConnect, which sends the chain ID in CAIP-2 format (`eip155:66238`). MetaMask rejects this for custom chains it doesn't recognize. See [issue #38](https://github.com/oma3dao/rep-attestation-frontend/issues/38).
+
+Instead, chain switching must happen just before a direct on-chain transaction, using raw EIP-1193 provider calls with hex chain IDs. `app-registry-frontend` already implements this pattern in `src/lib/contracts/chain-guard.ts`:
+
+1. Check if the wallet is already on the correct chain — if so, skip
+2. Call `wallet_switchEthereumChain` with hex chain ID (`0x102be` for 66238)
+3. If MetaMask returns error 4902 (chain unknown), call `wallet_addEthereumChain` to add OMAChain with its name, RPC, native currency, and explorer, then switch
+4. If provider-level switching isn't available (managed wallets), fall back and let Thirdweb handle it internally
+
+Copy `chain-guard.ts` from `app-registry-frontend` and call `ensureWalletOnEnvChain(account)` before `sendTransaction` in the direct attestation path (`createDirectAttestation` in `src/lib/eas.ts`). This is not needed for delegated attestations (EIP-712 signing) or SIWE signing — only for transactions where the user's wallet pays gas.
+
 ### 6. Premium RPC transport (internal)
 
 Hidden from the user. The backend uses the premium RPC endpoint for relay-adjacent reads.

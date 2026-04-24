@@ -26,7 +26,6 @@ import {
   patchAccountMe,
   type BackendSessionMeResponse,
   type BackendSubject,
-  type SubjectVerificationMethod,
   verifySubjectOwnership,
   type WalletExecutionMode,
   verifyWalletSession,
@@ -66,6 +65,7 @@ type AuthIntent =
     }
 
 type SubjectVerificationState = "idle" | "verified" | "failed"
+type DidWebProofMethod = "dns" | "didDocument"
 
 const SUBJECT_SCOPED_SCHEMA_IDS = new Set([
   "key-binding",
@@ -132,8 +132,25 @@ function getFriendlyError(error: unknown) {
   return "Something went wrong. Please try again."
 }
 
-function formatVerificationMethod(method: SubjectVerificationMethod) {
-  return method === "dns" ? "DNS TXT" : "did.json"
+function formatVerificationMethod(
+  method: "dns" | "did-document" | "wallet" | "contract" | "minting-wallet" | "transfer" | null
+) {
+  switch (method) {
+    case "dns":
+      return "DNS TXT"
+    case "did-document":
+      return "did.json"
+    case "wallet":
+      return "wallet"
+    case "contract":
+      return "contract ownership"
+    case "minting-wallet":
+      return "minting wallet"
+    case "transfer":
+      return "transfer proof"
+    default:
+      return "verification"
+  }
 }
 
 function getDomainFromDidWeb(didWeb: string | null) {
@@ -157,7 +174,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
   const [pendingChallenge, setPendingChallenge] = useState<PendingChallenge | null>(null)
   const [lastAttemptKey, setLastAttemptKey] = useState<string | null>(null)
   const [subjectRecord, setSubjectRecord] = useState<BackendSubject | null>(null)
-  const [verificationMethod, setVerificationMethod] = useState<SubjectVerificationMethod>("dns")
+  const [verificationMethod, setVerificationMethod] = useState<DidWebProofMethod>("dns")
   const [verificationState, setVerificationState] = useState<SubjectVerificationState>("idle")
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null)
   const [isBootstrappingChallenge, setIsBootstrappingChallenge] = useState(false)
@@ -503,11 +520,10 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     try {
       const verification = await verifySubjectOwnership({
         subjectDid: derivedDidWeb,
-        controllerDid: walletDid,
-        method: verificationMethod,
+        connectedWalletDid: walletDid,
       })
 
-      if (!verification.verified) {
+      if (!verification.ok) {
         setVerificationState("failed")
         setVerificationMessage(
           verification.error ||
@@ -520,7 +536,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       setVerificationState("verified")
       setVerificationMessage(
         `Ownership verified via ${formatVerificationMethod(
-          verification.method ?? verificationMethod
+          verification.method ?? (verificationMethod === "didDocument" ? "did-document" : "dns")
         )}.`
       )
 

@@ -13,7 +13,7 @@ import { DEFAULT_CHAIN } from "@/config/chains"
 
 import { cn } from "@/lib/utils"
 
-// The active chain for the app — wallet interactions are scoped to this chain
+// The active chain — scopes Thirdweb RPC and balance display to this chain
 const activeThirdwebChain = defineChain({
   id: DEFAULT_CHAIN.id,
   rpc: DEFAULT_CHAIN.rpc,
@@ -109,7 +109,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className={className}
           autoConnect={{ timeout: 15000 }}
           wallets={wallets}
-          chain={activeThirdwebChain}
           chains={[activeThirdwebChain]}
           connectModal={{
             size: "wide",
