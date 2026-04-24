@@ -162,7 +162,11 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">Manage Your Service Trust</h1>
           <p className="mt-1 text-muted-foreground">
-            Wallet {truncateMiddle(address || "")} on {chain?.name || `Chain ${chainId}`}
+            Wallet{" "}
+            <Link href="/account" className="font-medium text-primary transition-colors hover:text-primary/80">
+              {truncateMiddle(address || "")}
+            </Link>{" "}
+            on {chain?.name || `Chain ${chainId}`}
           </p>
         </div>
         <div className="flex items-center gap-2">

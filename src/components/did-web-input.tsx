@@ -37,6 +37,21 @@ export function DidWebInput({
     const newDomain = e.target.value;
     setDomain(newDomain);
     setInternalError(null);
+
+    const trimmed = newDomain.trim();
+    if (!trimmed) {
+      onChange(null);
+      return;
+    }
+
+    const normalized = normalizeDomain(trimmed);
+    const domainRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
+    if (domainRegex.test(normalized)) {
+      onChange(`did:web:${normalized}`);
+    } else {
+      onChange(null);
+    }
   };
 
   const handleBlur = () => {
@@ -57,6 +72,7 @@ export function DidWebInput({
       return;
     }
 
+    setDomain(normalized);
     const did = `did:web:${normalized}`;
     onChange(did);
   };

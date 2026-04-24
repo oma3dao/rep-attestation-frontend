@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react"
 import type { BackendSessionMeResponse } from "@/lib/omatrust-backend"
-import { BackendApiError, getSessionMe, isBackendNetworkError } from "@/lib/omatrust-backend"
+import { BackendApiError, getSessionMe, isBackendNetworkError, logoutSession } from "@/lib/omatrust-backend"
 
 type AuthDialogMode = "chooser" | "signin" | "signup"
 
@@ -25,6 +25,7 @@ interface BackendSessionContextValue {
   openAuthDialog: (request?: Partial<Omit<AuthDialogRequest, "open">>) => void
   closeAuthDialog: () => void
   refreshSession: () => Promise<BackendSessionMeResponse | null>
+  logout: () => Promise<void>
   setSession: (session: BackendSessionMeResponse | null) => void
 }
 
@@ -49,6 +50,13 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
   const activeAddress = activeAccount?.address ?? null
   const activeWallet = useActiveWallet()
   const { disconnect } = useDisconnect()
+  const hadActiveWalletRef = React.useRef(false)
+  const sessionRef = React.useRef<BackendSessionMeResponse | null>(null)
+  const suppressNextDisconnectLogoutRef = React.useRef(false)
+
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
 
   const refreshSession = useCallback(async () => {
     try {
@@ -68,15 +76,33 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
     }
   }, [])
 
-  useEffect(() => {
-    // Only check for a backend session if a wallet is connected.
-    // No wallet means no session cookie could exist.
-    if (!activeAddress) {
-      setSession(null)
-      setIsSessionLoading(false)
-      return
-    }
+  const logout = useCallback(async () => {
+    suppressNextDisconnectLogoutRef.current = true
+    setIsSessionLoading(true)
 
+    try {
+      if (sessionRef.current) {
+        try {
+          await logoutSession()
+        } catch (error) {
+          if (!(error instanceof BackendApiError && error.status === 401) && !isBackendNetworkError(error)) {
+            throw error
+          }
+        }
+      }
+
+      setSession(null)
+
+      if (activeWallet) {
+        await disconnect(activeWallet)
+      }
+    } finally {
+      hadActiveWalletRef.current = false
+      setIsSessionLoading(false)
+    }
+  }, [activeWallet, disconnect])
+
+  useEffect(() => {
     // Don't check session while the auth dialog is open — the sign-in flow
     // is in progress and will hydrate the session itself when complete.
     if (authDialog.open) {
@@ -84,9 +110,29 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
     }
 
     let cancelled = false
+    const hadActiveWallet = hadActiveWalletRef.current
+    const disconnectedWalletWithSession =
+      hadActiveWallet &&
+      !activeAddress &&
+      !!sessionRef.current &&
+      !suppressNextDisconnectLogoutRef.current
 
-    async function loadSession() {
+    hadActiveWalletRef.current = !!activeAddress
+
+    if (hadActiveWallet && !activeAddress && suppressNextDisconnectLogoutRef.current) {
+      suppressNextDisconnectLogoutRef.current = false
+    }
+
+    async function syncSession() {
       try {
+        if (disconnectedWalletWithSession) {
+          await logoutSession()
+          if (!cancelled) {
+            setSession(null)
+          }
+          return
+        }
+
         const response = await refreshSession()
         if (cancelled) {
           return
@@ -107,7 +153,7 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
     }
 
     setIsSessionLoading(true)
-    void loadSession()
+    void syncSession()
 
     return () => {
       cancelled = true
@@ -143,8 +189,9 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
     openAuthDialog,
     closeAuthDialog,
     refreshSession,
+    logout,
     setSession,
-  }), [authDialog, closeAuthDialog, isSessionLoading, openAuthDialog, refreshSession, session])
+  }), [authDialog, closeAuthDialog, isSessionLoading, logout, openAuthDialog, refreshSession, session])
 
   return (
     <BackendSessionContext.Provider value={value}>

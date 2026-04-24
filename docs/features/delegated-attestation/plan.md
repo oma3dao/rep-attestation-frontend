@@ -90,11 +90,20 @@ The entry point for all authenticated flows.
 
 Once signed in, the user needs a way to see their plan and upgrade.
 
-- `/account` page implemented with: display name, wallet DID and provider, subscription plan/status, primary subject, and Thirdweb "Manage Wallet" button for disconnect
+- `/account` page implemented with:
+  - `Name`
+  - `Subject Identifier`
+  - combined wallet card with wallet DID, wallet type, Thirdweb "Manage Wallet" button, and explicit `Log Out`
+  - subscription plan/status, reads left, writes left, renewal timing, and upgrade CTA
 - `/account` page redirects to `/` when session is lost (wallet disconnect, session expiry)
 - header links to `/account` when signed in
-- upgrade flow (Stripe checkout) not yet implemented
-- subscription usage display not yet implemented
+- account page subject flow implemented:
+  - hides the bootstrap wallet subject when it is the only subject
+  - prompts the user to add a meaningful subject identifier
+  - opens subject confirmation modal with DID picker, proof instructions, verification, and submit
+- startup session restore implemented globally via `GET /api/private/session/me`
+- explicit logout implemented by revoking backend session and disconnecting the wallet
+- upgrade flow (Stripe checkout) not yet implemented end-to-end
 
 ### 3. Subscription-execution delegated attestation
 
@@ -154,6 +163,18 @@ Transport note: `ethers.JsonRpcProvider` against the backend URL is not sufficie
 ## Session initialization timing
 
 See the spec for the full session initialization flow, wallet type gating, and signing UX details.
+
+## Subject ownership note
+
+The original bundled "subject inside signup wizard" model is now partially obsolete.
+
+Current product direction:
+
+- account creation and sign-in happen first
+- subject ownership is additive to the account
+- the canonical subject-add flow is now on `/account`
+
+The subject-required create-account path still exists in the auth modal, but future cleanup should remove subject attachment from signup entirely and keep subject management on `/account`.
 
 ## Unauthenticated user experience
 

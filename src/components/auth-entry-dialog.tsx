@@ -595,24 +595,25 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
 
   const renderSignInAction = () => (
     <div className="space-y-3">
-      <div className="omatrust-connect">
-        <Button
-          isConnectButton
-          className="w-full"
-          connectMode="all"
-          connectButtonProps={{ label: "Sign In" }}
-          connectOnConnect={() => beginAuthIntent({ kind: "signin" })}
-        />
-      </div>
       {activeAccount ? (
         <Button
           className="w-full"
           onClick={() => beginAuthIntent({ kind: "signin" })}
           disabled={isBootstrappingChallenge || isAuthenticating}
         >
-          Continue Sign In
+          Sign In
         </Button>
-      ) : null}
+      ) : (
+        <div className="omatrust-connect">
+          <Button
+            isConnectButton
+            className="w-full"
+            connectMode="all"
+            connectButtonProps={{ label: "Sign In" }}
+            connectOnConnect={() => beginAuthIntent({ kind: "signin" })}
+          />
+        </div>
+      )}
     </div>
   )
 
@@ -779,6 +780,39 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       {renderBusyState()}
     </div>
   )
+
+  useEffect(() => {
+    if (
+      step !== "signin" ||
+      authIntent ||
+      session ||
+      !activeAccount ||
+      !walletProviderId ||
+      !walletDid ||
+      isBootstrappingChallenge ||
+      isAuthenticating ||
+      pendingChallenge ||
+      authenticatedWalletKey ||
+      errorMessage ||
+      challengeFlowActiveRef.current
+    ) {
+      return
+    }
+
+    void beginAuthIntent({ kind: "signin" })
+  }, [
+    step,
+    authIntent,
+    session,
+    activeAccount,
+    walletProviderId,
+    walletDid,
+    isBootstrappingChallenge,
+    isAuthenticating,
+    pendingChallenge,
+    authenticatedWalletKey,
+    errorMessage,
+  ])
 
   const renderCreateSimple = () => (
     <div className="space-y-5">

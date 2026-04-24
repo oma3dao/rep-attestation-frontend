@@ -82,13 +82,30 @@ export interface WalletVerifyResponse {
   }
 }
 
-export type SubjectVerificationMethod = "dns" | "didDocument"
+export interface BackendSubscriptionCurrentResponse {
+  subscription: {
+    plan: string
+    status: string
+    annualSponsoredWriteLimit: number
+    sponsoredWritesUsedCurrentYear: number
+    annualPremiumReadLimit: number
+    premiumReadsUsedCurrentYear: number
+    entitlementPeriodStart: string | null
+    entitlementPeriodEnd: string | null
+  }
+}
+
+export type SubjectVerificationMethod = "dns" | "did-document" | "wallet" | "contract" | "minting-wallet" | "transfer" | null
 
 export interface SubjectOwnershipVerificationResponse {
-  verified: boolean
-  method: SubjectVerificationMethod | null
+  ok: boolean
+  status: "verified" | "failed"
+  subjectDid: string
+  connectedWalletDid: string
+  method?: SubjectVerificationMethod
   error?: string | null
   details?: string | null
+  controllingWalletDid?: string | null
 }
 
 type BackendErrorShape = {
@@ -237,8 +254,18 @@ export async function getSessionMe() {
   return backendFetch<BackendSessionMeResponse>("/api/private/session/me")
 }
 
+export async function logoutSession() {
+  return backendFetch<{ success: boolean }>("/api/private/session/logout", {
+    method: "POST",
+  })
+}
+
 export async function getAccountMe() {
   return backendFetch<BackendAccountMeResponse>("/api/private/accounts/me")
+}
+
+export async function getCurrentSubscription() {
+  return backendFetch<BackendSubscriptionCurrentResponse>("/api/private/subscriptions/current")
 }
 
 export async function patchAccountMe(params: { displayName: string | null }) {
@@ -261,10 +288,20 @@ export async function createSubject(params: { did: string; displayName?: string 
 
 export async function verifySubjectOwnership(params: {
   subjectDid: string
-  controllerDid: string
-  method: SubjectVerificationMethod
+  connectedWalletDid: string
 }) {
-  return backendFetch<SubjectOwnershipVerificationResponse>("/api/public/verify-subject-ownership", {
+  return backendFetch<SubjectOwnershipVerificationResponse>("/api/verify/subject-ownership", {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
+}
+
+export async function createSubscriptionCheckoutSession(params: {
+  plan: "paid"
+  successUrl: string
+  cancelUrl: string
+}) {
+  return backendFetch<{ checkoutUrl: string }>("/api/private/subscriptions/checkout-session", {
     method: "POST",
     body: JSON.stringify(params),
   })

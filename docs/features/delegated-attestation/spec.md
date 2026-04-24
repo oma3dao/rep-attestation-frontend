@@ -66,7 +66,7 @@ Example allowed origins:
 
 ---
 
-## Sign-up wizard flow
+## Sign-in and account creation flow
 
 The backend session is not established on page load. Account creation and wallet connection are delayed until the user initiates sign-in.
 
@@ -76,53 +76,96 @@ The frontend uses an auth chooser modal triggered by the "Sign In" button or `?a
 
 The modal presents two options:
 
-- **Existing account** — shows the Thirdweb ConnectButton for wallet sign-in. After wallet connects, the imperative challenge → sign → verify flow runs automatically.
-- **New account** — takes the user to the account creation form (display name, then wallet connection).
+- **Existing account** — shows the wallet sign-in path for an already-connected or newly connected wallet
+- **New account** — starts account creation
 
 The Thirdweb ConnectButton only appears inside this modal and on the `/account` page. It is never shown in the header navigation.
 
 ### Implementation notes
 
-The challenge → sign → verify flow is implemented as a single imperative async function (`performChallengeSignVerify`) called from button callbacks. This replaces the previous effect-based approach which had race conditions with React re-renders during the wallet signing wait.
+- the challenge → sign → verify flow is implemented as a single imperative async function (`performChallengeSignVerify`) called from button callbacks
+- the `BackendSessionProvider` restores session state on startup via `GET /api/private/session/me` even before Thirdweb wallet hydration completes
+- the `BackendSessionProvider` treats wallet disconnect as logout and clears the backend session cookie
+- the frontend shows an explicit `Log Out` action on `/account`
 
-The `BackendSessionProvider` auto-disconnects the Thirdweb wallet when no backend session exists and the auth dialog is not open. This keeps wallet connection state in sync with the backend session and prevents the confusing "wallet connected but not signed in" state.
+### Existing account
 
-### Wizard steps
+- if no wallet is connected, the modal shows the Thirdweb ConnectButton
+- once a wallet is connected, sign-in proceeds automatically without a separate "Continue Sign In" step
+- if a wallet is already connected when the user opens the existing-account path, the frontend starts the SIWE challenge → sign → verify flow directly
 
-**Step 1: Welcome and free tier introduction**
+### New account
 
-Default messaging:
+There are two create-account paths depending on whether a subject is required.
 
-> Thank you for signing up. We are giving you a limited number of transactions for free. Once those transactions are used up, you can pay for more by upgrading to a paid subscription.
+#### Flow A: simple account creation
 
-The wizard proceeds to Step 2. The frontend does not ask the user to choose an execution mode up front. Execution mode is established after wallet sign-in, because some wallet types can support only one mode.
+Used when no subject or organization URL is required.
 
-**Step 2: Account information**
+- modal title: `Create Account`
+- required field: `Display name`
+- primary path: `Create Account`
+- secondary path: `Pay with OMA instead →`
 
-The user fills out account details before connecting a wallet:
+The primary path is the managed / subscription-oriented creation path. The secondary path is a self-custody / native execution path using the Thirdweb wallet picker without managed wallets.
 
-- Display name (optional)
-- Subject / organization URL (optional — only needed for subject-scoped attestations, but can be entered here proactively)
-- Any other relevant profile information
+#### Flow B: subject-required attestation submission
 
-If the user enters a subject URL, the frontend derives the `did:web` subject for later use in Step 4.
+Used when the user submits a subject-scoped attestation and does not yet have a verified subject on their account.
 
-After filling out the form, the user clicks a button to connect their wallet.
+Flow B is a chained sequence of two independent modals orchestrated by `AttestationForm`. The auth dialog and the subject confirmation dialog each handle one concern. Neither modal knows about the other — `AttestationForm` chains them via the `onSubmitAfterAuth` callback.
 
-**Step 3: Connect wallet and create account**
+**Step 1 — Account creation (auth dialog, Flow A)**
 
-- Thirdweb wallet picker showing all supported wallet options including social/in-app wallets, MetaMask, WalletConnect, Coinbase Wallet, and other supported self-custody wallets.
-- The connected wallet's `walletProviderId` constrains which execution modes are allowed.
+The auth dialog opens exactly as in Flow A. The user enters a display name, connects a wallet, and creates an account. No subject fields appear in this modal. The auth dialog closes once the session is established.
+
+**Step 2 — Subject verification (subject confirmation dialog)**
+
+Immediately after the auth dialog closes, `AttestationForm` checks whether the schema is subject-scoped and whether the account already has a verified non-bootstrap subject. If a subject is needed, `AttestationForm` opens the `SubjectConfirmationDialog` automatically — the user does not return to the form between modals.
+
+The subject confirmation dialog is the same component used on the `/account` page. It includes:
+
+- DID method picker
+- method-specific proof instructions (DNS TXT, did.json, wallet match, contract ownership)
+- verification action with retry
+- submit action that calls `POST /api/private/subjects` to persist the subject
+
+The dialog pre-populates the subject input when a hint is available. If the attestation form's subject field contains a `did:web` value or a domain-like string, `AttestationForm` passes it as a `subjectHint` so the user doesn't re-enter it.
+
+**Step 3 — Attestation submission**
+
+After the subject dialog closes with a verified subject, `AttestationForm` proceeds to submit the attestation. The user does not click the submit button again.
+
+**Chaining implementation**
+
+`AttestationForm.handleSubmit` builds the `onSubmitAfterAuth` callback as an async function that runs after the auth dialog closes:
+
+1. Refresh the session to pick up the newly created account state.
+2. Check if the schema is subject-scoped and the account lacks a verified subject.
+3. If a subject is needed, open `SubjectConfirmationDialog` and await its completion via a promise-based wrapper.
+4. After the subject dialog resolves, call `submitPreparedAttestation`.
+
+If the subject dialog is dismissed without completing verification, the chain aborts and the user returns to the form. The session remains valid — the user can retry submission, and only the subject dialog will reappear (the auth step is already complete).
+
+**Important V1 rules:**
+
+- the auth dialog never collects subject information — it handles identity only
+- subject verification is a separate modal that chains after account creation
+- the user experiences a continuous flow: auth dialog → subject dialog → submission, without returning to the form between steps
+- if the user already has a verified subject (e.g., added from `/account`), step 2 is skipped entirely
+- the `SubjectConfirmationDialog` component is shared between this chained flow and the `/account` page — one implementation, two entry points
+
+### Backend account creation behavior
 
 After wallet connection:
 
-- Frontend calls `POST /api/private/session/wallet/challenge` then `POST /api/private/session/wallet/verify`
-- Backend creates account, wallet, default `did:pkh` subject, free-tier subscription, credential, and session
+- frontend calls `POST /api/private/session/wallet/challenge` then `POST /api/private/session/wallet/verify`
+- backend creates account, wallet, default `did:pkh` subject, free-tier subscription, credential, and session
 - `walletProviderId` is sent to the backend (detected from `useActiveWallet().id`)
-- Backend returns wallet context via `session/me`, including `walletProviderId` and wallet-scoped `executionMode`
-- If the user entered a display name in Step 2, frontend calls `PATCH /api/private/accounts/me` to update it
-- For social/in-app wallets: SIWE signature is auto-signed, user sees no pop-up
-- For self-custody wallets: user sees a wallet pop-up to sign the SIWE message
+- backend returns wallet context via `session/me`, including `walletProviderId` and wallet-scoped `executionMode`
+- if the user entered a display name or organization name, frontend calls `PATCH /api/private/accounts/me` to persist it
+- for social/in-app wallets: SIWE signature is auto-signed, user sees no pop-up
+- for self-custody wallets: user sees a wallet pop-up to sign the SIWE message
 
 Execution-mode rules on first sign-in:
 
@@ -132,17 +175,22 @@ Execution-mode rules on first sign-in:
 
 Every wallet creates or loads a backend account and session here, including wallets that will later use `native` execution mode.
 
-**Step 4: Subject ownership (conditional)**
+### Attestation submission after sign-in
 
-This step only appears if the selected attestation schema is subject-scoped. See the Subject ownership confirmation section below for the detailed sub-steps.
+Once the user has a valid backend session, the submission path depends on whether the schema requires a subject.
 
-If the user already entered a subject URL in Step 2, the frontend pre-populates this step.
+**Non-subject-scoped schemas:**
 
-If the attestation is not subject-scoped (e.g., a simple user review or security assessment), skip to Step 5.
+Submission proceeds directly. The user signs the EIP-712 attestation payload and the frontend routes to the appropriate execution path.
 
-**Step 5: Sign and submit attestation**
+**Subject-scoped schemas:**
 
-- Frontend presents the attestation form (or the user has already filled it out before the wizard launched)
+Before submission, `AttestationForm` checks whether the account has a verified non-bootstrap subject (i.e., a subject other than the default wallet `did:pkh`). If no verified subject exists, the `SubjectConfirmationDialog` opens. Submission proceeds only after the subject is verified and attached to the account.
+
+This check applies regardless of how the user arrived at submission — whether they just created an account (Flow B chaining) or are a returning user with an existing session.
+
+**Execution path routing (applies to all schemas after any subject gate is satisfied):**
+
 - User signs the EIP-712 attestation payload
   - Social/in-app wallets: auto-signed, no pop-up
   - Self-custody wallets: wallet pop-up showing the typed data
@@ -159,9 +207,10 @@ If a wallet is in `subscription` execution mode and has no usable entitlement, t
 
 If the user already has a backend session (cookie present and valid):
 
-- Skip Steps 1–3
-- If the attestation is subject-scoped and no verified subject exists, show Step 4
-- Otherwise go directly to Step 5, where the submission path is determined by the wallet's persisted `executionMode`
+- skip account creation
+- if the schema is subject-scoped and the account has no verified non-bootstrap subject, `AttestationForm` opens the `SubjectConfirmationDialog` before submission — the same dialog used in Flow B and on `/account`
+- if the account already has a verified subject, go directly to submission
+- the submission path is determined by the wallet's persisted `executionMode`
 
 ---
 
@@ -212,29 +261,34 @@ Subject-scoped attestations in V1:
 - **Linked identifier** — links an external identifier to a subject DID
 - **User review response** — a response filed on behalf of the subject being reviewed
 
-### Subject setup sub-steps (within Step 4 of the wizard)
+### Current V1 behavior
 
-**4a. Enter organization URL**
+The canonical place to add and verify a subject is now the `/account` page.
 
-- User enters the URL of their organization (e.g., `example.com`)
-- Frontend derives the `did:web` subject (e.g., `did:web:example.com`)
-- If the user already entered this in Step 2, pre-populate
+Account-page behavior:
 
-**4b. Add subject to account**
+- the page shows a `Subject Identifier` card between `Name` and `Wallet`
+- if the only subject on the account is the default wallet `did:pkh`, the UI hides it and treats the account as missing a meaningful subject
+- in that state the page prompts the user to add a URL they own
+- clicking the CTA opens a subject confirmation modal
 
-- Frontend calls `POST /api/private/subjects` with the normalized DID
-- Backend creates the subject record with canonical DID and `subjectDidHash`
+Subject confirmation modal behavior:
 
-**4c. Verify ownership**
+- the modal includes a DID method picker
+- it shows method-specific proof instructions
+- it calls `POST /api/verify/subject-ownership` as a public preflight verification step
+- it then calls `POST /api/private/subjects` to persist the subject on the account
 
-- Frontend shows instructions for DNS-TXT record or `.well-known/did.json` setup
-- For `did:web` subjects: DNS-TXT record challenge or `.well-known/did.json` challenge
-- For wallet-based subjects (`did:pkh`, `did:ethr`): signature challenge from the controlling address
-- Frontend provides a manual "Verify" retry button (same pattern as `app-registry-frontend`)
+Important backend rule:
 
-**4d. Confirmation**
+- the frontend verification step is UX preflight only
+- `POST /api/private/subjects` is the authoritative ownership check
+- other clients cannot bypass ownership checks by skipping the public verification endpoint
 
-- Once ownership is verified, the frontend shows confirmation and proceeds to Step 5
+Bootstrap-subject replacement rule:
+
+- if the account only has the default bootstrap wallet `did:pkh` subject and the user adds their first meaningful subject such as `did:web:example.com`, the backend replaces the bootstrap subject with the real one
+- the real subject becomes the default subject for the account
 
 ### Re-verification rules
 
@@ -322,50 +376,61 @@ A smart RPC router could inspect the JSON-RPC method and route `eth_sendRawTrans
 
 The `/account` page shows:
 
-- display name
-- wallet DID and provider type
-- subscription plan and status
-- primary subject (if set)
-- Thirdweb "Manage Wallet" button for wallet management and disconnect
+- wallet DID and wallet type in a single combined wallet card
+- wallet type language uses `Managed wallet` or `Self-custodial wallet` rather than provider metadata
+- a single wallet management control in that same card via the Thirdweb connect button
+- a `Subject Identifier` card between the `Name` and `Wallet` cards
+- if the only subject is the wallet DID itself, the page hides it and treats the account as missing a meaningful subject identifier
+- in that empty state, the page prompts the user to add a subject identifier with the CTA copy `Add your Subject Identifier.`
+- clicking that CTA opens a subject confirmation modal
+- the subject confirmation modal includes:
+  - a DID method picker
+  - method-specific ownership instructions
+  - a verification action
+  - a submit action
+- the name card is labeled `Name`
+- an explicit `Log Out` button is shown on the account page and disconnects the wallet while revoking the backend session
+- the subscription card shows:
+  - plan and status
+  - remaining reads
+  - remaining writes
+  - renewal date when available
+  - explanatory copy that reads and writes reset on renewal
+- if the account is on the free plan, the subscription card includes an upgrade button
 
 The page redirects to `/` when the session is lost (wallet disconnect, session expiry).
 
 The header shows the user's display name or truncated wallet address when signed in, linking to `/account`. When not signed in, the header shows "Sign In".
 
-Not yet implemented:
-- subscription usage metrics (writes used / limit, reads used / limit)
-- entitlement period dates
-- upgrade button / Stripe checkout flow
-
----
-
 ## Still to implement:
 - `src/lib/eas.ts` — attestation routing logic (backend relay path)
 - custom JSON-RPC transport for premium RPC
-- Stripe checkout integration
+- chained subject-verification flow in `AttestationForm` (Flow B): promise-based `SubjectConfirmationDialog` wrapper, subject-gate check in `onSubmitAfterAuth`, subject hint pre-population from form data
+- remove vestigial `createSubjectInfo` and `createSubjectVerify` wizard steps from `auth-entry-dialog.tsx`
 
 ---
 
 ## Acceptance criteria
 
-- [ ] All new attestation submissions require account creation (sign-up wizard modal)
-- [ ] Every wallet creates or loads a backend account and session before attestation submission
-- [ ] Wallet first sign-in establishes a persisted wallet-scoped `executionMode`
+- [x] All new attestation submissions require account creation or sign-in
+- [x] Every wallet creates or loads a backend account and session before attestation submission
+- [x] Wallet first sign-in establishes a persisted wallet-scoped `executionMode`
 - [ ] Managed wallets (`inApp`) can submit any attestation through the backend relay without holding OMA
 - [ ] Every relay submission decrements one sponsored write credit regardless of schema
 - [ ] Free-tier users can submit any schema until their write credits are exhausted
 - [ ] Wallets in `native` execution mode keep the current frontend behavior: subsidized delegated-attest for the two subsidized schemas and direct transaction for all other schemas
 - [ ] Wallets in `subscription` execution mode always use the backend relay path
-- [ ] Managed wallets (`inApp`) are constrained to `subscription` execution mode
+- [x] Managed wallets (`inApp`) are constrained to `subscription` execution mode
 - [ ] Wallets in `subscription` execution mode with exhausted entitlement are routed to upgrade, not per-submission fallback
-- [ ] Subject-scoped attestations prompt for subject ownership verification with manual retry
-- [ ] Subject ownership is re-checked by the backend on each subject-scoped submission (no caching)
-- [ ] Account page shows plan, usage, and upgrade option
-- [ ] Backend session cookies are included on all backend requests
+- [x] Subject ownership verification exists with manual retry and backend enforcement
+- [x] Subject ownership is re-checked authoritatively by the backend when a subject is attached to the account
+- [ ] Subject-scoped attestation submission gates on verified subject — opens SubjectConfirmationDialog inline if needed (chained flow)
+- [x] Account page shows plan, usage, and upgrade option
+- [x] Backend session cookies are included on all backend requests
 - [ ] Premium RPC credentials are never exposed to the browser
 - [ ] Premium RPC failures fall back to public RPC transparently
-- [ ] Landing page attestation queries continue to use the public RPC endpoint
-- [ ] The current frontend-hosted delegated-attest path remains functional for self-custody submissions of the two subsidized schemas
+- [x] Landing page attestation queries continue to use the public RPC endpoint
+- [x] The current frontend-hosted delegated-attest path remains functional for self-custody submissions of the two subsidized schemas
 
 ---
 
