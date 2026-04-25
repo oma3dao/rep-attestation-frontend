@@ -1,11 +1,60 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
 import { flushSync } from 'react-dom';
-import { vi, expect, describe, it, beforeEach } from 'vitest';
+import { vi, expect, describe, it, beforeEach, afterEach } from 'vitest';
+
+vi.mock('@/components/ui/button', async () => {
+  const React = await import('react');
+  const Button = React.forwardRef<HTMLButtonElement, any>(
+    ({ children, isConnectButton, connectButtonProps, connectMode, asChild, ...props }, ref) => {
+      if (isConnectButton) {
+        return (
+          <button ref={ref} type="button" {...props}>
+            {connectButtonProps?.label ?? 'Connect Wallet'}
+          </button>
+        );
+      }
+
+      if (asChild && React.isValidElement(children)) {
+        return React.cloneElement(children, props);
+      }
+
+      return (
+        <button ref={ref} {...props}>
+          {children}
+        </button>
+      );
+    }
+  );
+  Button.displayName = 'Button';
+  return { Button };
+});
+
 import { AttestationForm, validateField } from '@/components/AttestationForm';
 import type { AttestationSchema, FieldType } from '@/config/schemas';
 import * as schemasModule from '@/config/schemas';
 import { useWallet } from '@/lib/blockchain';
+
+const backendSessionMock = vi.hoisted(() => ({
+  session: null as any,
+  openAuthDialog: vi.fn(),
+}));
+
+function createMockBackendSession() {
+  return {
+    account: { id: 'account-1', displayName: 'Test Account' },
+    wallet: {
+      did: 'did:pkh:eip155:1:0x1234567890abcdef1234567890abcdef12345678',
+      walletProviderId: 'io.metamask',
+      executionMode: 'native',
+      isManagedWallet: false,
+    },
+    credential: null,
+    subscription: { plan: 'free', status: 'active' },
+    client: null,
+    primarySubject: null,
+  };
+}
 
 // Mock dependencies
 const mockSubmitAttestation = vi.fn(async () => ({
@@ -22,6 +71,12 @@ vi.mock('@/lib/service', () => ({
     isNetworkSupported: true,
     lastError: null,
     clearError: vi.fn(),
+  }),
+}));
+vi.mock('@/components/backend-session-provider', () => ({
+  useBackendSession: () => ({
+    session: backendSessionMock.session,
+    openAuthDialog: backendSessionMock.openAuthDialog,
   }),
 }));
 vi.mock('@/components/ui/toast', () => ({
@@ -62,9 +117,19 @@ const schema: AttestationSchema = {
   ],
 };
 
+beforeEach(() => {
+  backendSessionMock.session = createMockBackendSession();
+  backendSessionMock.openAuthDialog.mockClear();
+});
+
+afterEach(() => {
+  cleanup();
+});
+
 describe('AttestationForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    backendSessionMock.session = createMockBackendSession();
     // Mock window.alert
     window.alert = vi.fn();
     mockSubmitAttestation.mockResolvedValue({
@@ -233,6 +298,23 @@ describe('AttestationForm', () => {
       expect(screen.queryByText(/Recipient is required/i)).not.toBeInTheDocument();
     });
   });
+
+  it('opens the auth chooser for unauthenticated submissions', async () => {
+    backendSessionMock.session = null;
+
+    render(<AttestationForm schema={testSchema} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /create account to submit/i }));
+
+    await waitFor(() => {
+      expect(backendSessionMock.openAuthDialog).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'chooser',
+        reason: 'submission',
+        schemaId: 'test-schema',
+      }));
+    });
+    expect(mockSubmitAttestation).not.toHaveBeenCalled();
+  });
 });
 
 describe('AttestationForm clears service error on input change', () => {
@@ -272,7 +354,7 @@ describe('AttestationForm button states and wallet connection', () => {
     window.alert = vi.fn();
   });
 
-  it('shows "Connect Wallet to Submit" when not connected', async () => {
+  it('shows reconnect action when backend session exists but wallet is not connected', async () => {
     vi.doMock('@/lib/service', () => ({
       useAttestation: () => ({
         submitAttestation: vi.fn(),
@@ -289,8 +371,8 @@ describe('AttestationForm button states and wallet connection', () => {
     const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
 
     render(<AttestationFormMocked schema={schema} />);
-    expect(screen.getByText(/Connect Wallet to Submit/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Connect Wallet/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Reconnect Wallet/i })).toBeInTheDocument();
+    expect(screen.getByText(/You are signed in to OMATrust/i)).toBeInTheDocument();
   });
 
   it('shows "Switch to Supported Network" when network not supported', async () => {
@@ -309,11 +391,19 @@ describe('AttestationForm button states and wallet connection', () => {
     const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
 
     render(<AttestationFormMocked schema={schema} />);
-    expect(screen.getByText(/Switch to Supported Network/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Switch to Supported Network/i })).toBeDisabled();
   });
 
   it('shows "Submitting..." when form is being submitted', async () => {
+    backendSessionMock.session = {
+      ...createMockBackendSession(),
+      wallet: {
+        ...createMockBackendSession().wallet,
+        executionMode: 'subscription',
+        isManagedWallet: false,
+      },
+    };
+
     vi.doMock('@/lib/service', () => ({
       useAttestation: () => ({
         submitAttestation: vi.fn(),
@@ -330,6 +420,7 @@ describe('AttestationForm button states and wallet connection', () => {
 
     render(<AttestationFormMocked schema={schema} />);
     expect(screen.getByText(/Submitting.../i)).toBeInTheDocument();
+    expect(screen.getByText(/Check your wallet to sign the attestation request/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Submitting/i })).toBeDisabled();
   });
 
@@ -860,66 +951,6 @@ describe('AttestationForm witness-enabled schema handling', () => {
     const callArgs4 = calls4[0]![0];
     // Empty proofs should be set to empty array, not wrapped
     expect(callArgs4.data.proofs).toEqual([]);
-  });
-});
-
-describe('AttestationForm toast dismissal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    window.alert = vi.fn();
-  });
-
-  it('dismisses toast when isSubmitting changes from true to false', async () => {
-    const mockDismissToast = vi.fn();
-    const mockShowToast = vi.fn().mockReturnValue('toast-123');
-    let isSubmittingValue = false;
-
-    vi.doMock('@/lib/service', () => ({
-      useAttestation: () => ({
-        submitAttestation: vi.fn(),
-        get isSubmitting() { return isSubmittingValue; },
-        isConnected: true,
-        isNetworkSupported: true,
-        lastError: null,
-        clearError: vi.fn(),
-      }),
-    }));
-
-    vi.doMock('@/components/ui/toast', () => ({
-      useToast: () => ({
-        showToast: mockShowToast,
-        ToastContainer: () => <div data-testid="toast-container" />,
-        dismissToast: mockDismissToast,
-      }),
-    }));
-
-    vi.resetModules();
-    const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
-
-    // First render with isSubmitting = false
-    const { rerender } = render(<AttestationFormMocked schema={testSchema} />);
-    
-    // Now simulate isSubmitting becoming true (user started submission)
-    isSubmittingValue = true;
-    rerender(<AttestationFormMocked schema={testSchema} />);
-    
-    // showToast should have been called
-    await waitFor(() => {
-      expect(mockShowToast).toHaveBeenCalledWith(
-        'Please check your wallet and approve the transaction.',
-        'info',
-        60000
-      );
-    });
-    
-    // Now simulate isSubmitting becoming false (submission completed)
-    isSubmittingValue = false;
-    rerender(<AttestationFormMocked schema={testSchema} />);
-    
-    // dismissToast should be called with the toast ID
-    await waitFor(() => {
-      expect(mockDismissToast).toHaveBeenCalledWith('toast-123');
-    });
   });
 });
 

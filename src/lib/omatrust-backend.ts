@@ -95,6 +95,21 @@ export interface BackendSubscriptionCurrentResponse {
   }
 }
 
+export interface RelayEasNonceResponse {
+  nonce: string
+  chainId: number
+  chain: string
+  easAddress: string
+}
+
+export interface RelayEasDelegatedAttestResponse {
+  success: boolean
+  txHash?: string | null
+  uid?: string | null
+  blockNumber?: number
+  chain?: string
+}
+
 export type SubjectVerificationMethod = "dns" | "did-document" | "wallet" | "contract" | "minting-wallet" | "transfer" | null
 
 export interface SubjectOwnershipVerificationResponse {
@@ -182,6 +197,38 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+function stringifyBackendBody(body: unknown) {
+  return JSON.stringify(body, (_key, value) =>
+    typeof value === "bigint" ? value.toString() : value
+  )
+}
+
+export function getBackendErrorMessage(error: unknown) {
+  if (!(error instanceof BackendApiError)) {
+    return error instanceof Error ? error.message : "Something went wrong. Please try again."
+  }
+
+  switch (error.code) {
+    case "SPONSORED_WRITE_LIMIT_EXCEEDED":
+      return "You have used all sponsored writes for your current plan. Manage your account to continue publishing."
+    case "SUBSCRIPTION_INACTIVE":
+      return "Your subscription is not active. Manage your account to continue publishing."
+    case "SCHEMA_NOT_ELIGIBLE":
+      return "This schema is not available for sponsored publishing on your current plan."
+    case "ATTESTER_MISMATCH":
+      return "This wallet does not match the signed-in account. Sign in with the wallet you want to publish from."
+    default:
+      return error.details || error.message
+  }
+}
+
+export function shouldRouteBackendErrorToAccount(error: unknown) {
+  return (
+    error instanceof BackendApiError &&
+    (error.code === "SPONSORED_WRITE_LIMIT_EXCEEDED" || error.code === "SUBSCRIPTION_INACTIVE")
+  )
 }
 
 export function buildWalletDid(address: string, chainId: number) {
@@ -293,6 +340,23 @@ export async function verifySubjectOwnership(params: {
   return backendFetch<SubjectOwnershipVerificationResponse>("/api/verify/subject-ownership", {
     method: "POST",
     body: JSON.stringify(params),
+  })
+}
+
+export async function getRelayEasNonce(attester: string) {
+  return backendFetch<RelayEasNonceResponse>(
+    `/api/private/relay/eas/nonce?attester=${encodeURIComponent(attester)}`
+  )
+}
+
+export async function postRelayEasDelegatedAttest(params: {
+  attester: string
+  prepared: unknown
+  signature: string
+}) {
+  return backendFetch<RelayEasDelegatedAttestResponse>("/api/private/relay/eas/delegated-attest", {
+    method: "POST",
+    body: stringifyBackendBody(params),
   })
 }
 

@@ -185,7 +185,6 @@ export function Header() {
                 schemaTitle: authDialog.schemaTitle,
                 subjectScoped: authDialog.subjectScoped,
                 subjectHint: authDialog.subjectHint,
-                onSubmitAfterAuth: authDialog.onSubmitAfterAuth,
               })
               return
             }

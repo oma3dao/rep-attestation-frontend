@@ -1,7 +1,11 @@
 "use client"
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
-import { useActiveAccount, useActiveWallet, useDisconnect } from "thirdweb/react"
+import { usePathname } from "next/navigation"
+import { useActiveAccount, useActiveWallet, useAutoConnect, useDisconnect } from "thirdweb/react"
+import { client } from "@/app/client"
+import { allWallets } from "@/config/wallets"
+import { clearWalletBrowserState } from "@/lib/wallet-cleanup"
 import type { BackendSessionMeResponse } from "@/lib/omatrust-backend"
 import { BackendApiError, getSessionMe, isBackendNetworkError, logoutSession } from "@/lib/omatrust-backend"
 
@@ -15,7 +19,6 @@ export interface AuthDialogRequest {
   schemaTitle?: string
   subjectScoped?: boolean
   subjectHint?: string
-  onSubmitAfterAuth?: (() => Promise<void>) | null
 }
 
 interface BackendSessionContextValue {
@@ -37,7 +40,6 @@ const defaultAuthDialog: AuthDialogRequest = {
   schemaTitle: undefined,
   subjectScoped: false,
   subjectHint: "",
-  onSubmitAfterAuth: null,
 }
 
 const BackendSessionContext = createContext<BackendSessionContextValue | null>(null)
@@ -47,12 +49,21 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
   const [isSessionLoading, setIsSessionLoading] = useState(true)
   const [authDialog, setAuthDialog] = useState<AuthDialogRequest>(defaultAuthDialog)
   const activeAccount = useActiveAccount()
-  const activeAddress = activeAccount?.address ?? null
   const activeWallet = useActiveWallet()
   const { disconnect } = useDisconnect()
-  const hadActiveWalletRef = React.useRef(false)
   const sessionRef = React.useRef<BackendSessionMeResponse | null>(null)
   const suppressNextDisconnectLogoutRef = React.useRef(false)
+
+  // ---------------------------------------------------------------------------
+  // Provider-level autoConnect — single attempt on app mount.
+  // Replaces per-ConnectButton autoConnect props.
+  // ---------------------------------------------------------------------------
+  const autoConnect = useAutoConnect({
+    client,
+    wallets: allWallets,
+    timeout: 15000,
+  })
+  const isAutoConnectDone = !autoConnect.isLoading
 
   useEffect(() => {
     sessionRef.current = session
@@ -96,48 +107,53 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
       if (activeWallet) {
         await disconnect(activeWallet)
       }
+
+      // Best-effort cleanup of wallet browser state.
+      // Some deletes may be blocked by open connections (e.g., WalletConnect Core),
+      // but ensureWalletConnected will clean up before the next sign-in.
+      clearWalletBrowserState()
     } finally {
-      hadActiveWalletRef.current = false
+      suppressNextDisconnectLogoutRef.current = false
       setIsSessionLoading(false)
     }
   }, [activeWallet, disconnect])
 
+  // ---------------------------------------------------------------------------
+  // Session check — runs exactly once after autoConnect finishes.
+  //
+  // This is the only place that calls session/me on startup. All other
+  // session state changes are handled imperatively (performChallengeSignVerify,
+  // logout, refreshSession). Wallet state changes do NOT trigger this effect.
+  //
+  // Sequencing:
+  //   1. useAutoConnect attempts wallet restoration
+  //   2. Wait for autoConnect to resolve (isAutoConnectDone === true)
+  //   3. Call GET /api/private/session/me once
+  //   4. If session exists but wallet is not connected, clear the stale session
+  // ---------------------------------------------------------------------------
+  const initialSessionCheckDone = React.useRef(false)
+
   useEffect(() => {
-    // Don't check session while the auth dialog is open — the sign-in flow
-    // is in progress and will hydrate the session itself when complete.
-    if (authDialog.open) {
-      return
-    }
+    if (!isAutoConnectDone) return
+    if (initialSessionCheckDone.current) return
 
+    initialSessionCheckDone.current = true
     let cancelled = false
-    const hadActiveWallet = hadActiveWalletRef.current
-    const disconnectedWalletWithSession =
-      hadActiveWallet &&
-      !activeAddress &&
-      !!sessionRef.current &&
-      !suppressNextDisconnectLogoutRef.current
 
-    hadActiveWalletRef.current = !!activeAddress
-
-    if (hadActiveWallet && !activeAddress && suppressNextDisconnectLogoutRef.current) {
-      suppressNextDisconnectLogoutRef.current = false
-    }
-
-    async function syncSession() {
+    async function checkSession() {
       try {
-        if (disconnectedWalletWithSession) {
-          await logoutSession()
-          if (!cancelled) {
-            setSession(null)
-          }
+        // If autoConnect didn't restore a wallet, there's no point checking
+        // for a session. Even if a cookie exists, the session is stale
+        // (can't sign anything without a wallet) and we'd clear it anyway.
+        if (!activeAccount) {
+          setSession(null)
           return
         }
 
         const response = await refreshSession()
-        if (cancelled) {
-          return
-        }
-        setSession(response)
+        if (cancelled) return
+
+        // Session restored and wallet connected — happy path
       } catch (error) {
         if (!cancelled && !isBackendNetworkError(error)) {
           console.error("[backend-session] Failed to load session", error)
@@ -152,23 +168,20 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
       }
     }
 
-    setIsSessionLoading(true)
-    void syncSession()
+    void checkSession()
 
-    return () => {
-      cancelled = true
-    }
-  }, [activeAddress, authDialog.open, refreshSession])
+    return () => { cancelled = true }
+  }, [isAutoConnectDone]) // eslint-disable-line react-hooks/exhaustive-deps
+  // activeAccount and refreshSession are intentionally excluded — this effect
+  // must run exactly once after autoConnect finishes, not on every wallet change.
 
-  // Auto-disconnect the Thirdweb wallet if there's no valid backend session.
-  // This keeps wallet connection state in sync with the backend session.
-  // Skip disconnecting while the auth dialog is open (user is in the sign-up flow).
-  useEffect(() => {
-    if (activeWallet && !isSessionLoading && !session && !authDialog.open) {
-      console.debug("[backend-session] No session, disconnecting wallet")
-      disconnect(activeWallet)
-    }
-  }, [activeWallet, isSessionLoading, session, authDialog.open, disconnect])
+  // ---------------------------------------------------------------------------
+  // Auto-disconnect effect REMOVED.
+  //
+  // A connected wallet with no session is harmless — the submission gate
+  // will route through the auth dialog when the user tries to submit.
+  // A session without a wallet is handled above (stale session clearing).
+  // ---------------------------------------------------------------------------
 
   const openAuthDialog = useCallback((request?: Partial<Omit<AuthDialogRequest, "open">>) => {
     setAuthDialog({
@@ -181,6 +194,16 @@ export function BackendSessionProvider({ children }: { children: React.ReactNode
   const closeAuthDialog = useCallback(() => {
     setAuthDialog(defaultAuthDialog)
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Close the auth dialog on page navigation.
+  // The provider persists across Next.js client-side navigations (it's in the
+  // layout), so the dialog would stay open unless we explicitly close it.
+  // ---------------------------------------------------------------------------
+  const pathname = usePathname()
+  useEffect(() => {
+    setAuthDialog((current) => (current.open ? defaultAuthDialog : current))
+  }, [pathname])
 
   const value = useMemo<BackendSessionContextValue>(() => ({
     session,

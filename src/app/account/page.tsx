@@ -10,6 +10,7 @@ import {
   getAccountMe,
   getCurrentSubscription,
   listSubjects,
+  patchAccountMe,
   type BackendAccountMeResponse,
   type BackendSubject,
   type BackendSubscriptionCurrentResponse,
@@ -47,6 +48,9 @@ export default function AccountPage() {
   const [isSubjectDialogOpen, setIsSubjectDialogOpen] = React.useState(false)
   const [isUpgradeLoading, setIsUpgradeLoading] = React.useState(false)
   const [isLogoutLoading, setIsLogoutLoading] = React.useState(false)
+  const [isEditingName, setIsEditingName] = React.useState(false)
+  const [editNameValue, setEditNameValue] = React.useState("")
+  const [isSavingName, setIsSavingName] = React.useState(false)
 
   React.useEffect(() => {
     if (!isSessionLoading && !session) {
@@ -119,6 +123,39 @@ export default function AccountPage() {
   const renewalDateLabel = formatDate(subscription?.entitlementPeriodEnd ?? null)
   const isFreePlan = (subscription?.plan ?? session?.subscription?.plan ?? "free").toLowerCase() === "free"
 
+  function startEditingName() {
+    setEditNameValue(account?.account.displayName || session?.account.displayName || "")
+    setIsEditingName(true)
+    setPageError(null)
+  }
+
+  function cancelEditingName() {
+    setIsEditingName(false)
+    setEditNameValue("")
+  }
+
+  async function handleSaveName() {
+    const trimmed = editNameValue.trim()
+    setIsSavingName(true)
+    setPageError(null)
+
+    try {
+      const updated = await patchAccountMe({ displayName: trimmed || null })
+      setAccount((prev) =>
+        prev
+          ? { ...prev, account: { ...prev.account, displayName: updated.account.displayName } }
+          : prev
+      )
+      setIsEditingName(false)
+      setEditNameValue("")
+      await refreshSession().catch(() => null)
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : "Failed to update display name.")
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
   async function handleUpgrade() {
     setIsUpgradeLoading(true)
     setPageError(null)
@@ -154,7 +191,10 @@ export default function AccountPage() {
 
     try {
       await logout()
-      router.replace("/")
+      // Full page navigation (not Next.js client-side) to ensure all browser
+      // state is released — WalletConnect Core singleton, IndexedDB connections,
+      // in-memory wallet state. This guarantees a clean slate.
+      window.location.href = "/"
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Failed to log out.")
       setIsLogoutLoading(false)
@@ -182,15 +222,65 @@ export default function AccountPage() {
           ) : null}
 
           <div className="rounded-xl border border-border/80 bg-card p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">Name</h2>
-            <p className="mt-1 text-foreground">
-              {account?.account.displayName || session.account.displayName || "—"}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-medium text-muted-foreground">Name</h2>
+                {isEditingName ? (
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void handleSaveName()
+                        if (e.key === "Escape") cancelEditingName()
+                      }}
+                      disabled={isSavingName}
+                      className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm outline-none transition focus:border-primary"
+                      placeholder="Your name or organization"
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-1 text-foreground">
+                    {account?.account.displayName || session.account.displayName || "—"}
+                  </p>
+                )}
+              </div>
+              <div className="shrink-0 pt-5">
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={cancelEditingName}
+                      disabled={isSavingName}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void handleSaveName()}
+                      disabled={isSavingName}
+                    >
+                      {isSavingName ? "Saving…" : "Save"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button type="button" size="sm" variant="ghost" onClick={startEditingName}>
+                    Edit
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border border-border/80 bg-card p-5">
             <h2 className="text-sm font-medium text-muted-foreground">Subject Identifier</h2>
-            {visibleSubject ? (
+            {isPageLoading ? (
+              <div className="mt-3 text-sm text-muted-foreground">Loading…</div>
+            ) : visibleSubject ? (
               <div className="mt-3 space-y-2">
                 <p className="break-all font-mono text-xs tracking-wide text-foreground">
                   {visibleSubject.canonicalDid}
@@ -236,6 +326,7 @@ export default function AccountPage() {
                     <Button
                       isConnectButton
                       className="w-full"
+                      connectHideDisconnect
                       connectButtonProps={{ label: "Manage Wallet" }}
                     />
                   </div>

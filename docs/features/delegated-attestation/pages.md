@@ -62,9 +62,11 @@ Instead it should open a lightweight chooser:
 * **Sign in to an existing account**
 * **Create a new account**
 
-If the user chooses **Sign in to an existing account**, then show login/auth options.
+If the user wants **Sign in to an existing account**, they click on a a plain button that opens the Thirdweb wallet picker via `useConnectModal` (not a `ConnectButton`). After the wallet connects, the SIWE challenge/verify flow runs automatically.
 
-If the user chooses **Create a new account**, Take the user through the new modal account flow mentioned in plan.md and spec.md.
+If the user wants **Create a new account**, the auth dialog presents the account creation form with "Create Account" and "Pay with OMA instead" buttons. Clicking either opens the Thirdweb wallet picker via `useConnectModal` to connect a wallet, then the SIWE flow runs to create the account. This is the new account flow described in plan.md and spec.md.
+
+No `ConnectButton` is rendered inside the auth dialog. The Thirdweb wallet picker opens as its own overlay.
 
 ---
 
@@ -122,7 +124,7 @@ Do **not** include “Learn more” or “Use cases” links inside the cards.
 
 This should lead the /publish page.
 
-When an unauthenticated user selects a schema tile on /publish and attempts to submit, the sign-up wizard modal launches as described in plan.md and spec.md in this folder.
+When an unauthenticated user selects a schema tile on /publish and fills out the form, the submit button is always enabled and always labeled "Submit Attestation." When clicked, the submission gate checks wallet and session state and opens the auth dialog if needed, as described in spec.md.
 
 ---
 
@@ -280,7 +282,7 @@ That is better than a large generic hero that says little and delays action.
 * clicks Sign In
 * chooses existing-account path
 * authenticates
-* reaches dashboard
+* navigates to dashboard automatically
 
 ## Curious user
 
@@ -297,7 +299,7 @@ Remove from the primary top area:
 * giant attestation-type list
 * raw schema-first organization
 * current hero copy if it is only decorative
-* immediate wallet modal on Sign In
+* immediate wallet modal on Sign In (already addressed — Sign In opens the auth chooser, not the wallet picker)
 
 ---
 
@@ -322,10 +324,10 @@ The wording there can still map to underlying schemas, but should not begin with
 
 # Account Page /account
 
-The account page is described in spec.md. It shows subscription status, usage, wallet info, and upgrade options.
+The account page is described in spec.md. It shows the user's display name (with inline edit), subscription status, usage, wallet info, subject identifiers, and upgrade options.
 
-It should appear as a navigation link (e.g., in the header or as a user menu item) on both the `/publish` and `/dashboard` pages once the user has created an account. It is not visible to unauthenticated users.
+The `/account` page uses `ConnectButton` for the "Manage Wallet" control — this is the only place `ConnectButton` is rendered outside of the Thirdweb wallet picker overlay. It sets `autoConnect={false}` (autoConnect is handled at the provider level) and `connectHideDisconnect` (the Thirdweb disconnect option is hidden so users go through the explicit Log Out button, which properly cleans up both the backend session and wallet state).
 
-This page will be implemented later. For now, note its placement in the navigation architecture.
+The page appears as a navigation link in the header once the user has created an account. It is not visible to unauthenticated users.
 
 

@@ -3,13 +3,9 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { client } from "@/app/client"
 import { ConnectButton as ThirdwebConnectButton } from "thirdweb/react"
-import { 
-  createWallet,
-  inAppWallet,
-  walletConnect
-} from "thirdweb/wallets"
 import { defineChain } from "thirdweb/chains"
 import { DEFAULT_CHAIN } from "@/config/chains"
+import { managedWallet, nativeWallets, allWallets } from "@/config/wallets"
 
 import { cn } from "@/lib/utils"
 
@@ -58,6 +54,7 @@ export interface ButtonProps
   isConnectButton?: boolean
   connectMode?: "all" | "managed" | "native"
   connectOnConnect?: (wallet: unknown) => void
+  connectHideDisconnect?: boolean
   connectButtonProps?: {
     label?: string
   }
@@ -69,34 +66,16 @@ type ThirdwebConnectButtonProps = React.ComponentProps<typeof ThirdwebConnectBut
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, isConnectButton = false, connectMode = "all", connectOnConnect, connectButtonProps, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, isConnectButton = false, connectMode = "all", connectOnConnect, connectHideDisconnect = false, connectButtonProps, ...props }, ref) => {
     if (isConnectButton) {
       const { client: _, ...restProps } = props as ThirdwebConnectButtonProps
       
-      const managedWallet = inAppWallet({
-        auth: {
-          options: [
-            "email",
-            "google", 
-            "apple",
-            "facebook",
-            "passkey"
-          ]
-        }
-      })
-
-      const nativeWallets = [
-        createWallet("io.metamask"),
-        createWallet("com.coinbase.wallet"),
-        walletConnect()
-      ]
-
       const wallets =
         connectMode === "managed"
           ? [managedWallet]
           : connectMode === "native"
             ? nativeWallets
-            : [managedWallet, ...nativeWallets]
+            : allWallets
       
       return (
         <ThirdwebConnectButton
@@ -107,12 +86,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             logoUrl: "/oma3_logo.svg"
           }}
           className={className}
-          autoConnect={{ timeout: 15000 }}
+          autoConnect={false}
           wallets={wallets}
           chains={[activeThirdwebChain]}
           connectModal={{
             size: "wide",
             showThirdwebBranding: false,
+          }}
+          detailsModal={{
+            hideDisconnect: connectHideDisconnect,
           }}
           connectButton={{
             label: connectButtonProps?.label ?? "Connect Wallet",

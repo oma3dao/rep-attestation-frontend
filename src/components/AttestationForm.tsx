@@ -1,7 +1,9 @@
 'use client'
 
 import React from 'react'
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useActiveAccount } from 'thirdweb/react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { EvidencePointerProofInput } from './EvidencePointerProofInput'
@@ -13,9 +15,13 @@ import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
 import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
 import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
-import { useToast } from '@/components/ui/toast'
 import { useBackendSession } from '@/components/backend-session-provider'
-import { deriveSubjectUrlHint } from '@/lib/omatrust-backend'
+import {
+  deriveSubjectUrlHint,
+  getBackendErrorMessage,
+  logoutSession,
+  shouldRouteBackendErrorToAccount,
+} from '@/lib/omatrust-backend'
 import logger from '@/lib/logger';
 
 interface AttestationFormProps {
@@ -29,9 +35,6 @@ const SUBJECT_SCOPED_SCHEMA_IDS = new Set(['key-binding', 'linked-identifier', '
 
 export function validateField(field: any, value: any): string | undefined {
   if (field.required) {
-    // Fields with autoDefault (e.g., issuedAt with current-timestamp) will be
-    // populated automatically on submission if the user hasn't touched them.
-    // Skip the required check when the value is untouched (undefined/null/'').
     const isEmpty = !value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)
     if (isEmpty && !field.autoDefault) {
       return `${field.label} is required`;
@@ -40,7 +43,6 @@ export function validateField(field: any, value: any): string | undefined {
   if (value && typeof value === 'string') {
     const trimmedValue = value.trim();
     
-    // String length validation
     if (field.minLength !== undefined && trimmedValue.length < field.minLength) {
       return `${field.label} must be at least ${field.minLength} characters`;
     }
@@ -48,12 +50,10 @@ export function validateField(field: any, value: any): string | undefined {
       return `${field.label} must be at most ${field.maxLength} characters`;
     }
     
-    // Pattern validation (regex)
     if (field.pattern && trimmedValue) {
       try {
         const regex = new RegExp(field.pattern);
         if (!regex.test(trimmedValue)) {
-          // Provide helpful error message based on subtype
           if (field.subtype === 'semver') {
             return `${field.label} must be a valid version (e.g., 1, 1.2, or 1.2.3)`;
           }
@@ -89,61 +89,43 @@ export function validateField(field: any, value: any): string | undefined {
 }
 
 export function AttestationForm({ schema, validateForm }: AttestationFormProps) {
+  const router = useRouter()
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
-  const { session, openAuthDialog } = useBackendSession()
+  const [showAccountAction, setShowAccountAction] = useState(false)
+  const { session, setSession, openAuthDialog } = useBackendSession()
+  const activeAccount = useActiveAccount()
 
-  // Get attestation service - this handles all service selection and wallet management
   const {
     submitAttestation,
     isSubmitting,
-    isConnected,
-    isNetworkSupported,
     lastError,
     clearError
   } = useAttestation()
 
-  // Toast for wallet approval
-  const { showToast, ToastContainer, dismissToast } = useToast()
-  const prevIsSubmitting = useRef(false)
-  const approvalToastId = useRef<string | null>(null)
-  useEffect(() => {
-    if (isSubmitting && !prevIsSubmitting.current) {
-      approvalToastId.current = showToast('Please check your wallet and approve the transaction.', 'info', 60000)
-    }
-    prevIsSubmitting.current = isSubmitting
-  }, [isSubmitting, showToast])
+  const submissionStatusMessage =
+    session?.wallet?.executionMode === 'subscription'
+      ? session.wallet.isManagedWallet
+        ? 'Submitting with your OMATrust subscription.'
+        : 'Check your wallet to sign the attestation request, then return here. OMATrust will sponsor the on-chain write.'
+      : 'Please check your wallet and approve the transaction.'
 
-  // Dismiss toast on success or error
-  useEffect(() => {
-    if (!isSubmitting && approvalToastId.current) {
-      dismissToast(approvalToastId.current)
-      approvalToastId.current = null
-    }
-  }, [isSubmitting, dismissToast])
-
-  // Group fields by required status
   const requiredFields = schema.fields.filter(field => field.required)
   const optionalFields = schema.fields.filter(field => !field.required)
 
   const handleFieldChange = (fieldName: string, value: string | string[]) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldName]: value
-    }))
+    setFormData(prev => ({ ...prev, [fieldName]: value }))
 
-    // Clear error when user starts typing
     if (errors[fieldName]) {
-      setErrors(prev => ({
-        ...prev,
-        [fieldName]: ''
-      }))
+      setErrors(prev => ({ ...prev, [fieldName]: '' }))
     }
-
-    // Clear service error when user makes changes
     if (lastError) {
       clearError()
+    }
+    if (generalError) {
+      setGeneralError(null)
+      setShowAccountAction(false)
     }
   }
 
@@ -151,22 +133,15 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     if (validateForm) {
       const newErrors = validateForm(formData)
       setErrors(newErrors)
-      // Debug log
-      logger.log('validateForm newErrors:', newErrors)
       return Object.keys(newErrors).length === 0
     }
     const newErrors: FormErrors = {}
-
     schema.fields.forEach(field => {
-      const value = formData[field.name]
-
-      const error = validateField(field, value)
+      const error = validateField(field, formData[field.name])
       if (error) {
         newErrors[field.name] = error
       }
     })
-    // Debug log
-    logger.log('validateForm newErrors:', newErrors)
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -213,15 +188,12 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
 
       for (const name of arrayFieldNames) {
         let arr = completeData[name]
-
         if (typeof arr === 'string') {
           try { arr = JSON.parse(arr) } catch { arr = arr ? [arr] : [] }
         }
-
         if (!Array.isArray(arr)) {
           arr = arr ? [arr] : []
         }
-
         completeData[name] = arr.map((item: unknown) =>
           typeof item === 'string' ? item : JSON.stringify(item)
         )
@@ -257,17 +229,13 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     if (!recipient.startsWith('did:')) {
       if (recipient.startsWith('0x') && recipient.length === 42) {
         throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
-      }
-      else if (recipient.startsWith('eip155:')) {
+      } else if (recipient.startsWith('eip155:')) {
         throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
-      }
-      else if (recipient.includes('@') || recipient.includes('.')) {
+      } else if (recipient.includes('@') || recipient.includes('.')) {
         throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
-      }
-      else if (recipient.trim().length > 0) {
+      } else if (recipient.trim().length > 0) {
         throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
-      }
-      else {
+      } else {
         throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
       }
     }
@@ -276,11 +244,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
     }
 
-    logger.log('Submitting attestation:', {
-      schema: schema.id,
-      recipient,
-      data: completeData
-    })
+    logger.log('Submitting attestation:', { schema: schema.id, recipient, data: completeData })
 
     const result = await submitAttestation({
       schemaId: schema.id,
@@ -289,60 +253,74 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     })
 
     logger.log('Attestation created successfully:', result)
-    alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
     setFormData({})
+    router.push('/dashboard')
   }
 
+  /**
+   * Submission gate — implements the 2×2 wallet/session matrix:
+   *
+   * | Session | Wallet    | Action                                    |
+   * |---------|-----------|-------------------------------------------|
+   * | Yes     | Connected | Submit directly                            |
+   * | Yes     | No wallet | Clear stale session, open auth dialog      |
+   * | No      | Connected | Open auth dialog (wallet available for SIWE)|
+   * | No      | No wallet | Open auth dialog                           |
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setGeneralError(null)
-    if (!validateFormInternal()) {
-      return
-    }
+    setShowAccountAction(false)
+    if (!validateFormInternal()) return
 
     try {
       const completeData = buildCompleteData()
 
-      if (!session) {
-        const subjectValue =
-          typeof completeData.subject === 'string'
-            ? completeData.subject
-            : typeof completeData.subjectId === 'string'
-              ? completeData.subjectId
-              : typeof completeData.recipient === 'string'
-                ? completeData.recipient
-                : ''
+      const hasSession = !!session
+      const hasWallet = !!activeAccount
 
-        openAuthDialog({
-          mode: 'signup',
-          reason: 'submission',
-          schemaId: schema.id,
-          schemaTitle: schema.title,
-          subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
-          subjectHint: deriveSubjectUrlHint(subjectValue),
-          onSubmitAfterAuth: async () => {
-            await submitPreparedAttestation(completeData)
-          }
-        })
+      // Happy path: session + wallet → submit directly
+      if (hasSession && hasWallet) {
+        await submitPreparedAttestation(completeData)
         return
       }
 
-      await submitPreparedAttestation(completeData)
+      // Session exists but wallet is gone → stale session, clear and re-auth
+      if (hasSession && !hasWallet) {
+        try { await logoutSession() } catch { /* best-effort */ }
+        setSession(null)
+      }
+
+      // Open auth dialog (handles both no-session cases)
+      const subjectValue =
+        typeof completeData.subject === 'string'
+          ? completeData.subject
+          : typeof completeData.subjectId === 'string'
+            ? completeData.subjectId
+            : typeof completeData.recipient === 'string'
+              ? completeData.recipient
+              : ''
+
+      openAuthDialog({
+        mode: 'chooser',
+        reason: 'submission',
+        schemaId: schema.id,
+        schemaTitle: schema.title,
+        subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
+        subjectHint: deriveSubjectUrlHint(subjectValue),
+      })
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      const errorMessage = getBackendErrorMessage(error)
+      setShowAccountAction(shouldRouteBackendErrorToAccount(error))
       setGeneralError(errorMessage)
       logger.error('Submission error:', error)
     }
   }
 
-  // For witness-enabled schemas (key-binding, linked-identifier), render the proofs
-  // field as a simplified EvidencePointerProofInput instead of the generic ProofInput.
-  // The proofs field stores just the URL during editing; we wrap it on submission.
   const isWitnessSchema = !!schema.witness
-  const controllerFieldName = schema.witness?.controllerField // 'keyId' or 'linkedId'
+  const controllerFieldName = schema.witness?.controllerField
 
   const renderField = (field: typeof schema.fields[0]) => {
-    // For witness-enabled schemas, replace the proofs field with EvidencePointerProofInput
     if (isWitnessSchema && field.name === 'proofs') {
       const subjectDid = (formData['subject'] as string) || ''
       const controllerDid = controllerFieldName ? (formData[controllerFieldName] as string) || '' : ''
@@ -380,70 +358,45 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     )
   }
 
-  // Determine if submit should be enabled
-  const canSubmit = isNetworkSupported
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
-        <ToastContainer position="center" />
         {(generalError || lastError) && (
-          <div className="status-panel-error mb-4 px-4 py-2" data-testid="form-error">
-            {generalError || lastError}
+          <div className="status-panel-error mb-4 space-y-3 px-4 py-3" data-testid="form-error">
+            <p>{generalError || lastError}</p>
+            {showAccountAction ? (
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link href="/account">Manage account</Link>
+              </Button>
+            ) : null}
           </div>
         )}
-        {/* Header */}
+
         <div className="mb-8">
           <h1 className="mb-4 text-3xl font-semibold tracking-tight">{schema.title}</h1>
-
-          <p className="text-lg text-muted-foreground">
-            {schema.description}
-          </p>
+          <p className="text-lg text-muted-foreground">{schema.description}</p>
         </div>
 
-        {/* Form */}
         <Card>
           <CardHeader>
-            <CardDescription>
-              Fields marked with * are required.
-            </CardDescription>
+            <CardDescription>Fields marked with * are required.</CardDescription>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {requiredFields.map((field) => renderField(field))}
+              {optionalFields.length > 0 && optionalFields.map((field) => renderField(field))}
 
-              {optionalFields.length > 0 && (
-                <>
-                  {optionalFields.map((field) => renderField(field))}
-                </>
-              )}
-
-              <div className="flex gap-4 pt-6">
+              <div className="flex flex-wrap gap-4 pt-6">
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !canSubmit}
+                  disabled={isSubmitting}
                   className="flex items-center gap-2"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                       Submitting...
-                    </>
-                  ) : !session ? (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Create Account to Submit
-                    </>
-                  ) : !isConnected ? (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Connect Wallet to Submit
-                    </>
-                  ) : !isNetworkSupported ? (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Switch to Supported Network
                     </>
                   ) : (
                     <>
@@ -458,21 +411,15 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                 </Button>
               </div>
 
-              {/* Wallet Connection Status */}
-              {!canSubmit && (
-                <div className="muted-panel mt-4 p-4">
-                  <h4 className="mb-2 font-medium">Connection Required</h4>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    {!isNetworkSupported && (
-                      <p>• Please switch to a supported network for attestations</p>
-                    )}
-                  </div>
+              {isSubmitting ? (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+                  {submissionStatusMessage}
                 </div>
-              )}
+              ) : null}
             </form>
           </CardContent>
         </Card>
       </div>
     </div>
   )
-} 
+}

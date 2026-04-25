@@ -25,7 +25,7 @@ This means non-crypto users cannot submit attestations beyond the two subsidized
 
 ### Attestation submission routing
 
-- **Wallets in `subscription` execution mode**: all attestations go through `POST /api/private/relay/eas/delegated-attest` on `omatrust-backend`. The backend handles nonce fetching, signature verification, schema eligibility, and transaction submission internally. The frontend does not make a separate nonce endpoint call. Every relay submission decrements one sponsored write credit, regardless of schema.
+- **Wallets in `subscription` execution mode**: all attestations use the backend relay on `omatrust-backend`. The frontend first calls `GET /api/private/relay/eas/nonce?attester=0x...` to fetch the signable EAS nonce through the backend's premium-read path, signs the delegated payload, then submits it to `POST /api/private/relay/eas/delegated-attest`. The backend re-fetches the authoritative nonce before signature verification/submission. Every successful relay submission decrements one sponsored write credit, regardless of schema.
 - **Wallets in `native` execution mode**: keep the current frontend execution behavior. Subsidized schemas (`user-review`, `linked-identifier`) use the current frontend-hosted delegated-attest path. All other schemas use direct transaction via the user's wallet, with the user paying gas in OMA.
 
 ### Execution-mode routing matrix
@@ -66,6 +66,85 @@ Example allowed origins:
 
 ---
 
+## Wallet connection architecture
+
+The frontend manages two independent pieces of state: the Thirdweb wallet connection (client-side, stored in browser local storage by Thirdweb) and the backend session (server-side, stored as an httpOnly cookie). Keeping these in sync is the primary source of complexity.
+
+### Design principles
+
+- the backend session cookie is the source of truth for "is the user signed in"
+- the Thirdweb wallet connection is needed only for signing (SIWE, EIP-712 attestation payloads, direct transactions)
+- a valid submission state requires both a session and a connected wallet — if either is missing, the user goes through the auth dialog
+- if a session exists but the wallet is not connected (autoConnect failed), the session is treated as stale and cleared — the user re-authenticates from scratch
+
+### Provider-level autoConnect
+
+A single `useAutoConnect` call runs inside `BackendSessionProvider` (or a sibling component at the provider level). This replaces the per-`ConnectButton` `autoConnect` prop. It runs once on app mount, attempts to restore the previously connected wallet from Thirdweb's local storage, and either succeeds or fails silently.
+
+Configuration:
+
+- `client`: the Thirdweb client
+- `wallets`: the full wallet list (inAppWallet + MetaMask + Coinbase + WalletConnect)
+- `timeout`: 15000ms
+- failure is non-fatal — if autoConnect fails (stale key, cleared storage, etc.), the app continues with no wallet connected
+
+No `ConnectButton` instance should set `autoConnect`. AutoConnect is handled once at the provider level.
+
+Startup sequencing:
+
+1. `useAutoConnect` runs and attempts wallet restoration
+2. `BackendSessionProvider` waits for autoConnect to finish (`isLoading` becomes false)
+3. If no wallet was restored, skip the session check — set session to null and mark loading as done. Even if a cookie exists, the session is stale without a wallet.
+4. If a wallet was restored, call `GET /api/private/session/me` to check for an existing backend session
+5. If both wallet and session exist, the user is fully signed in on page load
+
+This ordering prevents unnecessary network requests on clean browsers and avoids the transient "session without wallet" state during the autoConnect window.
+
+### useConnectModal for user-initiated wallet connection
+
+The auth dialog and any other place that needs to prompt the user to connect a wallet uses `useConnectModal` from `thirdweb/react` instead of rendering a `ConnectButton`. This hook provides an imperative `connect()` function that opens the Thirdweb wallet picker as its own modal overlay and returns a promise that resolves with the connected wallet.
+
+Benefits:
+
+- the Thirdweb wallet picker is independent of the auth dialog's lifecycle — no "ConnectButton inside a modal" issues
+- the auth dialog can use a plain `<Button>` that calls `connectModal.connect(...)` on click
+- the wallet picker opens as an overlay on top of the auth dialog, or the auth dialog can close first if preferred
+- the promise-based API integrates cleanly with the imperative `performChallengeSignVerify` flow
+
+### ConnectButton usage
+
+`ConnectButton` is used only on the `/account` page for the "Manage Wallet" control, where it shows the connected wallet's details and provides disconnect/switch functionality. It should set `autoConnect={false}` since autoConnect is handled at the provider level.
+
+### Submission gate wallet matrix
+
+When the user clicks "Submit" on `AttestationForm`, the button is always enabled and always labeled "Submit Attestation." The form does not inspect wallet or session state to decide the button label or disabled state. Instead, `handleSubmit` evaluates a 2×2 matrix:
+
+| | Wallet connected | Wallet not connected |
+|---|---|---|
+| **Session exists** | Submit directly (happy path) | Clear session, open auth dialog |
+| **No session** | Open auth dialog (wallet already available for SIWE) | Open auth dialog |
+
+Only the top-left cell (session + wallet) proceeds to submission directly. All other cells route through the auth dialog, which handles wallet connection and session creation in one flow.
+
+The "session exists, wallet not connected" cell clears the session before opening the auth dialog. If autoConnect failed, the wallet identity is gone and the session is unusable for signing. Rather than attempting to reconnect and verify the wallet matches, the frontend treats this as a stale session and starts fresh. The user goes through the auth dialog, connects their wallet, and either signs into their existing account (the backend matches the wallet DID) or creates a new one. This eliminates wallet-mismatch edge cases and keeps the code path simple.
+
+For managed wallets, the SIWE re-sign is invisible (auto-signed). For self-custody wallets, it's one wallet pop-up — a small cost for robust synchronization.
+
+### Logout
+
+The `logout` function in `BackendSessionProvider` handles both sides imperatively:
+
+1. Call `POST /api/private/session/logout` to revoke the backend session and clear the cookie
+2. Call `disconnect(activeWallet)` to disconnect the Thirdweb wallet
+3. Call `clearWalletBrowserState()` to clean up WalletConnect IndexedDB and Thirdweb localStorage (best-effort — may be blocked by open connections)
+4. Navigate via `window.location.href = "/"` for a full page unload, which destroys the WalletConnect Core singleton and releases all browser state
+
+The full page navigation on logout ensures a clean slate. Any wallet state that `clearWalletBrowserState()` couldn't delete (due to open IndexedDB connections) is released when the page unloads.
+
+The `ConnectButton` on the `/account` page hides the Thirdweb disconnect option (`connectHideDisconnect`) so users go through the explicit Log Out button, which properly cleans up both the backend session and wallet state.
+
+---
+
 ## Sign-in and account creation flow
 
 The backend session is not established on page load. Account creation and wallet connection are delayed until the user initiates sign-in.
@@ -79,24 +158,28 @@ The modal presents two options:
 - **Existing account** — shows the wallet sign-in path for an already-connected or newly connected wallet
 - **New account** — starts account creation
 
-The Thirdweb ConnectButton only appears inside this modal and on the `/account` page. It is never shown in the header navigation.
+The auth dialog uses `useConnectModal` to trigger wallet connection when needed. No `ConnectButton` is rendered inside the dialog. The Thirdweb wallet picker opens as its own overlay when the user clicks a sign-in or create-account button and no wallet is connected.
 
 ### Implementation notes
 
 - the challenge → sign → verify flow is implemented as a single imperative async function (`performChallengeSignVerify`) called from button callbacks
-- the `BackendSessionProvider` restores session state on startup via `GET /api/private/session/me` even before Thirdweb wallet hydration completes
-- the `BackendSessionProvider` treats wallet disconnect as logout and clears the backend session cookie
+- the auth dialog uses `useConnectModal` to open the Thirdweb wallet picker — no `ConnectButton` is rendered inside the dialog
+- provider-level `useAutoConnect` handles wallet restoration on app mount; individual components do not manage autoConnect
+- `BackendSessionProvider` waits for `useAutoConnect` to finish (its `isLoading` becomes false) before calling `GET /api/private/session/me` — this prevents the transient "session exists, wallet not yet restored" state from triggering stale-session clearing
+- if autoConnect succeeds and the session cookie is valid, the user is fully signed in on page load with no interaction required
+- if autoConnect fails and a session cookie exists, the session is treated as stale and cleared — the user will be prompted to sign in when they try to submit
 - the frontend shows an explicit `Log Out` action on `/account`
 
 ### Existing account
 
-- if no wallet is connected, the modal shows the Thirdweb ConnectButton
-- once a wallet is connected, sign-in proceeds automatically without a separate "Continue Sign In" step
-- if a wallet is already connected when the user opens the existing-account path, the frontend starts the SIWE challenge → sign → verify flow directly
+- the auth dialog shows a plain button (not a ConnectButton) for sign-in
+- clicking the button calls `useConnectModal.connect(...)` if no wallet is connected, which opens the Thirdweb wallet picker as an overlay
+- if a wallet is already connected (autoConnect succeeded), the SIWE flow starts immediately without opening the wallet picker
+- once a wallet is connected, sign-in proceeds automatically via `performChallengeSignVerify`
 
 ### New account
 
-There are two create-account paths depending on whether a subject is required.
+The account-creation modal itself is always identity-first. It creates the account and session before any subject work happens.
 
 #### Flow A: simple account creation
 
@@ -113,47 +196,37 @@ The primary path is the managed / subscription-oriented creation path. The secon
 
 Used when the user submits a subject-scoped attestation and does not yet have a verified subject on their account.
 
-Flow B is a chained sequence of two independent modals orchestrated by `AttestationForm`. The auth dialog and the subject confirmation dialog each handle one concern. Neither modal knows about the other — `AttestationForm` chains them via the `onSubmitAfterAuth` callback.
+Flow B stays in one continuous auth funnel. The auth dialog creates the account first, then branches into a subject-setup step if needed. After sign-in (and subject setup if required), the dialog shows a success message and the user closes it to return to the form.
 
-**Step 1 — Account creation (auth dialog, Flow A)**
+**Step 1 — Account creation**
 
-The auth dialog opens exactly as in Flow A. The user enters a display name, connects a wallet, and creates an account. No subject fields appear in this modal. The auth dialog closes once the session is established.
+The auth dialog opens exactly as in Flow A. The user enters a display name, connects a wallet, and creates an account. No subject fields appear in this step.
 
-**Step 2 — Subject verification (subject confirmation dialog)**
+**Step 2 — Post-auth subject setup**
 
-Immediately after the auth dialog closes, `AttestationForm` checks whether the schema is subject-scoped and whether the account already has a verified non-bootstrap subject. If a subject is needed, `AttestationForm` opens the `SubjectConfirmationDialog` automatically — the user does not return to the form between modals.
+If the pending submission is subject-scoped and the newly authenticated account still only has the bootstrap wallet subject, the auth dialog moves to `Verify Subject Ownership` instead of showing the success message.
 
-The subject confirmation dialog is the same component used on the `/account` page. It includes:
+This step includes:
 
-- DID method picker
-- method-specific proof instructions (DNS TXT, did.json, wallet match, contract ownership)
-- verification action with retry
-- submit action that calls `POST /api/private/subjects` to persist the subject
+- organization URL input
+- derived `did:web` preview
+- proof-method selection (`DNS TXT` or `did.json`)
+- proof instructions using the connected wallet DID
+- verification + subject-attach action
 
-The dialog pre-populates the subject input when a hint is available. If the attestation form's subject field contains a `did:web` value or a domain-like string, `AttestationForm` passes it as a `subjectHint` so the user doesn't re-enter it.
+The auth dialog pre-populates the subject URL when a hint is available. If the attestation form's subject field contains a `did:web` value or a domain-like string, `AttestationForm` passes it as `subjectHint` so the user does not re-enter it.
 
-**Step 3 — Attestation submission**
+**Step 3 — Success and return to form**
 
-After the subject dialog closes with a verified subject, `AttestationForm` proceeds to submit the attestation. The user does not click the submit button again.
-
-**Chaining implementation**
-
-`AttestationForm.handleSubmit` builds the `onSubmitAfterAuth` callback as an async function that runs after the auth dialog closes:
-
-1. Refresh the session to pick up the newly created account state.
-2. Check if the schema is subject-scoped and the account lacks a verified subject.
-3. If a subject is needed, open `SubjectConfirmationDialog` and await its completion via a promise-based wrapper.
-4. After the subject dialog resolves, call `submitPreparedAttestation`.
-
-If the subject dialog is dismissed without completing verification, the chain aborts and the user returns to the form. The session remains valid — the user can retry submission, and only the subject dialog will reappear (the auth step is already complete).
+After sign-in completes (and subject setup if needed), the auth dialog shows a success message: "You're signed in. Close this dialog and click Submit Attestation to publish." The user closes the dialog and clicks the submit button again. The second click runs with fresh hook values — session exists, wallet connected — and submits directly.
 
 **Important V1 rules:**
 
-- the auth dialog never collects subject information — it handles identity only
-- subject verification is a separate modal that chains after account creation
-- the user experiences a continuous flow: auth dialog → subject dialog → submission, without returning to the form between steps
-- if the user already has a verified subject (e.g., added from `/account`), step 2 is skipped entirely
-- the `SubjectConfirmationDialog` component is shared between this chained flow and the `/account` page — one implementation, two entry points
+- account creation and subject setup are still separate concerns, but they remain in one continuous funnel for subject-scoped first-time submissions
+- the account is created before the subject is attached
+- if the user already has a verified non-bootstrap subject, the subject-setup step is skipped entirely
+- the auth dialog does not submit the attestation — it only establishes the session and subject, then the user clicks submit again
+- `/account` remains the general management surface for subjects, but first-time subject-scoped submission does not force the user to leave the publish funnel
 
 ### Backend account creation behavior
 
@@ -175,29 +248,64 @@ Execution-mode rules on first sign-in:
 
 Every wallet creates or loads a backend account and session here, including wallets that will later use `native` execution mode.
 
-### Attestation submission after sign-in
+### Attestation submission gate
 
-Once the user has a valid backend session, the submission path depends on whether the schema requires a subject.
+The submit button on `AttestationForm` is always enabled and always labeled "Submit Attestation." The form does not change the button label or disabled state based on wallet or session state. When the user clicks submit, `handleSubmit` runs the gate sequence:
 
-**Non-subject-scoped schemas:**
+**Gate 1 — Session + Wallet**
 
-Submission proceeds directly. The user signs the EIP-712 attestation payload and the frontend routes to the appropriate execution path.
+The form checks session and wallet state together per the wallet matrix above:
 
-**Subject-scoped schemas:**
+- **Session exists, wallet connected**: proceed to Gate 2.
+- **Session exists, wallet not connected**: clear the session (it's stale without a wallet), then open the auth dialog in `chooser` mode. The user re-authenticates from scratch.
+- **No session** (wallet connected or not): open the auth dialog in `chooser` mode. If a wallet is already connected, the SIWE flow can start immediately inside the dialog. If not, the dialog handles wallet connection via `useConnectModal`.
 
-Before submission, `AttestationForm` checks whether the account has a verified non-bootstrap subject (i.e., a subject other than the default wallet `did:pkh`). If no verified subject exists, the `SubjectConfirmationDialog` opens. Submission proceeds only after the subject is verified and attached to the account.
+After the auth dialog completes and the user closes it, they click the submit button again. The second click runs with a valid session and connected wallet, proceeding to Gate 2.
 
-This check applies regardless of how the user arrived at submission — whether they just created an account (Flow B chaining) or are a returning user with an existing session.
+**Gate 2 — Live subject verification (subject-scoped schemas only)**
 
-**Execution path routing (applies to all schemas after any subject gate is satisfied):**
+If the schema is subject-scoped, `AttestationForm` calls `POST /api/verify/subject-ownership` with the form's subject DID and the connected wallet DID. This is a live check — it hits DNS TXT, `.well-known/did.json`, on-chain key bindings, controller-witness attestations, and linked identifiers. The stored subjects in the database are not the authority here; the live proof sources are.
 
+If the live check passes, submission proceeds.
+
+If the live check fails:
+
+1. If the form's subject was previously stored on the account, the backend removes it (subject pruning — see re-verification rules below).
+2. `AttestationForm` opens the `SubjectConfirmationDialog` pre-populated with the form's subject value. The dialog shows proof instructions so the user can set up their DNS TXT / did.json / key binding and retry verification.
+3. After the dialog fires `onSubjectCreated` (verification passed and subject re-attached), `AttestationForm` proceeds to submission.
+4. If the user dismisses the dialog without completing verification, the submission is aborted.
+
+This gate applies regardless of how the user arrived:
+
+- unauthenticated user who just completed account creation
+- returning user with an existing session
+- user whose previously verified subject has become stale (DNS record removed, key binding revoked)
+
+**Subject field pre-population for signed-in users**
+
+When the user has a session with a `primarySubject` that is not the bootstrap wallet DID, `AttestationForm` pre-populates the subject field with that value on mount. The user can change it to any other subject. If they enter a subject that doesn't pass the live check, Gate 2 handles it.
+
+**How `SubjectConfirmationDialog` is used in this context**
+
+The dialog's existing interface (`open`, `onOpenChange`, `walletDid`, `existingSubjectDids`, `onSubjectCreated`) is sufficient. `AttestationForm` wraps it with a promise so `handleSubmit` can `await` the subject step:
+
+1. `AttestationForm` sets a `pendingSubjectResolve` ref and opens the dialog.
+2. `onSubjectCreated` resolves the promise and closes the dialog.
+3. `onOpenChange(false)` without a subject rejects the promise, aborting submission.
+
+This keeps `SubjectConfirmationDialog` as a single shared implementation — `/account` uses it for general subject management, `AttestationForm` uses it as a submission gate.
+
+**Submission (after both gates are satisfied)**
+
+- **`subscription` execution mode pre-sign step**: frontend calls `GET /api/private/relay/eas/nonce?attester=0x...` to fetch the nonce needed to construct the EIP-712 delegated payload. This is a premium metered read and should go through `omatrust-backend`, not directly to the public RPC endpoint.
 - User signs the EIP-712 attestation payload
   - Social/in-app wallets: auto-signed, no pop-up
   - Self-custody wallets: wallet pop-up showing the typed data
-- **`subscription` execution mode**: frontend submits via `POST /api/private/relay/eas/delegated-attest`. Backend verifies signature, checks entitlement, submits transaction, returns txHash and attestation UID. One sponsored write credit is decremented.
+- **`subscription` execution mode**: frontend submits via `POST /api/private/relay/eas/delegated-attest`. The backend re-fetches the authoritative nonce, verifies signature, checks entitlement, submits transaction, returns txHash and attestation UID. One sponsored write credit is decremented.
 - **`native` execution mode + subsidized schema**: frontend uses the current frontend-hosted delegated-attest path.
 - **`native` execution mode + non-subsidized schema**: frontend submits the transaction directly via the user's wallet. User pays gas in OMA.
 - Frontend shows confirmation with transaction hash and attestation UID
+- after successful submission, `AttestationForm` navigates the user to `/dashboard` where they can see their attestation — this replaces the current `window.alert()` confirmation
 
 Note: the free tier allows any schema — there is no schema restriction on the free plan. The user only needs to upgrade to paid when their free write credits are exhausted, not based on which schema they're using.
 
@@ -207,9 +315,11 @@ If a wallet is in `subscription` execution mode and has no usable entitlement, t
 
 If the user already has a backend session (cookie present and valid):
 
-- skip account creation
-- if the schema is subject-scoped and the account has no verified non-bootstrap subject, `AttestationForm` opens the `SubjectConfirmationDialog` before submission — the same dialog used in Flow B and on `/account`
-- if the account already has a verified subject, go directly to submission
+- skip account creation (Gate 1 passes immediately)
+- subject field is pre-populated from the account's primary subject (editable)
+- if the schema is subject-scoped, Gate 2 runs the live verification check against the form's subject
+- if the live check passes, submission proceeds directly
+- if the live check fails, `SubjectConfirmationDialog` opens so the user can re-verify or set up a new proof
 - the submission path is determined by the wallet's persisted `executionMode`
 
 ---
@@ -292,13 +402,36 @@ Bootstrap-subject replacement rule:
 
 ### Re-verification rules
 
-Subject ownership is checked by the backend on each subject-scoped attestation submission via direct onchain lookup. The backend does not cache key-binding or subject ownership state. As long as the DNS-TXT or `.well-known/did.json` record remains active, subsequent subject-scoped attestations proceed without re-prompting the user for verification setup.
+Subject ownership is verified live on each subject-scoped attestation submission. The live check hits all available proof sources:
 
-If the DNS-TXT or `.well-known` record is removed, the backend will reject the attestation and the frontend should prompt the user to re-verify.
+- DNS TXT records (`_controllers.<domain>`)
+- `.well-known/did.json` DID documents
+- on-chain key-binding attestations
+- on-chain controller-witness attestations
+- on-chain linked-identifier attestations
+
+The backend does not rely on stored subject records as proof of ownership. Stored subjects are a convenience cache for pre-populating the UI and displaying the account's known subjects.
+
+**Subject pruning on failed live check:**
+
+If a live verification check fails for a subject that is stored on the account, the backend removes that subject from the account's stored subjects. This keeps the database in sync with the actual state of the proof sources. The user is then prompted to re-verify via the `SubjectConfirmationDialog`, which guides them through re-establishing their proof (re-adding the DNS TXT record, re-hosting the did.json, etc.). If re-verification succeeds, the subject is re-attached to the account.
+
+This pruning ensures that stored subjects do not become stale. A user who removes their DNS TXT record or revokes a key binding will have the corresponding subject removed from their account the next time a live check runs against it.
+
+**When live checks run:**
+
+- at attestation submission time (Gate 2 in the submission flow)
+- when the backend processes a subject-scoped relay submission (`POST /api/private/relay/eas/delegated-attest`)
+
+Live checks do not run on page load, session restore, or account page views. The `/account` page displays stored subjects as-is. Pruning only happens when a submission triggers a live check.
 
 See `docs.omatrust.org` for key-binding proof formats and controller-witness attestation details.
 
 See `app-registry-frontend` for its implementation of `did:web` ownership checking.
+
+### Future direction: subjects as derived state
+
+Long-term, stored subjects should be an index derived from on-chain attestations (key bindings, controller-witness attestations, linked identifiers) rather than user-managed state. When a key-binding attestation is filed, the backend indexes it. When a DNS TXT record is verified, the backend records the verification but treats it as ephemeral. The `/account` page would show subjects derived from the latest on-chain and DNS state, not from a mutable database table. This is not V1 scope but informs the direction of the pruning behavior described above.
 
 ---
 
@@ -352,7 +485,9 @@ V1 rules:
 Premium RPC is infrastructure hidden from the user.
 
 - The backend relay uses the premium RPC internally for nonce lookups and transaction submission
-- The frontend does not call a separate nonce endpoint for subscription-path attestations — the backend's `delegated-attest` endpoint handles nonce fetching internally
+- The frontend calls `GET /api/private/relay/eas/nonce` for subscription-path attestations so it can construct the delegated payload to sign
+- the relay nonce lookup is a premium metered read and should be served by `omatrust-backend`, not by direct browser access to the premium RPC origin
+- the backend's `delegated-attest` endpoint still re-fetches the authoritative nonce internally before verifying and submitting
 - V1 landing page attestation queries (browsing reviews, checking scores) use the public RPC endpoint regardless of subscription status
 - Premium read routing for attestation queries is deferred until a user dashboard is built
 
@@ -378,8 +513,8 @@ The `/account` page shows:
 
 - wallet DID and wallet type in a single combined wallet card
 - wallet type language uses `Managed wallet` or `Self-custodial wallet` rather than provider metadata
-- a single wallet management control in that same card via the Thirdweb connect button
-- a `Subject Identifier` card between the `Name` and `Wallet` cards
+- a single wallet management control in that same card via the Thirdweb connect button (with disconnect hidden — users use the explicit Log Out button)
+- a `Subject Identifier` card between the `Name` and `Wallet` cards, with a loading state to prevent the "Add Subject" CTA from flashing before data loads
 - if the only subject is the wallet DID itself, the page hides it and treats the account as missing a meaningful subject identifier
 - in that empty state, the page prompts the user to add a subject identifier with the CTA copy `Add your Subject Identifier.`
 - clicking that CTA opens a subject confirmation modal
@@ -388,8 +523,8 @@ The `/account` page shows:
   - method-specific ownership instructions
   - a verification action
   - a submit action
-- the name card is labeled `Name`
-- an explicit `Log Out` button is shown on the account page and disconnects the wallet while revoking the backend session
+- the name card is labeled `Name` and includes an inline edit button that toggles to a text field with Save/Cancel
+- an explicit `Log Out` button is shown on the account page — it revokes the backend session, disconnects the wallet, cleans up browser state, and does a full page navigation to `/`
 - the subscription card shows:
   - plan and status
   - remaining reads
@@ -403,10 +538,13 @@ The page redirects to `/` when the session is lost (wallet disconnect, session e
 The header shows the user's display name or truncated wallet address when signed in, linking to `/account`. When not signed in, the header shows "Sign In".
 
 ## Still to implement:
-- `src/lib/eas.ts` — attestation routing logic (backend relay path)
+- `AttestationForm` Gate 2: live subject verification call before submission, with `SubjectConfirmationDialog` fallback on failure
+- `AttestationForm` subject field pre-population from session's `primarySubject`
+- backend subject pruning: remove stored subject when live verification fails at submission time
+- backend live verification should check all proof sources: DNS TXT, did.json, key bindings, controller-witness attestations, linked identifiers
+- `SubjectConfirmationDialog` pre-population via `subjectHint` prop when opened from `AttestationForm`
 - custom JSON-RPC transport for premium RPC
-- chained subject-verification flow in `AttestationForm` (Flow B): promise-based `SubjectConfirmationDialog` wrapper, subject-gate check in `onSubmitAfterAuth`, subject hint pre-population from form data
-- remove vestigial `createSubjectInfo` and `createSubjectVerify` wizard steps from `auth-entry-dialog.tsx`
+- Premium RPC fallback to public RPC on failure
 
 ---
 
@@ -415,22 +553,29 @@ The header shows the user's display name or truncated wallet address when signed
 - [x] All new attestation submissions require account creation or sign-in
 - [x] Every wallet creates or loads a backend account and session before attestation submission
 - [x] Wallet first sign-in establishes a persisted wallet-scoped `executionMode`
-- [ ] Managed wallets (`inApp`) can submit any attestation through the backend relay without holding OMA
-- [ ] Every relay submission decrements one sponsored write credit regardless of schema
-- [ ] Free-tier users can submit any schema until their write credits are exhausted
-- [ ] Wallets in `native` execution mode keep the current frontend behavior: subsidized delegated-attest for the two subsidized schemas and direct transaction for all other schemas
-- [ ] Wallets in `subscription` execution mode always use the backend relay path
+- [x] Managed wallets (`inApp`) can submit any attestation through the backend relay without holding OMA
+- [x] Every relay submission decrements one sponsored write credit regardless of schema
+- [x] Free-tier users can submit any schema until their write credits are exhausted
+- [x] Wallets in `native` execution mode keep the current frontend behavior: subsidized delegated-attest for the two subsidized schemas and direct transaction for all other schemas
+- [x] Wallets in `subscription` execution mode always use the backend relay path
 - [x] Managed wallets (`inApp`) are constrained to `subscription` execution mode
-- [ ] Wallets in `subscription` execution mode with exhausted entitlement are routed to upgrade, not per-submission fallback
+- [x] Wallets in `subscription` execution mode with exhausted entitlement are routed to upgrade, not per-submission fallback
 - [x] Subject ownership verification exists with manual retry and backend enforcement
 - [x] Subject ownership is re-checked authoritatively by the backend when a subject is attached to the account
-- [ ] Subject-scoped attestation submission gates on verified subject — opens SubjectConfirmationDialog inline if needed (chained flow)
+- [x] Unauthenticated subject-scoped submission stays in one funnel: auth -> subject setup -> submission
+- [ ] Signed-in subject-scoped submission runs live verification against the form's subject before submission
+- [ ] Failed live verification prunes the stale subject from the account and opens SubjectConfirmationDialog for re-verification
+- [ ] Subject field is pre-populated from session's primary subject when signed in
 - [x] Account page shows plan, usage, and upgrade option
 - [x] Backend session cookies are included on all backend requests
-- [ ] Premium RPC credentials are never exposed to the browser
+- [x] Premium RPC credentials are never exposed to the browser
 - [ ] Premium RPC failures fall back to public RPC transparently
 - [x] Landing page attestation queries continue to use the public RPC endpoint
 - [x] The current frontend-hosted delegated-attest path remains functional for self-custody submissions of the two subsidized schemas
+- [x] Provider-level `useAutoConnect` replaces per-ConnectButton autoConnect
+- [x] Auth dialog uses `useConnectModal` instead of ConnectButton for wallet connection
+- [x] Submit button is always enabled and labeled "Submit Attestation" — gates handle wallet/session state
+- [x] Session-exists-but-wallet-disconnected case clears the stale session and routes through auth dialog
 
 ---
 
@@ -438,6 +583,4 @@ The header shows the user's display name or truncated wallet address when signed
 
 The following details from earlier drafts are retained for reference:
 
-- `ethers.JsonRpcProvider` instances in `src/lib/attestation-queries.ts` and `src/lib/server/eas-routes.ts` are the current direct RPC usage points that will need updating
-- the `src/lib/eas.ts` routing logic (`isSubsidizedSchema`) currently decides between delegated and direct paths — this will be extended to include the backend relay path
-- the Thirdweb `ConnectButton` in `header.tsx` currently uses inline `<style>` overrides that should be moved to globals.css during the design system alignment workstream
+- `ethers.JsonRpcProvider` instances in `src/lib/attestation-queries.ts` and `src/lib/server/eas-routes.ts` are the current direct RPC usage points that will need updating for premium RPC transport

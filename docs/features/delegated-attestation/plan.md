@@ -76,15 +76,21 @@ Design token system aligned with omatrust-landing brand language. All hardcoded 
 
 The entry point for all authenticated flows.
 
-- header shows "Sign In" button when unauthenticated.  When authenticagted, the button shows the display name of the account and links to `/account`
+- header shows "Sign In" button when unauthenticated. When authenticated, the button shows the display name of the account and links to `/account`
 - Unauthenticated Sign In button opens an auth chooser modal with two options: "Existing account" (sign in) and "New account" (create account)
-- the Thirdweb ConnectButton only appears inside the auth modal and on the `/account` page — not in the header
+- the auth dialog uses `useConnectModal` to open the Thirdweb wallet picker — no `ConnectButton` is rendered inside the dialog
+- `ConnectButton` is used only on the `/account` page for the "Manage Wallet" control (with disconnect hidden)
 - SIWE challenge/verify flow uses an imperative async function (`performChallengeSignVerify`) triggered by button click, not React effects
 - wallet provider detected via `useActiveWallet().id` and sent as `walletProviderId` to backend on verify
-- `BackendSessionProvider` auto-disconnects the Thirdweb wallet when no backend session exists (keeps wallet and session state in sync)
-- session check uses `activeAddress` (string) as dependency, not `activeAccount` (object), to prevent re-render flooding
+- provider-level `useAutoConnect` handles wallet restoration on app mount; individual components do not manage autoConnect
+- session check runs exactly once after autoConnect finishes; skips the `session/me` call entirely if no wallet was restored
+- auto-disconnect effect removed from `BackendSessionProvider`
+- auth dialog closes automatically on page navigation via pathname change detection
 - `?action=signin` query parameter from the landing page opens the auth modal automatically
 - wallet connection is delayed until the user initiates sign-in, not on page load
+- after sign-in: existing account → navigates to `/dashboard`, new account → navigates to `/account`, submission flow → shows success message, user clicks submit again
+- logout uses `window.location.href` for full page unload, ensuring clean wallet state teardown
+- `clearWalletBrowserState()` utility cleans up WalletConnect IndexedDB and Thirdweb localStorage on logout and before new wallet connections
 
 ### 2. Subscription and payment
 
@@ -109,8 +115,10 @@ Once signed in, the user needs a way to see their plan and upgrade.
 
 The core feature. Route wallets in `subscription` execution mode through the backend relay.
 
+- for wallets in `subscription` execution mode: fetch the signable EAS nonce via `GET /api/private/relay/eas/nonce?attester=0x...`
+- treat the relay nonce lookup as a premium metered read; it should go through `omatrust-backend`, not directly to the public RPC endpoint
 - for wallets in `subscription` execution mode: submit attestations via `POST /api/private/relay/eas/delegated-attest`
-- do not make a separate frontend nonce call for backend relay submissions; the backend delegated-attest endpoint handles nonce fetching internally
+- the frontend uses the returned nonce to construct the delegated payload for signing; the backend delegated-attest endpoint still re-fetches the authoritative nonce internally before verifying and submitting
 - the backend verifies the signature, checks subscription entitlement, checks schema eligibility, and submits the transaction
 - handle backend error codes in the UI: `SPONSORED_WRITE_LIMIT_EXCEEDED`, `SCHEMA_NOT_ELIGIBLE`, `SUBSCRIPTION_INACTIVE`, `ATTESTER_MISMATCH`
 - when a wallet in `subscription` execution mode has no usable entitlement, route the user to upgrade rather than falling back per submission
@@ -166,15 +174,12 @@ See the spec for the full session initialization flow, wallet type gating, and s
 
 ## Subject ownership note
 
-The original bundled "subject inside signup wizard" model is now partially obsolete.
+Subject verification has two entry points:
 
-Current product direction:
+- **Unauthenticated submission of a subject-scoped schema**: the auth dialog handles account creation and then branches into an inline subject-setup step. After sign-in and subject setup, the dialog shows a success message and the user closes it to click submit again (Flow B in the spec).
+- **Signed-in submission of a subject-scoped schema without a verified subject**: Gate 2 in the submission flow runs a live verification check. If it fails, `AttestationForm` opens the `SubjectConfirmationDialog` (the same component used on `/account`) for re-verification.
 
-- account creation and sign-in happen first
-- subject ownership is additive to the account
-- the canonical subject-add flow is now on `/account`
-
-The subject-required create-account path still exists in the auth modal, but future cleanup should remove subject attachment from signup entirely and keep subject management on `/account`.
+`/account` remains the general management surface for adding, viewing, and re-verifying subjects outside of the submission flow.
 
 ## Unauthenticated user experience
 
