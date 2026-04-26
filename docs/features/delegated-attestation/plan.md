@@ -174,12 +174,13 @@ See the spec for the full session initialization flow, wallet type gating, and s
 
 ## Subject ownership note
 
-Subject verification has two entry points:
+Subject ownership verification uses a shared `SubjectOwnershipDialog` with three entry points:
 
-- **Unauthenticated submission of a subject-scoped schema**: the auth dialog handles account creation and then branches into an inline subject-setup step. After sign-in and subject setup, the dialog shows a success message and the user closes it to click submit again (Flow B in the spec).
-- **Signed-in submission of a subject-scoped schema without a verified subject**: Gate 2 in the submission flow runs a live verification check. If it fails, `AttestationForm` opens the `SubjectConfirmationDialog` (the same component used on `/account`) for re-verification.
+- **Attestation form** — "Verify ownership" button next to the subject field on subject-scoped schemas (key-binding, linked-identifier, user-review-response). Proactive preflight check.
+- **`/account` "Add Subject Identifier"** — requires on-chain proof (controller-witness or key-binding) to formally associate a subject with the account.
+- **Backend rejection** — when the relay returns `SUBJECT_OWNERSHIP_REQUIRED`, the frontend opens the dialog reactively and auto-submits after verification.
 
-`/account` remains the general management surface for adding, viewing, and re-verifying subjects outside of the submission flow.
+The backend is the authority for subject ownership checks. The frontend preflight is advisory UX. See spec.md for the full architecture.
 
 ## Unauthenticated user experience
 

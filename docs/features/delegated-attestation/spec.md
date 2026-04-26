@@ -262,40 +262,44 @@ The form checks session and wallet state together per the wallet matrix above:
 
 After the auth dialog completes and the user closes it, they click the submit button again. The second click runs with a valid session and connected wallet, proceeding to Gate 2.
 
-**Gate 2 — Live subject verification (subject-scoped schemas only)**
+**Subject ownership verification for subject-scoped schemas**
 
-If the schema is subject-scoped, `AttestationForm` calls `POST /api/verify/subject-ownership` with the form's subject DID and the connected wallet DID. This is a live check — it hits DNS TXT, `.well-known/did.json`, on-chain key bindings, controller-witness attestations, and linked identifiers. The stored subjects in the database are not the authority here; the live proof sources are.
+Subject-scoped schemas (key-binding, linked-identifier, user-review-response) require the attester to prove ownership of the subject DID. Subject ownership is enforced at two levels:
 
-If the live check passes, submission proceeds.
+**Frontend (advisory, UX):**
 
-If the live check fails:
+For subject-scoped schemas, `AttestationForm` renders a "Verify ownership" button next to the subject field. Clicking it opens the `SubjectOwnershipDialog` — a shared modal that handles ownership verification. The dialog:
 
-1. If the form's subject was previously stored on the account, the backend removes it (subject pruning — see re-verification rules below).
-2. `AttestationForm` opens the `SubjectConfirmationDialog` pre-populated with the form's subject value. The dialog shows proof instructions so the user can set up their DNS TXT / did.json / key binding and retry verification.
-3. After the dialog fires `onSubjectCreated` (verification passed and subject re-attached), `AttestationForm` proceeds to submission.
-4. If the user dismisses the dialog without completing verification, the submission is aborted.
+- accepts the subject DID (pre-populated from the form's subject field) and the connected wallet DID
+- includes a DID method picker and method-specific proof instructions (DNS TXT, did.json)
+- calls `POST /api/verify/subject-ownership` as a preflight check
+- shows verification status with retry capability
+- optionally offers to record the proof on-chain as a controller-witness attestation
+- optionally offers to create a full key-binding attestation (advanced, with expiration/revocation)
 
-This gate applies regardless of how the user arrived:
+This preflight verification is advisory — it helps the user confirm their proof is in place before submitting. It does not gate submission. The user can submit without clicking "Verify ownership" and the backend will check.
 
-- unauthenticated user who just completed account creation
-- returning user with an existing session
-- user whose previously verified subject has become stale (DNS record removed, key binding revoked)
+**Backend (authoritative):**
+
+The backend relay (`POST /api/private/relay/eas/delegated-attest`) checks subject ownership before submitting the transaction. If the attester does not have proven ownership of the subject, the backend returns `SUBJECT_OWNERSHIP_REQUIRED`. The frontend catches this error and opens the `SubjectOwnershipDialog` so the user can establish their proof and retry.
+
+The backend check hits all available proof sources: DNS TXT, did.json, on-chain key-bindings, controller-witness attestations. The backend is the authority — the frontend preflight can be bypassed by other clients, but the backend catches it.
+
+**Three entry points for the dialog:**
+
+1. **Attestation form** — "Verify ownership" button next to the subject field on subject-scoped schemas. Proactive, user-initiated.
+2. **`/account` "Add Subject Identifier"** — user wants to formally associate a subject with their account. Requires a controller-witness or key-binding attestation to persist the association on-chain.
+3. **Backend rejection** — `SUBJECT_OWNERSHIP_REQUIRED` error from the relay. Reactive. After the user verifies in the dialog, `AttestationForm` auto-submits the pending attestation.
+
+**Auto-submit after backend rejection:**
+
+When the dialog is opened reactively (entry point 3), `AttestationForm` stores the pending attestation data in a ref. After the user completes verification and closes the dialog, the form auto-submits without requiring the user to click submit again. This is safe because the wallet and session state are already established by Gate 1 and do not change while the dialog is open.
 
 **Subject field pre-population for signed-in users**
 
-When the user has a session with a `primarySubject` that is not the bootstrap wallet DID, `AttestationForm` pre-populates the subject field with that value on mount. The user can change it to any other subject. If they enter a subject that doesn't pass the live check, Gate 2 handles it.
+When the user has a session with a `primarySubject` that is not the bootstrap wallet DID, `AttestationForm` pre-populates the subject field with that value on mount. The user can change it to any other subject.
 
-**How `SubjectConfirmationDialog` is used in this context**
-
-The dialog's existing interface (`open`, `onOpenChange`, `walletDid`, `existingSubjectDids`, `onSubjectCreated`) is sufficient. `AttestationForm` wraps it with a promise so `handleSubmit` can `await` the subject step:
-
-1. `AttestationForm` sets a `pendingSubjectResolve` ref and opens the dialog.
-2. `onSubjectCreated` resolves the promise and closes the dialog.
-3. `onOpenChange(false)` without a subject rejects the promise, aborting submission.
-
-This keeps `SubjectConfirmationDialog` as a single shared implementation — `/account` uses it for general subject management, `AttestationForm` uses it as a submission gate.
-
-**Submission (after both gates are satisfied)**
+**Submission (after Gate 1 is satisfied)**
 
 - **`subscription` execution mode pre-sign step**: frontend calls `GET /api/private/relay/eas/nonce?attester=0x...` to fetch the nonce needed to construct the EIP-712 delegated payload. This is a premium metered read and should go through `omatrust-backend`, not directly to the public RPC endpoint.
 - User signs the EIP-712 attestation payload
@@ -371,67 +375,48 @@ Subject-scoped attestations in V1:
 - **Linked identifier** — links an external identifier to a subject DID
 - **User review response** — a response filed on behalf of the subject being reviewed
 
-### Current V1 behavior
+### Subject ownership dialog
 
-The canonical place to add and verify a subject is now the `/account` page.
+A single `SubjectOwnershipDialog` component handles all subject ownership verification. It is called from three entry points (see "Subject ownership verification" in the submission gate section above).
 
-Account-page behavior:
+The dialog includes:
 
-- the page shows a `Subject Identifier` card between `Name` and `Wallet`
-- if the only subject on the account is the default wallet `did:pkh`, the UI hides it and treats the account as missing a meaningful subject
-- in that state the page prompts the user to add a URL they own
-- clicking the CTA opens a subject confirmation modal
+- DID method picker (did:web, did:pkh, did:handle, did:key)
+- method-specific proof instructions (DNS TXT record, did.json hosting)
+- verification action that calls `POST /api/verify/subject-ownership` as a preflight check
+- verification status with retry capability
+- optional: "Record ownership on-chain" — files a controller-witness attestation to snapshot the proof permanently
+- optional: "Create key binding" — advanced option with expiration, revocation, and lifecycle management fields
 
-Subject confirmation modal behavior:
+### Proof levels
 
-- the modal includes a DID method picker
-- it shows method-specific proof instructions
-- it calls `POST /api/verify/subject-ownership` as a public preflight verification step
-- it then calls `POST /api/private/subjects` to persist the subject on the account
+1. **Ephemeral (DNS TXT / did.json)** — free, can be revoked by removing the record. Sufficient for filing subject-scoped attestations. Verified live at submission time by the backend.
+2. **Controller-witness (on-chain)** — snapshots the ephemeral proof on-chain. Permanent record that the wallet was verified as controlling the subject at a specific time. Costs one sponsored write credit. Recommended for associating a subject with an account on `/account`.
+3. **Key-binding (on-chain)** — full bidirectional binding with lifecycle management (revocation, rotation, expiration). Used by agents, x402 servers, and services that need formal authorization chains.
 
-Important backend rule:
+### `/account` subject association
 
-- the frontend verification step is UX preflight only
-- `POST /api/private/subjects` is the authoritative ownership check
-- other clients cannot bypass ownership checks by skipping the public verification endpoint
+The `/account` page's "Add Subject Identifier" flow opens the `SubjectOwnershipDialog`. To formally associate a subject with the account (visible on `/account`, used for pre-populating forms), the user must file at least a controller-witness attestation. This puts the association on-chain as the source of truth. The stored subject on the account is a cache of the on-chain state.
 
-Bootstrap-subject replacement rule:
+### Backend enforcement
 
-- if the account only has the default bootstrap wallet `did:pkh` subject and the user adds their first meaningful subject such as `did:web:example.com`, the backend replaces the bootstrap subject with the real one
-- the real subject becomes the default subject for the account
-
-### Re-verification rules
-
-Subject ownership is verified live on each subject-scoped attestation submission. The live check hits all available proof sources:
+The backend relay (`POST /api/private/relay/eas/delegated-attest`) checks subject ownership authoritatively before submitting subject-scoped attestations. The check hits all available proof sources:
 
 - DNS TXT records (`_controllers.<domain>`)
 - `.well-known/did.json` DID documents
 - on-chain key-binding attestations
 - on-chain controller-witness attestations
-- on-chain linked-identifier attestations
 
-The backend does not rely on stored subject records as proof of ownership. Stored subjects are a convenience cache for pre-populating the UI and displaying the account's known subjects.
+If no proof is found, the backend returns `SUBJECT_OWNERSHIP_REQUIRED`. The frontend catches this error and opens the `SubjectOwnershipDialog`.
 
-**Subject pruning on failed live check:**
+### Re-verification rules
 
-If a live verification check fails for a subject that is stored on the account, the backend removes that subject from the account's stored subjects. This keeps the database in sync with the actual state of the proof sources. The user is then prompted to re-verify via the `SubjectConfirmationDialog`, which guides them through re-establishing their proof (re-adding the DNS TXT record, re-hosting the did.json, etc.). If re-verification succeeds, the subject is re-attached to the account.
+Subject ownership is verified by the backend on each subject-scoped attestation submission. The backend does not rely on stored subject records as proof of ownership. Stored subjects are a convenience cache for pre-populating the UI.
 
-This pruning ensures that stored subjects do not become stale. A user who removes their DNS TXT record or revokes a key binding will have the corresponding subject removed from their account the next time a live check runs against it.
-
-**When live checks run:**
-
-- at attestation submission time (Gate 2 in the submission flow)
-- when the backend processes a subject-scoped relay submission (`POST /api/private/relay/eas/delegated-attest`)
-
-Live checks do not run on page load, session restore, or account page views. The `/account` page displays stored subjects as-is. Pruning only happens when a submission triggers a live check.
+Live checks do not run on page load, session restore, or account page views. The `/account` page displays stored subjects as-is.
 
 See `docs.omatrust.org` for key-binding proof formats and controller-witness attestation details.
-
 See `app-registry-frontend` for its implementation of `did:web` ownership checking.
-
-### Future direction: subjects as derived state
-
-Long-term, stored subjects should be an index derived from on-chain attestations (key bindings, controller-witness attestations, linked identifiers) rather than user-managed state. When a key-binding attestation is filed, the backend indexes it. When a DNS TXT record is verified, the backend records the verification but treats it as ephemeral. The `/account` page would show subjects derived from the latest on-chain and DNS state, not from a mutable database table. This is not V1 scope but informs the direction of the pruning behavior described above.
 
 ---
 
@@ -538,11 +523,12 @@ The page redirects to `/` when the session is lost (wallet disconnect, session e
 The header shows the user's display name or truncated wallet address when signed in, linking to `/account`. When not signed in, the header shows "Sign In".
 
 ## Still to implement:
-- `AttestationForm` Gate 2: live subject verification call before submission, with `SubjectConfirmationDialog` fallback on failure
+- `SubjectOwnershipDialog` — shared modal for subject verification with optional on-chain recording (controller-witness) and key-binding creation
+- `AttestationForm` "Verify ownership" button on subject field for subject-scoped schemas
+- `AttestationForm` error handling for `SUBJECT_OWNERSHIP_REQUIRED` backend rejection — opens dialog, auto-submits after verification
 - `AttestationForm` subject field pre-population from session's `primarySubject`
-- backend subject pruning: remove stored subject when live verification fails at submission time
-- backend live verification should check all proof sources: DNS TXT, did.json, key bindings, controller-witness attestations, linked identifiers
-- `SubjectConfirmationDialog` pre-population via `subjectHint` prop when opened from `AttestationForm`
+- Backend `SUBJECT_OWNERSHIP_REQUIRED` enforcement in `POST /api/private/relay/eas/delegated-attest` for subject-scoped schemas
+- `/account` "Add Subject Identifier" flow updated to use `SubjectOwnershipDialog` and require on-chain proof (controller-witness or key-binding)
 - custom JSON-RPC transport for premium RPC
 - Premium RPC fallback to public RPC on failure
 
@@ -563,9 +549,12 @@ The header shows the user's display name or truncated wallet address when signed
 - [x] Subject ownership verification exists with manual retry and backend enforcement
 - [x] Subject ownership is re-checked authoritatively by the backend when a subject is attached to the account
 - [x] Unauthenticated subject-scoped submission stays in one funnel: auth -> subject setup -> submission
-- [ ] Signed-in subject-scoped submission runs live verification against the form's subject before submission
-- [ ] Failed live verification prunes the stale subject from the account and opens SubjectConfirmationDialog for re-verification
+- [ ] Subject-scoped attestation forms show "Verify ownership" button next to subject field
+- [ ] SubjectOwnershipDialog shared across attestation forms and /account page
+- [ ] Backend enforces subject ownership check on relay submission (SUBJECT_OWNERSHIP_REQUIRED error)
+- [ ] Frontend handles SUBJECT_OWNERSHIP_REQUIRED by opening SubjectOwnershipDialog and auto-submitting after verification
 - [ ] Subject field is pre-populated from session's primary subject when signed in
+- [ ] /account subject association requires on-chain proof (controller-witness or key-binding)
 - [x] Account page shows plan, usage, and upgrade option
 - [x] Backend session cookies are included on all backend requests
 - [x] Premium RPC credentials are never exposed to the browser

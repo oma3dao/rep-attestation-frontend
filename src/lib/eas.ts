@@ -25,6 +25,12 @@ const activeThirdwebChain = getActiveThirdwebChain()
 const ZERO_UID = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex
 const SIGNATURE_TIMEOUT_MS = 2 * 60_000
 
+/** Extract the subject DID from attestation data for subject-scoped schemas. */
+function extractSubjectDid(data: Record<string, unknown>): string | undefined {
+  const value = data.subject ?? data.subjectId ?? data.recipient
+  return typeof value === 'string' && value.startsWith('did:') ? value : undefined
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -291,6 +297,7 @@ export function useEASClient() {
         prepared,
         signature,
         attester: attesterAddress,
+        subjectDid: extractSubjectDid(data.data),
       })
 
       logger.log('[EAS] Subscription relay attestation successful:', result)

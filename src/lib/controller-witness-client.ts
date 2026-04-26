@@ -9,8 +9,32 @@ import * as reputation from '@oma3/omatrust/reputation'
 import type { Hex, Did } from '@oma3/omatrust/reputation'
 import logger from '@/lib/logger'
 
-const WITNESS_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL ?? '/api/controller-witness-proxy'
+function getWitnessGatewayUrl() {
+  const configured = process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL?.trim()
+
+  if (!configured) {
+    return '/api/controller-witness-proxy'
+  }
+
+  if (typeof window === 'undefined') {
+    return configured
+  }
+
+  try {
+    const configuredUrl = new URL(configured, window.location.origin)
+    if (
+      configuredUrl.pathname === '/api/controller-witness-proxy' &&
+      configuredUrl.hostname === 'localhost' &&
+      configuredUrl.origin !== window.location.origin
+    ) {
+      return `${window.location.origin}/api/controller-witness-proxy`
+    }
+  } catch {
+    return configured
+  }
+
+  return configured
+}
 
 interface WitnessCallParams {
   attestationUid: string
@@ -36,7 +60,7 @@ export async function callControllerWitness(
 
   try {
     const result = await reputation.callControllerWitness({
-      gatewayUrl: WITNESS_GATEWAY_URL,
+      gatewayUrl: getWitnessGatewayUrl(),
       attestationUid: params.attestationUid as Hex,
       chainId: params.chainId,
       easContract: params.easContract as Hex,

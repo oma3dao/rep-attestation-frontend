@@ -353,6 +353,7 @@ export async function postRelayEasDelegatedAttest(params: {
   attester: string
   prepared: unknown
   signature: string
+  subjectDid?: string
 }) {
   return backendFetch<RelayEasDelegatedAttestResponse>("/api/private/relay/eas/delegated-attest", {
     method: "POST",

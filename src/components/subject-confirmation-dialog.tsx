@@ -38,6 +38,7 @@ interface SubjectConfirmationDialogProps {
   walletDid: string | null
   existingSubjectDids: string[]
   onSubjectCreated: (subject: BackendSubject) => void
+  initialMessage?: string | null
 }
 
 function getDidMethod(value: string): SupportedDidMethod | "" {
@@ -77,13 +78,14 @@ export function SubjectConfirmationDialog({
   walletDid,
   existingSubjectDids,
   onSubjectCreated,
+  initialMessage,
 }: SubjectConfirmationDialogProps) {
   const [subjectDid, setSubjectDid] = useState("")
   const [selectedMethod, setSelectedMethod] = useState<SupportedDidMethod>("did:web")
   const [didWebProofMethod, setDidWebProofMethod] = useState<DidWebProofMethod>("dns")
   const [verificationState, setVerificationState] = useState<"idle" | "verified" | "failed">("idle")
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(initialMessage ?? null)
   const [isVerifying, setIsVerifying] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -97,8 +99,10 @@ export function SubjectConfirmationDialog({
       setErrorMessage(null)
       setIsVerifying(false)
       setIsSubmitting(false)
+    } else if (initialMessage) {
+      setErrorMessage(initialMessage)
     }
-  }, [open])
+  }, [open, initialMessage])
 
   const currentMethod = useMemo(() => {
     const inferred = getDidMethod(subjectDid)

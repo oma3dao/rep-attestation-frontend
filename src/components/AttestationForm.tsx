@@ -1,26 +1,31 @@
 'use client'
 
 import React from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useActiveAccount } from 'thirdweb/react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { EvidencePointerProofInput } from './EvidencePointerProofInput'
+import { SubjectConfirmationDialog } from '@/components/subject-confirmation-dialog'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
+import { getActiveChain } from '@/lib/blockchain'
 import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
 import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
 import { useBackendSession } from '@/components/backend-session-provider'
 import {
+  BackendApiError,
+  buildWalletDid,
   deriveSubjectUrlHint,
   getBackendErrorMessage,
   logoutSession,
   shouldRouteBackendErrorToAccount,
+  type BackendSubject,
 } from '@/lib/omatrust-backend'
 import logger from '@/lib/logger';
 
@@ -94,6 +99,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   const [errors, setErrors] = useState<FormErrors>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
   const [showAccountAction, setShowAccountAction] = useState(false)
+  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false)
+  const [subjectDialogMessage, setSubjectDialogMessage] = useState<string | null>(null)
+  const pendingSubmitDataRef = useRef<Record<string, any> | null>(null)
   const { session, setSession, openAuthDialog } = useBackendSession()
   const activeAccount = useActiveAccount()
 
@@ -258,14 +266,24 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   }
 
   /**
-   * Submission gate — implements the 2×2 wallet/session matrix:
+   * Extract the subject DID from the built attestation data.
+   */
+  const extractSubjectDid = (completeData: Record<string, any>): string => {
+    return (
+      typeof completeData.subject === 'string' ? completeData.subject
+      : typeof completeData.subjectId === 'string' ? completeData.subjectId
+      : typeof completeData.recipient === 'string' ? completeData.recipient
+      : ''
+    )
+  }
+
+  /**
+   * Submission gate:
    *
-   * | Session | Wallet    | Action                                    |
-   * |---------|-----------|-------------------------------------------|
-   * | Yes     | Connected | Submit directly                            |
-   * | Yes     | No wallet | Clear stale session, open auth dialog      |
-   * | No      | Connected | Open auth dialog (wallet available for SIWE)|
-   * | No      | No wallet | Open auth dialog                           |
+   * Gate 1 — Session + Wallet (2×2 matrix)
+   * Subject ownership — enforced by the backend. If the backend returns
+   * SUBJECT_OWNERSHIP_REQUIRED, the frontend opens the SubjectOwnershipDialog
+   * and auto-submits after verification.
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -279,41 +297,65 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       const hasSession = !!session
       const hasWallet = !!activeAccount
 
-      // Happy path: session + wallet → submit directly
-      if (hasSession && hasWallet) {
-        await submitPreparedAttestation(completeData)
+      // --- Gate 1: Session + Wallet ---
+
+      if (!hasSession || !hasWallet) {
+        if (hasSession && !hasWallet) {
+          try { await logoutSession() } catch { /* best-effort */ }
+          setSession(null)
+        }
+
+        const subjectValue = extractSubjectDid(completeData)
+        openAuthDialog({
+          mode: 'chooser',
+          reason: 'submission',
+          schemaId: schema.id,
+          schemaTitle: schema.title,
+          subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
+          subjectHint: deriveSubjectUrlHint(subjectValue),
+        })
         return
       }
 
-      // Session exists but wallet is gone → stale session, clear and re-auth
-      if (hasSession && !hasWallet) {
-        try { await logoutSession() } catch { /* best-effort */ }
-        setSession(null)
+      // --- Submit (backend enforces subject ownership for subject-scoped schemas) ---
+      await submitPreparedAttestation(completeData)
+    } catch (error) {
+      // Handle SUBJECT_OWNERSHIP_REQUIRED from the backend relay
+      if (error instanceof BackendApiError && error.code === 'SUBJECT_OWNERSHIP_REQUIRED') {
+        logger.log('[AttestationForm] Backend requires subject ownership proof, opening dialog')
+        pendingSubmitDataRef.current = buildCompleteData()
+        setSubjectDialogMessage(
+          'Subject ownership verification failed. Re-confirm your proof and try again.  Failure explanation- ' + (error.details || error.message)
+        )
+        setSubjectDialogOpen(true)
+        return
       }
 
-      // Open auth dialog (handles both no-session cases)
-      const subjectValue =
-        typeof completeData.subject === 'string'
-          ? completeData.subject
-          : typeof completeData.subjectId === 'string'
-            ? completeData.subjectId
-            : typeof completeData.recipient === 'string'
-              ? completeData.recipient
-              : ''
-
-      openAuthDialog({
-        mode: 'chooser',
-        reason: 'submission',
-        schemaId: schema.id,
-        schemaTitle: schema.title,
-        subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
-        subjectHint: deriveSubjectUrlHint(subjectValue),
-      })
-    } catch (error) {
       const errorMessage = getBackendErrorMessage(error)
       setShowAccountAction(shouldRouteBackendErrorToAccount(error))
       setGeneralError(errorMessage)
       logger.error('Submission error:', error)
+    }
+  }
+
+  /**
+   * Called when the SubjectOwnershipDialog successfully verifies and
+   * attaches a subject. Auto-submits the pending attestation.
+   */
+  const handleSubjectVerified = async (_subject: BackendSubject) => {
+    setSubjectDialogOpen(false)
+    const completeData = pendingSubmitDataRef.current
+    pendingSubmitDataRef.current = null
+
+    if (!completeData) return
+
+    try {
+      await submitPreparedAttestation(completeData)
+    } catch (error) {
+      const errorMessage = getBackendErrorMessage(error)
+      setShowAccountAction(shouldRouteBackendErrorToAccount(error))
+      setGeneralError(errorMessage)
+      logger.error('Submission error after subject verification:', error)
     }
   }
 
@@ -358,7 +400,12 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     )
   }
 
+  const walletDid = activeAccount?.address
+    ? buildWalletDid(activeAccount.address, getActiveChain().id)
+    : null
+
   return (
+    <>
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
         {(generalError || lastError) && (
@@ -421,5 +468,23 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         </Card>
       </div>
     </div>
+
+    <SubjectConfirmationDialog
+      open={subjectDialogOpen}
+      onOpenChange={(open) => {
+        setSubjectDialogOpen(open)
+        if (!open) {
+          pendingSubmitDataRef.current = null
+          setSubjectDialogMessage(null)
+        }
+      }}
+      walletDid={walletDid}
+      existingSubjectDids={[]}
+      initialMessage={subjectDialogMessage}
+      onSubjectCreated={(subject) => {
+        void handleSubjectVerified(subject)
+      }}
+    />
+    </>
   )
 }
