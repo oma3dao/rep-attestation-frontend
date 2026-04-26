@@ -277,6 +277,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
    */
   const performChallengeSignVerify = async (intent: AuthIntent) => {
     challengeFlowActiveRef.current = true
+    setAuthIntent(intent)
     setIsBootstrappingChallenge(true)
     setErrorMessage(null)
 

@@ -97,7 +97,13 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   const router = useRouter()
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
-  const [generalError, setGeneralError] = useState<string | null>(null)
+  const [generalError, setGeneralErrorRaw] = useState<string | null>(null)
+  const setGeneralError = (message: string | null) => {
+    setGeneralErrorRaw(message)
+    if (message) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
   const [showAccountAction, setShowAccountAction] = useState(false)
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false)
   const [subjectDialogMessage, setSubjectDialogMessage] = useState<string | null>(null)

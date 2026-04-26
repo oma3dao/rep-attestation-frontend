@@ -360,11 +360,15 @@ export default function AccountPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Reads Left</p>
-                    <p className="mt-1 text-foreground">{readsLeft ?? "—"}</p>
+                    <p className={`mt-1 ${readsLeft === 0 ? "font-semibold text-destructive" : "text-foreground"}`}>
+                      {readsLeft ?? "—"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Writes Left</p>
-                    <p className="mt-1 text-foreground">{writesLeft ?? "—"}</p>
+                    <p className={`mt-1 ${writesLeft === 0 ? "font-semibold text-destructive" : "text-foreground"}`}>
+                      {writesLeft ?? "—"}
+                    </p>
                   </div>
                 </div>
 
