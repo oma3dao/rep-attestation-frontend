@@ -76,4 +76,20 @@ describe('FormField', () => {
     fireEvent.change(textarea, { target: { value: 'about me' } });
     expect(handleChange).toHaveBeenCalledWith('about me');
   });
+
+  it('applies error border class to textarea when error is provided', () => {
+    render(
+      <FormField label="Bio" name="bio" type="textarea" value="" onChange={() => {}} error="Required" />
+    );
+    const textarea = screen.getByLabelText(/^Bio/);
+    expect(textarea).toHaveClass('border-red-500');
+  });
+
+  it('applies error border class to array input when error is provided', () => {
+    render(
+      <FormField label="Tags" name="tags" type="array" value={[]} onChange={() => {}} error="Invalid" />
+    );
+    const input = screen.getByLabelText(/^Tags/);
+    expect(input).toHaveClass('border-red-500');
+  });
 }); 

@@ -1,181 +1,322 @@
 "use client"
 
-import React from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import * as reputation from "@oma3/omatrust/reputation"
+import type { Hex } from "@oma3/omatrust/reputation"
+import { useActiveAccount } from "thirdweb/react"
+import { ethers6Adapter } from "thirdweb/adapters/ethers6"
+import { ExternalLink, RefreshCw } from "lucide-react"
+import { client } from "@/app/client"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Shield, FileCheck, LinkIcon, Star, Plus } from "lucide-react"
-import Link from "next/link"
+import { AttestationDetailModal } from "@/components/attestation-detail-modal"
+import { RevokeConfirmationDialog } from "@/components/revoke-confirmation-dialog"
+import { getAttestationsByAttesterWithMetadata, type EnrichedAttestationResult } from "@/lib/attestation-queries"
+import { getActiveThirdwebChain, useWallet } from "@/lib/blockchain"
+import { getContractAddress } from "@/config/attestation-services"
+import { getChainById } from "@/config/chains"
+import { dashboardActions } from "@/config/publish-options"
+
+const activeThirdwebChain = getActiveThirdwebChain()
+
+function truncateMiddle(value: string, head: number = 12, tail: number = 8): string {
+  if (value.length <= head + tail + 3) {
+    return value
+  }
+  return `${value.slice(0, head)}...${value.slice(-tail)}`
+}
+
+function getRecipientLabel(attestation: EnrichedAttestationResult): string {
+  const subject = attestation.decodedData?.subject
+  if (typeof subject === "string" && subject.length > 0) {
+    return subject
+  }
+  return attestation.recipient
+}
+
+function canRevoke(attestation: EnrichedAttestationResult, connectedAddress: string | null): boolean {
+  if (!connectedAddress) {
+    return false
+  }
+  return (
+    attestation.revocable &&
+    attestation.revocationTime === 0 &&
+    attestation.attester.toLowerCase() === connectedAddress.toLowerCase()
+  )
+}
 
 export default function DashboardPage() {
-  // Mock data for demonstration
-  const recentAttestations = [
-    {
-      id: "1",
-      type: "certification",
-      subject: "DeFi Protocol v2.1",
-      status: "confirmed",
-      date: "2024-01-15",
-      icon: Shield,
-      color: "bg-blue-100 text-blue-800",
-    },
-    {
-      id: "2",
-      type: "user-review",
-      subject: "Gaming App",
-      status: "pending",
-      date: "2024-01-14",
-      icon: Star,
-      color: "bg-yellow-100 text-yellow-800",
-    },
-    {
-      id: "3",
-      type: "endorsement",
-      subject: "NFT Marketplace",
-      status: "confirmed",
-      date: "2024-01-13",
-      icon: FileCheck,
-      color: "bg-green-100 text-green-800",
-    },
-  ]
+  const { isConnected, address, chainId } = useWallet()
+  const account = useActiveAccount()
+  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [revokingUid, setRevokingUid] = useState<string | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<EnrichedAttestationResult | null>(null)
+  const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const stats = [
-    { label: "Total Attestations", value: "12", change: "+3 this month" },
-    { label: "Confirmed", value: "9", change: "+2 this month" },
-    { label: "Pending", value: "3", change: "+1 this week" },
-    { label: "Reputation Score", value: "847", change: "+15 this month" },
-  ]
+  const chain = useMemo(() => getChainById(chainId), [chainId])
+  const easContractAddress = useMemo(() => getContractAddress("eas", chainId), [chainId])
+
+  const loadAttestations = useCallback(async () => {
+    if (!isConnected || !address) {
+      setAttestations([])
+      return
+    }
+    if (!easContractAddress) {
+      setAttestations([])
+      setError("My Attestations is currently available only on EAS-enabled chains.")
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setError(null)
+      const results = await getAttestationsByAttesterWithMetadata(address, chainId, 100)
+      setAttestations(results)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load attestations.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [address, chainId, easContractAddress, isConnected])
+
+  useEffect(() => {
+    void loadAttestations()
+  }, [loadAttestations])
+
+  const handleRevoke = useCallback(async (attestation: EnrichedAttestationResult) => {
+    if (!address || !account || !easContractAddress) {
+      setError("Wallet account or EAS contract not available.")
+      return
+    }
+    if (!canRevoke(attestation, address)) {
+      return
+    }
+
+    try {
+      setRevokingUid(attestation.uid)
+      setError(null)
+
+      const signer = await ethers6Adapter.signer.toEthers({
+        client,
+        chain: activeThirdwebChain,
+        account,
+      })
+      if (!signer) {
+        throw new Error("Failed to obtain signer.")
+      }
+
+      await reputation.revokeAttestation({
+        signer,
+        easContractAddress: easContractAddress as Hex,
+        schemaUid: attestation.schema as Hex,
+        uid: attestation.uid as Hex,
+      })
+
+      await loadAttestations()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
+    } finally {
+      setRevokingUid(null)
+      setRevokeTarget(null)
+    }
+  }, [account, address, easContractAddress, loadAttestations])
+
+  const openDetailModal = useCallback((attestation: EnrichedAttestationResult) => {
+    setSelectedAttestation(attestation)
+    setIsModalOpen(true)
+  }, [])
+
+  const closeDetailModal = useCallback(() => {
+    setIsModalOpen(false)
+    setSelectedAttestation(null)
+  }, [])
+
+  if (!isConnected) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Card>
+          <CardHeader>
+            <CardTitle>Manage Your Service Trust</CardTitle>
+            <CardDescription>
+              Sign in to manage keys, linked identities, review responses, and your published trust data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard?action=signin">
+              <Button>Sign In</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage your attestations and view your activity</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Manage Your Service Trust</h1>
+          <p className="mt-1 text-muted-foreground">
+            Wallet{" "}
+            <Link href="/account" className="font-medium text-primary transition-colors hover:text-primary/80">
+              {truncateMiddle(address || "")}
+            </Link>{" "}
+            on {chain?.name || `Chain ${chainId}`}
+          </p>
         </div>
-        <Link href="/attest">
-          <Button className="flex items-center space-x-2">
-            <Plus className="h-4 w-4" />
-            <span>Create Attestation</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => void loadAttestations()} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
-        </Link>
+          <Link href="/publish">
+            <Button>Open Publish Page</Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, index) => (
-          <Card key={index}>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-sm">{stat.label}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              <p className="text-sm text-green-600 mt-1">{stat.change}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Service Management Actions</CardTitle>
+          <CardDescription>
+            Common actions for service operators and teams managing ongoing trust signals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {dashboardActions.map((action) => (
+            <div
+              key={action.href}
+              className="rounded-xl border border-border/70 bg-muted/40 p-4"
+            >
+              <h3 className="font-semibold tracking-tight text-foreground">{action.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{action.description}</p>
+              <Link href={action.href} className="mt-4 inline-flex">
+                <Button variant="outline" size="sm">
+                  Open
+                </Button>
+              </Link>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Recent Attestations */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Attestations</CardTitle>
-              <CardDescription>Your latest attestation submissions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentAttestations.map((attestation) => (
-                  <div key={attestation.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="p-2 bg-gray-100 rounded-lg">
-                        <attestation.icon className="h-5 w-5 text-gray-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">{attestation.subject}</h3>
-                        <p className="text-sm text-gray-500 capitalize">{attestation.type.replace("-", " ")}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Badge
-                        variant={attestation.status === "confirmed" ? "default" : "secondary"}
-                        className={
-                          attestation.status === "confirmed"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }
+      {error && (
+        <Card className="mb-4 border-destructive/20 bg-destructive/10">
+          <CardContent className="pt-6 text-destructive">{error}</CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your Attestations</CardTitle>
+          <CardDescription>
+            View all attestations created by your connected wallet and revoke revocable attestations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="py-12 text-center text-muted-foreground">Loading attestations...</div>
+          ) : attestations.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">No attestations found for this wallet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-3 pr-4 font-medium">Schema</th>
+                    <th className="py-3 pr-4 font-medium">Recipient</th>
+                    <th className="py-3 pr-4 font-medium">Date</th>
+                    <th className="py-3 pr-4 font-medium">Status</th>
+                    <th className="py-3 pr-4 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attestations.map((attestation) => {
+                    const recipientLabel = getRecipientLabel(attestation)
+                    const revoked = attestation.revocationTime > 0
+                    const revokeAllowed = canRevoke(attestation, address)
+                    return (
+                      <tr
+                        key={attestation.uid}
+                        className="cursor-pointer border-b align-top transition-colors hover:bg-muted/50"
+                        onClick={() => openDetailModal(attestation)}
                       >
-                        {attestation.status}
-                      </Badge>
-                      <span className="text-sm text-gray-500">{attestation.date}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                        <td className="py-4 pr-4">
+                          <div className="font-medium text-foreground">{attestation.schemaTitle || attestation.schemaId || "Unknown schema"}</div>
+                          <div className="mt-1 font-mono text-xs text-muted-foreground">{truncateMiddle(attestation.uid, 10, 6)}</div>
+                        </td>
+                        <td className="py-4 pr-4">
+                          <div className="font-mono text-foreground/80" title={recipientLabel}>
+                            {truncateMiddle(recipientLabel, 20, 10)}
+                          </div>
+                        </td>
+                        <td className="py-4 pr-4 text-foreground/80">{new Date(attestation.time * 1000).toLocaleString()}</td>
+                        <td className="py-4 pr-4">
+                          {revoked ? (
+                            <Badge variant="destructive">Revoked</Badge>
+                          ) : (
+                            <Badge variant="success">Active</Badge>
+                          )}
+                        </td>
+                        <td className="py-4 pr-4">
+                          <div className="flex items-center gap-2">
+                            {revokeAllowed ? (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={revokingUid === attestation.uid}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setRevokeTarget(attestation)
+                                }}
+                              >
+                                {revokingUid === attestation.uid ? "Revoking..." : "Revoke"}
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                            {attestation.txHash && chain?.blockExplorers?.[0]?.url && (
+                              <a
+                                href={`${chain.blockExplorers[0].url}/tx/${attestation.txHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:text-primary/80"
+                                title="View transaction"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Quick Actions */}
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common attestation types</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Link href="/attest/certification" className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Certification
-                </Button>
-              </Link>
-              <Link href="/attest/user-review" className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <Star className="h-4 w-4 mr-2" />
-                  User Review
-                </Button>
-              </Link>
-              <Link href="/attest/endorsement" className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <FileCheck className="h-4 w-4 mr-2" />
-                  Endorsement
-                </Button>
-              </Link>
-              <Link href="/attest/linked-identifier" className="block">
-                <Button variant="outline" className="w-full justify-start">
-                  <LinkIcon className="h-4 w-4 mr-2" />
-                  Linked Identifier
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+      <AttestationDetailModal
+        isOpen={isModalOpen}
+        onClose={closeDetailModal}
+        attestation={selectedAttestation}
+      />
 
-          {/* Activity Summary */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Activity Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">This Week</span>
-                  <span className="font-medium">3 attestations</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">This Month</span>
-                  <span className="font-medium">8 attestations</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Total</span>
-                  <span className="font-medium">12 attestations</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <RevokeConfirmationDialog
+        isOpen={revokeTarget !== null}
+        onClose={() => setRevokeTarget(null)}
+        onConfirm={() => { if (revokeTarget) void handleRevoke(revokeTarget) }}
+        attestationUid={revokeTarget?.uid ?? ""}
+        isRevoking={revokingUid !== null}
+      />
     </div>
   )
 }

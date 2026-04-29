@@ -1,95 +1,227 @@
 "use client"
 
+import React, { useState, useEffect } from "react"
 import Link from "next/link"
-import Image from "next/image"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Menu, X, MessageSquarePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { DEFAULT_CHAIN } from "@/config/chains"
-import { useWallet } from "@/lib/blockchain"
+import { AuthEntryDialog } from "@/components/auth-entry-dialog"
+import { ReviewWidgetModal } from "@/components/review-widget-modal"
+import { useBackendSession } from "@/components/backend-session-provider"
+
+type NavLink = {
+  label: string
+  href: string
+  external?: boolean
+}
+
+const navLinks: NavLink[] = [
+  { label: "Activity", href: "/" },
+  { label: "Publish", href: "/publish" },
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Docs", href: "https://docs.omatrust.org/", external: true },
+]
 
 export function Header() {
   const pathname = usePathname()
-  const { isConnected, isChainSupported } = useWallet()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { session, authDialog, closeAuthDialog, openAuthDialog: openBackendAuthDialog } = useBackendSession()
+  const [scrolled, setScrolled] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
-  const navItems = [
-    { href: "/", label: "Home", external: false },
-    { href: "https://registry.omatrust.org", label: "Registry", external: true },
-    { href: "https://docs.oma3.org/attestations", label: "Docs", external: true },
-    // { href: "/attest", label: "Create Attestation" }, // Redundant with home page
-    // { href: "/dashboard", label: "Dashboard" }, // TODO: Re-enable when dashboard is implemented
-  ]
+  const isSignedIn = !!session
+  const displayName = session?.account?.displayName
+  const walletAddress = session?.wallet?.did
+  const headerLabel = isSignedIn
+    ? displayName || (walletAddress ? `${walletAddress.slice(-8)}` : "Account")
+    : "Sign In"
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 40)
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
+  useEffect(() => {
+    if (searchParams.get("action") !== "signin") {
+      return
+    }
+
+    // Don't open the sign-in modal if the user already has a session
+    if (!isSignedIn) {
+      openBackendAuthDialog({ mode: "chooser" })
+    }
+
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("action")
+    const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+    router.replace(nextUrl, { scroll: false })
+  }, [isSignedIn, openBackendAuthDialog, pathname, router, searchParams])
+
+  const openAuthDialog = () => {
+    setMobileOpen(false)
+    openBackendAuthDialog({ mode: "chooser" })
+  }
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-20">
-          <Link href="/" className="flex items-center">
-            <Image 
-              src="/oma3_logo.svg" 
-              alt="OMA3 Logo" 
-              width={120} 
-              height={40} 
-              priority
-              style={{ width: 'auto' }}
-            />
-            <span className="ml-2 text-gray-600 text-lg">Reputation Portal</span>
+    <>
+      <nav
+        className={`sticky top-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? "bg-background/80 backdrop-blur-xl border-b border-border"
+          : "bg-transparent"
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+          <Link
+            href="https://www.omatrust.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-2"
+          >
+            <span className="text-xl font-bold tracking-tight text-foreground">
+              OMATrust
+            </span>
           </Link>
 
-          <div className="flex-1" />
-
-          <div className="flex items-center space-x-8">
-            <nav className="hidden md:flex space-x-6">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-lg font-medium transition-colors hover:text-blue-600 ${
-                    pathname === item.href ? "text-blue-600" : "text-gray-600"
+          <div className="hidden items-center gap-8 md:flex">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className={`group relative text-sm font-medium transition-colors hover:text-foreground ${
+                  !link.external && pathname === link.href
+                    ? "text-foreground"
+                    : "text-foreground/70"
+                }`}
+              >
+                {link.label}
+                <span
+                  className={`absolute -bottom-1 left-0 h-px bg-primary transition-all group-hover:w-full ${
+                    !link.external && pathname === link.href ? "w-full" : "w-0"
                   }`}
-                  target={item.external ? "_blank" : undefined}
-                  rel={item.external ? "noopener noreferrer" : undefined}
+                />
+              </Link>
+            ))}
+            {isSignedIn ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md border-primary/25 bg-background/80 px-3 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                  onClick={() => setReviewOpen(true)}
                 >
-                  {item.label}
+                  <MessageSquarePlus className="mr-1.5 h-4 w-4" />
+                  Review
+                </Button>
+                <Link
+                  href="/account"
+                  className="rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
+                >
+                  {headerLabel}
                 </Link>
-              ))}
-            </nav>
-
-            {/* Network mismatch warning */}
-            {isConnected && !isChainSupported && (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-100 border border-orange-300 rounded-md">
-                <span className="text-orange-800 text-sm font-medium">
-                  Wrong Network
-                </span>
-                <span className="text-orange-600 text-xs">
-                  Please disconnect your wallet, switch to {DEFAULT_CHAIN.name} in your wallet, and then reconnect.  
-                </span>
-              </div>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-2 border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                onClick={openAuthDialog}
+              >
+                Sign In
+              </Button>
             )}
-            <div id="header-connect">
-              <Button 
-                isConnectButton 
-                className="bg-black text-white hover:bg-black/80 rounded-md px-4 py-2"
-                connectButtonProps={{ label: "Sign In" }}
-              />
-              <style>{`
-                #header-connect .tw-connect-wallet {
-                  height: 2.25rem !important;
-                  padding: 0 0.75rem !important;
-                  background-color: rgb(0 0 0) !important;
-                  color: white !important;
-                  border-radius: 0.375rem !important;
-                  font-weight: 500 !important;
-                  font-size: 0.875rem !important;
-                  border: none !important;
-                }
-                #header-connect .tw-connect-wallet:hover {
-                  background-color: rgb(0 0 0 / 0.8) !important;
-                }
-              `}</style>
-            </div>
           </div>
+
+          <button
+            className="text-foreground md:hidden"
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
-      </div>
-    </header>
+
+        {mobileOpen && (
+          <div className="border-b border-border bg-background/95 px-6 pb-6 backdrop-blur-xl md:hidden">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className={`block border-b border-border/50 py-3 text-sm transition-colors hover:text-foreground ${
+                  !link.external && pathname === link.href
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+            {isSignedIn ? (
+              <div className="mt-4 space-y-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                  onClick={() => {
+                    setMobileOpen(false)
+                    setReviewOpen(true)
+                  }}
+                >
+                  <MessageSquarePlus className="mr-1.5 h-4 w-4" />
+                  Review
+                </Button>
+                <Link
+                  href="/account"
+                  className="block w-full rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-center text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {headerLabel}
+                </Link>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 w-full border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
+                onClick={openAuthDialog}
+              >
+                Sign In
+              </Button>
+            )}
+          </div>
+        )}
+      </nav>
+
+      {authDialog.open && (
+        <AuthEntryDialog
+          request={authDialog}
+          onOpenChange={(open) => {
+            if (open) {
+              openBackendAuthDialog({
+                mode: authDialog.mode,
+                reason: authDialog.reason,
+                schemaId: authDialog.schemaId,
+                schemaTitle: authDialog.schemaTitle,
+                subjectScoped: authDialog.subjectScoped,
+                subjectHint: authDialog.subjectHint,
+              })
+              return
+            }
+            closeAuthDialog()
+          }}
+        />
+      )}
+
+      <ReviewWidgetModal open={reviewOpen} onOpenChange={setReviewOpen} />
+    </>
   )
 }

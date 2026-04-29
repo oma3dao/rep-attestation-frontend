@@ -1,24 +1,32 @@
-import React from "react"
+import React, { Suspense } from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { Header } from "@/components/header"
 import { Providers } from "@/components/providers"
 import { PreAlphaBanner } from "@/components/pre-alpha-banner"
 import Script from "next/script"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+})
 
 export const metadata: Metadata = {
-  title: "OMA3 Attestation Portal",
-  description: "Create and manage attestations for the OMA3 App Registry",
-  keywords: ["attestations", "OMA3", "blockchain", "certifications", "reviews", "security", "web3"],
+  title: "OMATrust Portal",
+  description: "Publish trust data on services or manage trust for your own with OMATrust.",
+  keywords: ["OMATrust", "trust data", "reviews", "certifications", "security", "service trust", "web3"],
   authors: [{ name: "OMA3" }],
   openGraph: {
-    title: "OMA3 Attestation Portal",
-    description: "Create and manage attestations for the OMA3 App Registry",
+    title: "OMATrust Portal",
+    description: "Publish trust data on services or manage trust for your own with OMATrust.",
     type: "website",
-    url: "https://reputation.omatrust.org",
+    url: "https://app.omatrust.org",
   },
 }
 
@@ -35,11 +43,13 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <Providers>
         <PreAlphaBanner />
-        <Header />
-        <main className="min-h-screen bg-gray-50">{children}</main>
+        <Suspense fallback={null}>
+          <Header />
+        </Suspense>
+        <main className="min-h-screen bg-transparent">{children}</main>
         </Providers>
       </body>
     </html>

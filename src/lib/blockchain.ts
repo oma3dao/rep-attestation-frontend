@@ -1,6 +1,6 @@
 import { useActiveAccount, useActiveWalletChain } from 'thirdweb/react'
 import { defineChain } from 'thirdweb/chains'
-import { omachainTestnet, omachainMainnet, bscTestnet, bscMainnet, sepolia, mainnet } from '@/config/chains'
+import { omachainTestnet, omachainMainnet, bscTestnet, bscMainnet, sepolia, mainnet, baseSepolia, base } from '@/config/chains'
 
 /**
  * Get active chain from environment variable
@@ -92,6 +92,6 @@ export function useWallet() {
     account,
     
     // Utilities
-    supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bscMainnet.id, sepolia.id, mainnet.id]
+    supportedChainIds: [omachainTestnet.id, omachainMainnet.id, bscTestnet.id, bscMainnet.id, sepolia.id, mainnet.id, baseSepolia.id, base.id]
   }
 } 

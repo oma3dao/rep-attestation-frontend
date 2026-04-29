@@ -12,6 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
@@ -111,6 +112,23 @@ describe('DropdownMenu (Radix UI)', () => {
     expect(await screen.findByText('Label')).toBeInTheDocument();
     expect(await screen.findByText('Item')).toBeInTheDocument();
     expect(screen.getByRole('separator')).toBeInTheDocument();
+  });
+
+  it('renders DropdownMenuShortcut inside menu item', async () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Open Menu</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>
+            Save
+            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    await userEvent.click(screen.getByText('Open Menu'));
+    expect(await screen.findByText('Save')).toBeInTheDocument();
+    expect(await screen.findByText('⌘S')).toBeInTheDocument();
   });
 
   it('renders and opens a submenu', async () => {

@@ -192,11 +192,11 @@ export function Caip10Input({
   return (
     <div className={`space-y-3 ${className}`}>
       {/* Info about chain support */}
-      <div className="p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
-        <div className="flex gap-2 items-start text-blue-700 dark:text-blue-400 text-sm">
+      <div className="info-panel p-2">
+        <div className="flex gap-2 items-start text-sm">
           <InfoIcon size={16} className="mt-0.5 flex-shrink-0" />
           <div>
-            <p className="mt-1">If you know the contract&apos;s <strong>CAIP-10 ID</strong> (e.g., <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">eip155:11155111:0xAbc...</code>) paste it here.  If not, click on &quot;CAIP-10 Builder&quot; below.</p>
+            <p className="mt-1">If you know the contract&apos;s <strong>CAIP-10 ID</strong> (e.g., <code className="rounded bg-primary/10 px-1 text-primary">eip155:11155111:0xAbc...</code>) paste it here. If not, click on &quot;CAIP-10 Builder&quot; below.</p>
           </div>
         </div>
       </div>
@@ -211,7 +211,7 @@ export function Caip10Input({
             onChange={handleInputChange}
             onBlur={handleInputBlur}
             placeholder="eip155:1:0xAbc123... or paste full CAIP-10"
-            className={showError ? "border-red-500" : ""}
+            className={showError ? "field-error" : ""}
           />
           <Button
             type="button"
@@ -227,7 +227,7 @@ export function Caip10Input({
 
         {/* Error Message */}
         {showError && (
-          <div className="flex gap-2 items-start text-red-600 dark:text-red-400 text-sm">
+          <div className="feedback-error">
             <AlertCircleIcon size={16} className="mt-0.5 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -235,7 +235,7 @@ export function Caip10Input({
 
         {/* Success + Normalized Display */}
         {validationResult?.valid && (
-          <div className="flex gap-2 items-start text-green-600 dark:text-green-400 text-sm">
+          <div className="feedback-success">
             <CheckIcon size={16} className="mt-0.5 flex-shrink-0" />
             <span>Valid CAIP-10 (checksummed)</span>
           </div>
@@ -378,5 +378,4 @@ export function Caip10Input({
     </div>
   );
 }
-
 

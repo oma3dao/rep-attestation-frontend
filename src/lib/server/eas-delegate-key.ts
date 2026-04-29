@@ -17,19 +17,16 @@ import * as path from 'path';
 /**
  * Check if Thirdweb Managed Vault is configured for EAS delegation
  * Returns wallet address if available, null otherwise
- * 
- * TODO: Re-enable for production deployment
  */
 export function getThirdwebManagedWallet(): { secretKey: string; walletAddress: string } | null {
-  // TODO: Uncomment for production Thirdweb Managed Vault support
-  // const secretKey = process.env.THIRDWEB_SECRET_KEY;
-  // const walletAddress = process.env.THIRDWEB_EAS_DELEGATE_WALLET_ADDRESS;
-  // 
-  // if (secretKey && walletAddress) {
-  //   console.log('[eas-delegate-key] Thirdweb Managed Vault configured');
-  //   return { secretKey, walletAddress };
-  // }
-  
+  const secretKey = process.env.THIRDWEB_SECRET_KEY;
+  const walletAddress = process.env.THIRDWEB_SERVER_WALLET_ADDRESS;
+
+  if (secretKey && walletAddress) {
+    console.log('[eas-delegate-key] Thirdweb Managed Vault configured');
+    return { secretKey, walletAddress };
+  }
+
   return null;
 }
 

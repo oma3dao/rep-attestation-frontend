@@ -2,6 +2,30 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      // Preview environment: route to preview widget
+      {
+        source: "/widgets/:path*",
+        has: [{ type: "host", value: "preview.reputation.omatrust.org" }],
+        destination: "https://preview.widgets.omatrust.org/widgets/:path*",
+      },
+      {
+        source: "/api/proof/:path*",
+        has: [{ type: "host", value: "preview.reputation.omatrust.org" }],
+        destination: "https://preview.widgets.omatrust.org/api/proof/:path*",
+      },
+      // Production (fallback): route to production widget
+      {
+        source: "/widgets/:path*",
+        destination: "https://widgets.omatrust.org/widgets/:path*",
+      },
+      {
+        source: "/api/proof/:path*",
+        destination: "https://widgets.omatrust.org/api/proof/:path*",
+      },
+    ];
+  },
   webpack: (config) => {
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
     

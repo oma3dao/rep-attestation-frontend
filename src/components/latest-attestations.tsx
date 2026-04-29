@@ -3,18 +3,23 @@
 import { useEffect, useState } from 'react'
 import { AttestationCard } from './attestation-card'
 import { AttestationDetailModal } from './attestation-detail-modal'
-import { getLatestAttestations, type AttestationQueryResult } from '@/lib/attestation-queries'
+import { getLatestAttestationsWithMetadata, type EnrichedAttestationResult } from '@/lib/attestation-queries'
 import { useWallet } from '@/lib/blockchain'
 import logger from '@/lib/logger'
 import { ATTESTATION_QUERY_CONFIG } from '@/config/attestation-services'
 
-export function LatestAttestations() {
-  const [attestations, setAttestations] = useState<AttestationQueryResult[]>([])
+interface LatestAttestationsProps {
+  showHeading?: boolean
+}
+
+export function LatestAttestations({ showHeading = true }: LatestAttestationsProps) {
+  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedAttestation, setSelectedAttestation] = useState<AttestationQueryResult | null>(null)
+  const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { chainId } = useWallet()
+  const sectionPadding = showHeading ? "py-16" : "py-4"
 
   useEffect(() => {
     async function fetchAttestations() {
@@ -23,7 +28,7 @@ export function LatestAttestations() {
         setError(null)
         logger.log('[LatestAttestations] Fetching attestations for chain', chainId)
         
-        const results = await getLatestAttestations(chainId, ATTESTATION_QUERY_CONFIG.defaultLimit)
+        const results = await getLatestAttestationsWithMetadata(chainId, ATTESTATION_QUERY_CONFIG.defaultLimit)
         setAttestations(results)
         
         logger.log('[LatestAttestations] Loaded', results.length, 'attestations')
@@ -39,7 +44,7 @@ export function LatestAttestations() {
     fetchAttestations()
   }, [chainId])
 
-  const handleCardClick = (attestation: AttestationQueryResult) => {
+  const handleCardClick = (attestation: EnrichedAttestationResult) => {
     setSelectedAttestation(attestation)
     setIsModalOpen(true)
   }
@@ -51,10 +56,12 @@ export function LatestAttestations() {
 
   if (isLoading) {
     return (
-      <div className="py-16">
-        <h2 className="text-3xl font-bold mb-8 text-center">Latest Attestations</h2>
+      <div className={sectionPadding}>
+        {showHeading ? (
+          <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
+        ) : null}
         <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
         </div>
       </div>
     )
@@ -62,9 +69,11 @@ export function LatestAttestations() {
 
   if (error) {
     return (
-      <div className="py-16">
-        <h2 className="text-3xl font-bold mb-8 text-center">Latest Attestations</h2>
-        <div className="text-center text-red-600">
+      <div className={sectionPadding}>
+        {showHeading ? (
+          <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
+        ) : null}
+        <div className="text-center text-destructive">
           <p>Error loading attestations: {error}</p>
         </div>
       </div>
@@ -73,9 +82,11 @@ export function LatestAttestations() {
 
   if (attestations.length === 0) {
     return (
-      <div className="py-16">
-        <h2 className="text-3xl font-bold mb-8 text-center">Latest Attestations</h2>
-        <div className="text-center text-gray-600">
+      <div className={sectionPadding}>
+        {showHeading ? (
+          <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
+        ) : null}
+        <div className="text-center text-muted-foreground">
           <p>No attestations found yet. Be the first to submit one!</p>
         </div>
       </div>
@@ -84,8 +95,10 @@ export function LatestAttestations() {
 
   return (
     <>
-      <div className="py-16">
-        <h2 className="text-3xl font-bold mb-8 text-center">Latest Attestations</h2>
+      <div className={sectionPadding}>
+        {showHeading ? (
+          <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
+        ) : null}
         <div className="grid grid-cols-1 gap-4 max-w-4xl mx-auto">
           {attestations.map((attestation) => (
             <AttestationCard 

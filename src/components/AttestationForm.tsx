@@ -1,15 +1,32 @@
 'use client'
 
 import React from 'react'
-import { useState, useEffect, useRef } from 'react'
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useActiveAccount } from 'thirdweb/react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
+import { EvidencePointerProofInput } from './EvidencePointerProofInput'
+import { SubjectConfirmationDialog } from '@/components/subject-confirmation-dialog'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
-import { useToast } from '@/components/ui/toast'
+import { getActiveChain } from '@/lib/blockchain'
+import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
+import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
+import { useBackendSession } from '@/components/backend-session-provider'
+import {
+  BackendApiError,
+  buildWalletDid,
+  deriveSubjectUrlHint,
+  getBackendErrorMessage,
+  logoutSession,
+  shouldRouteBackendErrorToAccount,
+  type BackendSubject,
+} from '@/lib/omatrust-backend'
 import logger from '@/lib/logger';
 
 interface AttestationFormProps {
@@ -19,17 +36,18 @@ interface AttestationFormProps {
 
 type FormData = Record<string, string | string[]>
 type FormErrors = Record<string, string>
+const SUBJECT_SCOPED_SCHEMA_IDS = new Set(['key-binding', 'linked-identifier', 'user-review-response'])
 
 export function validateField(field: any, value: any): string | undefined {
   if (field.required) {
-    if (!value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)) {
+    const isEmpty = !value || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)
+    if (isEmpty && !field.autoDefault) {
       return `${field.label} is required`;
     }
   }
   if (value && typeof value === 'string') {
     const trimmedValue = value.trim();
     
-    // String length validation
     if (field.minLength !== undefined && trimmedValue.length < field.minLength) {
       return `${field.label} must be at least ${field.minLength} characters`;
     }
@@ -37,14 +55,12 @@ export function validateField(field: any, value: any): string | undefined {
       return `${field.label} must be at most ${field.maxLength} characters`;
     }
     
-    // Pattern validation (regex)
     if (field.pattern && trimmedValue) {
       try {
         const regex = new RegExp(field.pattern);
         if (!regex.test(trimmedValue)) {
-          // Provide helpful error message based on subtype
           if (field.subtype === 'semver') {
-            return `${field.label} must be a valid semantic version (e.g., 1.2.3)`;
+            return `${field.label} must be a valid version (e.g., 1, 1.2, or 1.2.3)`;
           }
           return `${field.label} format is invalid`;
         }
@@ -78,60 +94,52 @@ export function validateField(field: any, value: any): string | undefined {
 }
 
 export function AttestationForm({ schema, validateForm }: AttestationFormProps) {
+  const router = useRouter()
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
-  const [generalError, setGeneralError] = useState<string | null>(null)
+  const [generalError, setGeneralErrorRaw] = useState<string | null>(null)
+  const setGeneralError = (message: string | null) => {
+    setGeneralErrorRaw(message)
+    if (message) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+  const [showAccountAction, setShowAccountAction] = useState(false)
+  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false)
+  const [subjectDialogMessage, setSubjectDialogMessage] = useState<string | null>(null)
+  const pendingSubmitDataRef = useRef<Record<string, any> | null>(null)
+  const { session, setSession, openAuthDialog } = useBackendSession()
+  const activeAccount = useActiveAccount()
 
-  // Get attestation service - this handles all service selection and wallet management
   const {
     submitAttestation,
     isSubmitting,
-    isConnected,
-    isNetworkSupported,
     lastError,
     clearError
   } = useAttestation()
 
-  // Toast for wallet approval
-  const { showToast, ToastContainer, dismissToast } = useToast()
-  const prevIsSubmitting = useRef(false)
-  const approvalToastId = useRef<string | null>(null)
-  useEffect(() => {
-    if (isSubmitting && !prevIsSubmitting.current) {
-      approvalToastId.current = showToast('Please check your wallet and approve the transaction.', 'info', 60000)
-    }
-    prevIsSubmitting.current = isSubmitting
-  }, [isSubmitting, showToast])
+  const submissionStatusMessage =
+    session?.wallet?.executionMode === 'subscription'
+      ? session.wallet.isManagedWallet
+        ? 'Submitting with your OMATrust subscription.'
+        : 'Check your wallet to sign the attestation request, then return here. OMATrust will sponsor the on-chain write.'
+      : 'Please check your wallet and approve the transaction.'
 
-  // Dismiss toast on success or error
-  useEffect(() => {
-    if (!isSubmitting && approvalToastId.current) {
-      dismissToast(approvalToastId.current)
-      approvalToastId.current = null
-    }
-  }, [isSubmitting, dismissToast])
-
-  // Group fields by required status
   const requiredFields = schema.fields.filter(field => field.required)
   const optionalFields = schema.fields.filter(field => !field.required)
 
   const handleFieldChange = (fieldName: string, value: string | string[]) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldName]: value
-    }))
+    setFormData(prev => ({ ...prev, [fieldName]: value }))
 
-    // Clear error when user starts typing
     if (errors[fieldName]) {
-      setErrors(prev => ({
-        ...prev,
-        [fieldName]: ''
-      }))
+      setErrors(prev => ({ ...prev, [fieldName]: '' }))
     }
-
-    // Clear service error when user makes changes
     if (lastError) {
       clearError()
+    }
+    if (generalError) {
+      setGeneralError(null)
+      setShowAccountAction(false)
     }
   }
 
@@ -139,196 +147,309 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     if (validateForm) {
       const newErrors = validateForm(formData)
       setErrors(newErrors)
-      // Debug log
-      logger.log('validateForm newErrors:', newErrors)
       return Object.keys(newErrors).length === 0
     }
     const newErrors: FormErrors = {}
-
     schema.fields.forEach(field => {
-      const value = formData[field.name]
-
-      const error = validateField(field, value)
+      const error = validateField(field, formData[field.name])
       if (error) {
         newErrors[field.name] = error
       }
     })
-    // Debug log
-    logger.log('validateForm newErrors:', newErrors)
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
+  const buildCompleteData = () => {
+    const completeData: Record<string, any> = {}
+
+    schema.fields.forEach(field => {
+      const value = formData[field.name]
+      if (value !== undefined && value !== null && value !== '') {
+        completeData[field.name] = value
+      } else if (field.autoDefault === 'current-timestamp') {
+        completeData[field.name] = Math.floor(Date.now() / 1000)
+      } else {
+        completeData[field.name] = field.type === 'array' ? [] : field.type === 'integer' ? 0 : ''
+      }
+    })
+
+    if (schema.easSchemaString) {
+      const easFields = schema.easSchemaString.split(',').map(f => f.trim().split(/\s+/))
+      for (const [type, name] of easFields) {
+        if (name && completeData[name] === undefined) {
+          if (type.endsWith('[]')) {
+            completeData[name] = []
+          } else if (type.startsWith('uint') || type.startsWith('int')) {
+            completeData[name] = 0
+          } else {
+            completeData[name] = ''
+          }
+        }
+      }
+    }
+
+    if (isWitnessSchema && typeof completeData['proofs'] === 'string' && completeData['proofs']) {
+      completeData['proofs'] = [createEvidencePointerProof(completeData['proofs'])]
+    }
+
+    if (schema.easSchemaString) {
+      const arrayFieldNames = schema.easSchemaString
+        .split(',')
+        .map(f => f.trim().split(/\s+/))
+        .filter(([type]) => type?.endsWith('[]'))
+        .map(([, name]) => name)
+
+      for (const name of arrayFieldNames) {
+        let arr = completeData[name]
+        if (typeof arr === 'string') {
+          try { arr = JSON.parse(arr) } catch { arr = arr ? [arr] : [] }
+        }
+        if (!Array.isArray(arr)) {
+          arr = arr ? [arr] : []
+        }
+        completeData[name] = arr.map((item: unknown) =>
+          typeof item === 'string' ? item : JSON.stringify(item)
+        )
+      }
+    }
+
+    if (CONTROLLER_WITNESS_CONFIG.graceSchemaIds.includes(schema.id)) {
+      const userExplicitlySetEffectiveAt = formData['effectiveAt'] !== undefined && formData['effectiveAt'] !== ''
+      if (!userExplicitlySetEffectiveAt) {
+        completeData['effectiveAt'] = Math.floor(Date.now() / 1000) + CONTROLLER_WITNESS_CONFIG.graceSeconds
+      }
+    }
+
+    return completeData
+  }
+
+  const submitPreparedAttestation = async (completeData: Record<string, any>) => {
+    const subjectField = schema.fields.find(field =>
+      field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
+    )
+
+    if (!subjectField) {
+      throw new Error('No subject field found in schema')
+    }
+
+    const subjectValue = completeData[subjectField.name] as string
+    if (!subjectValue) {
+      throw new Error('Subject field is required')
+    }
+
+    const recipient = subjectValue
+
+    if (!recipient.startsWith('did:')) {
+      if (recipient.startsWith('0x') && recipient.length === 42) {
+        throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
+      } else if (recipient.startsWith('eip155:')) {
+        throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
+      } else if (recipient.includes('@') || recipient.includes('.')) {
+        throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
+      } else if (recipient.trim().length > 0) {
+        throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
+      } else {
+        throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
+      }
+    }
+
+    if (recipient.length < 7 || !recipient.includes(':')) {
+      throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
+    }
+
+    logger.log('Submitting attestation:', { schema: schema.id, recipient, data: completeData })
+
+    const result = await submitAttestation({
+      schemaId: schema.id,
+      recipient,
+      data: completeData
+    })
+
+    logger.log('Attestation created successfully:', result)
+    setFormData({})
+    router.push('/dashboard')
+  }
+
+  /**
+   * Extract the subject DID from the built attestation data.
+   */
+  const extractSubjectDid = (completeData: Record<string, any>): string => {
+    return (
+      typeof completeData.subject === 'string' ? completeData.subject
+      : typeof completeData.subjectId === 'string' ? completeData.subjectId
+      : typeof completeData.recipient === 'string' ? completeData.recipient
+      : ''
+    )
+  }
+
+  /**
+   * Submission gate:
+   *
+   * Gate 1 — Session + Wallet (2×2 matrix)
+   * Subject ownership — enforced by the backend. If the backend returns
+   * SUBJECT_OWNERSHIP_REQUIRED, the frontend opens the SubjectOwnershipDialog
+   * and auto-submits after verification.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setGeneralError(null)
-    if (!validateFormInternal()) {
-      return
-    }
+    setShowAccountAction(false)
+    if (!validateFormInternal()) return
 
     try {
-      // Ensure all schema fields are present with empty strings for optional fields
-      // This maintains compatibility with BAS indexers and search functionality
-      const completeData: Record<string, any> = {}
+      const completeData = buildCompleteData()
 
-      schema.fields.forEach(field => {
-        const value = formData[field.name]
-        if (value !== undefined && value !== null && value !== '') {
-          completeData[field.name] = value
-        } else {
-          // Use empty string for missing optional fields to maintain search compatibility
-          completeData[field.name] = field.type === 'array' ? [] : ''
+      const hasSession = !!session
+      const hasWallet = !!activeAccount
+
+      // --- Gate 1: Session + Wallet ---
+
+      if (!hasSession || !hasWallet) {
+        if (hasSession && !hasWallet) {
+          try { await logoutSession() } catch { /* best-effort */ }
+          setSession(null)
         }
-      })
 
-      // Extract subject field for recipient
-      const subjectField = schema.fields.find(field =>
-        field.name === 'subject' || field.name === 'subjectId' || field.name === 'recipient'
-      )
-
-      if (!subjectField) {
-        throw new Error('No subject field found in schema')
+        const subjectValue = extractSubjectDid(completeData)
+        openAuthDialog({
+          mode: 'chooser',
+          reason: 'submission',
+          schemaId: schema.id,
+          schemaTitle: schema.title,
+          subjectScoped: SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id),
+          subjectHint: deriveSubjectUrlHint(subjectValue),
+        })
+        return
       }
 
-      const subjectValue = completeData[subjectField.name] as string
-      if (!subjectValue) {
-        throw new Error('Subject field is required')
-      }
-
-      // Validate that recipient is in DID format (no automatic conversion)
-      const recipient = subjectValue
-
-      // Check if it's a valid DID format
-      if (!recipient.startsWith('did:')) {
-        // If it's an Ethereum address, tell user to convert it
-        if (recipient.startsWith('0x') && recipient.length === 42) {
-          throw new Error(`Please convert Ethereum address to DID format. For example, use "did:pkh:eip155:1:${recipient}" or "did:ethr:${recipient}" instead of "${recipient}"`)
-        }
-        // If it's a CAIP-10 address, tell user to convert it
-        else if (recipient.startsWith('eip155:')) {
-          throw new Error(`Please convert CAIP-10 address to DID format. For example, use "did:pkh:${recipient}" instead of "${recipient}"`)
-        }
-        // If it looks like an email or domain, suggest using proper DID format
-        else if (recipient.includes('@') || recipient.includes('.')) {
-          throw new Error(`Please use DID format for identifiers. For example, use "did:web:${recipient}" instead of "${recipient}"`)
-        }
-        // For other identifier formats, require DID format
-        else if (recipient.trim().length > 0) {
-          throw new Error(`Recipient must be in DID format. You entered: "${subjectValue}". Please use a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
-        }
-        else {
-          throw new Error(`Recipient is required and must be in DID format. Please enter a valid DID like "did:web:example.com", "did:pkh:eip155:1:0x...", "did:handle:twitter:username", or "did:key:z6Mk..."`)
-        }
-      }
-
-      // Basic DID format validation
-      if (recipient.length < 7 || !recipient.includes(':')) {
-        throw new Error(`Invalid DID format: "${recipient}". DIDs must follow the format "did:method:identifier"`)
-      }
-
-      logger.log('Submitting attestation:', {
-        schema: schema.id,
-        recipient,
-        data: completeData
-      })
-
-      // Use the service layer to submit attestation
-      const result = await submitAttestation({
-        schemaId: schema.id,
-        recipient,
-        data: completeData
-      })
-
-      logger.log('Attestation created successfully:', result)
-
-      // Show success message with transaction details
-      alert(`Attestation submitted successfully!\n\nTransaction Hash: ${result.transactionHash}\nAttestation ID: ${result.attestationId}\nBlock Number: ${result.blockNumber}`)
-
-      // Reset form after successful submission
-      setFormData({})
-
+      // --- Submit (backend enforces subject ownership for subject-scoped schemas) ---
+      await submitPreparedAttestation(completeData)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      // Handle SUBJECT_OWNERSHIP_REQUIRED from the backend relay
+      if (error instanceof BackendApiError && error.code === 'SUBJECT_OWNERSHIP_REQUIRED') {
+        logger.log('[AttestationForm] Backend requires subject ownership proof, opening dialog')
+        pendingSubmitDataRef.current = buildCompleteData()
+        setSubjectDialogMessage(
+          'Subject ownership verification failed. Re-confirm your proof and try again.  Failure explanation- ' + (error.details || error.message)
+        )
+        setSubjectDialogOpen(true)
+        return
+      }
+
+      const errorMessage = getBackendErrorMessage(error)
+      setShowAccountAction(shouldRouteBackendErrorToAccount(error))
       setGeneralError(errorMessage)
       logger.error('Submission error:', error)
     }
   }
 
-  // Determine if submit should be enabled
-  const canSubmit = isConnected && isNetworkSupported
+  /**
+   * Called when the SubjectOwnershipDialog successfully verifies and
+   * attaches a subject. Auto-submits the pending attestation.
+   */
+  const handleSubjectVerified = async (_subject: BackendSubject) => {
+    setSubjectDialogOpen(false)
+    const completeData = pendingSubmitDataRef.current
+    pendingSubmitDataRef.current = null
+
+    if (!completeData) return
+
+    try {
+      await submitPreparedAttestation(completeData)
+    } catch (error) {
+      const errorMessage = getBackendErrorMessage(error)
+      setShowAccountAction(shouldRouteBackendErrorToAccount(error))
+      setGeneralError(errorMessage)
+      logger.error('Submission error after subject verification:', error)
+    }
+  }
+
+  const isWitnessSchema = !!schema.witness
+  const controllerFieldName = schema.witness?.controllerField
+
+  const renderField = (field: typeof schema.fields[0]) => {
+    if (isWitnessSchema && field.name === 'proofs') {
+      const subjectDid = (formData['subject'] as string) || ''
+      const controllerDid = controllerFieldName ? (formData[controllerFieldName] as string) || '' : ''
+      const proofUrl = (formData['proofs'] as string) || ''
+
+      return (
+        <div key={field.name} className="space-y-2">
+          <Label htmlFor={field.name} className="text-sm font-medium">
+            {field.label}
+            {field.required && <span className="ml-1 text-destructive">*</span>}
+          </Label>
+          {field.description && (
+            <p className="text-sm text-muted-foreground">{field.description}</p>
+          )}
+          <EvidencePointerProofInput
+            subjectDid={subjectDid}
+            controllerDid={controllerDid}
+            value={proofUrl}
+            onChange={(url) => handleFieldChange('proofs', url)}
+            error={errors[field.name]}
+          />
+          {errors[field.name] && <p className="text-sm text-destructive" data-testid="field-error">{errors[field.name]}</p>}
+        </div>
+      )
+    }
+
+    return (
+      <FieldRenderer
+        key={field.name}
+        field={field}
+        value={formData[field.name] || (field.type === 'array' ? [] : '')}
+        onChange={(value) => handleFieldChange(field.name, value)}
+        error={errors[field.name]}
+      />
+    )
+  }
+
+  const walletDid = activeAccount?.address
+    ? buildWalletDid(activeAccount.address, getActiveChain().id)
+    : null
 
   return (
+    <>
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
-        <ToastContainer position="center" />
         {(generalError || lastError) && (
-          <div className="bg-red-100 text-red-800 px-4 py-2 rounded mb-4" data-testid="form-error">
-            {generalError || lastError}
+          <div className="status-panel-error mb-4 space-y-3 px-4 py-3" data-testid="form-error">
+            <p>{generalError || lastError}</p>
+            {showAccountAction ? (
+              <Button type="button" variant="outline" size="sm" asChild>
+                <Link href="/account">Manage account</Link>
+              </Button>
+            ) : null}
           </div>
         )}
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-4">{schema.title}</h1>
 
-          <p className="text-lg text-muted-foreground">
-            {schema.description}
-          </p>
+        <div className="mb-8">
+          <h1 className="mb-4 text-3xl font-semibold tracking-tight">{schema.title}</h1>
+          <p className="text-lg text-muted-foreground">{schema.description}</p>
         </div>
 
-        {/* Form */}
         <Card>
           <CardHeader>
-            <CardDescription>
-              Fields marked with * are required.
-            </CardDescription>
+            <CardDescription>Fields marked with * are required.</CardDescription>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {requiredFields.map((field) => (
-                <FieldRenderer
-                  key={field.name}
-                  field={field}
-                  value={formData[field.name] || (field.type === 'array' ? [] : '')}
-                  onChange={(value) => handleFieldChange(field.name, value)}
-                  error={errors[field.name]}
-                />
-              ))}
+              {requiredFields.map((field) => renderField(field))}
+              {optionalFields.length > 0 && optionalFields.map((field) => renderField(field))}
 
-              {optionalFields.length > 0 && (
-                <>
-                  {optionalFields.map((field) => (
-                    <FieldRenderer
-                      key={field.name}
-                      field={field}
-                      value={formData[field.name] || (field.type === 'array' ? [] : '')}
-                      onChange={(value) => handleFieldChange(field.name, value)}
-                      error={errors[field.name]}
-                    />
-                  ))}
-                </>
-              )}
-
-              <div className="flex gap-4 pt-6">
+              <div className="flex flex-wrap gap-4 pt-6">
                 <Button
                   type="submit"
-                  disabled={isSubmitting || !canSubmit}
+                  disabled={isSubmitting}
                   className="flex items-center gap-2"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                       Submitting...
-                    </>
-                  ) : !isConnected ? (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Connect Wallet to Submit
-                    </>
-                  ) : !isNetworkSupported ? (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Switch to Supported Network
                     </>
                   ) : (
                     <>
@@ -339,28 +460,37 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                 </Button>
 
                 <Button type="button" variant="outline" asChild>
-                  <Link href="/attest">Cancel</Link>
+                  <Link href="/publish">Cancel</Link>
                 </Button>
               </div>
 
-              {/* Wallet Connection Status */}
-              {!canSubmit && (
-                <div className="mt-4 p-4 border rounded-lg bg-muted/50">
-                  <h4 className="font-medium mb-2">Connection Required</h4>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    {!isConnected && (
-                      <p>• Please connect your wallet using the button in the header</p>
-                    )}
-                    {isConnected && !isNetworkSupported && (
-                      <p>• Please switch to a supported network for attestations</p>
-                    )}
-                  </div>
+              {isSubmitting ? (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+                  {submissionStatusMessage}
                 </div>
-              )}
+              ) : null}
             </form>
           </CardContent>
         </Card>
       </div>
     </div>
+
+    <SubjectConfirmationDialog
+      open={subjectDialogOpen}
+      onOpenChange={(open) => {
+        setSubjectDialogOpen(open)
+        if (!open) {
+          pendingSubmitDataRef.current = null
+          setSubjectDialogMessage(null)
+        }
+      }}
+      walletDid={walletDid}
+      existingSubjectDids={[]}
+      initialMessage={subjectDialogMessage}
+      onSubjectCreated={(subject) => {
+        void handleSubjectVerified(subject)
+      }}
+    />
+    </>
   )
-} 
+}

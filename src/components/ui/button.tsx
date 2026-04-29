@@ -1,32 +1,25 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
-import { useActiveAccount } from "thirdweb/react"
 import { client } from "@/app/client"
 import { ConnectButton as ThirdwebConnectButton } from "thirdweb/react"
-import { 
-  createWallet,
-  inAppWallet,
-  walletConnect
-} from "thirdweb/wallets"
 import { defineChain } from "thirdweb/chains"
-import { SUPPORTED_CHAINS } from "@/config/chains"
+import { DEFAULT_CHAIN } from "@/config/chains"
+import { managedWallet, nativeWallets, allWallets } from "@/config/wallets"
 
 import { cn } from "@/lib/utils"
 
-// Convert plain chain configs to thirdweb chains
-const thirdwebChains = SUPPORTED_CHAINS.map(chain => 
-  defineChain({
-    id: chain.id,
-    rpc: chain.rpc,
-    name: chain.name,
-    nativeCurrency: chain.nativeCurrency,
-    blockExplorers: chain.blockExplorers,
-  })
-)
+// The active chain — scopes Thirdweb RPC and balance display to this chain
+const activeThirdwebChain = defineChain({
+  id: DEFAULT_CHAIN.id,
+  rpc: DEFAULT_CHAIN.rpc,
+  name: DEFAULT_CHAIN.name,
+  nativeCurrency: DEFAULT_CHAIN.nativeCurrency,
+  blockExplorers: DEFAULT_CHAIN.blockExplorers,
+})
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -41,9 +34,9 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
+        default: "h-10 px-5 py-2",
+        sm: "h-9 px-4",
+        lg: "h-11 px-8",
         icon: "h-10 w-10",
       },
     },
@@ -59,6 +52,9 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
   isConnectButton?: boolean
+  connectMode?: "all" | "managed" | "native"
+  connectOnConnect?: (wallet: unknown) => void
+  connectHideDisconnect?: boolean
   connectButtonProps?: {
     label?: string
   }
@@ -70,47 +66,40 @@ type ThirdwebConnectButtonProps = React.ComponentProps<typeof ThirdwebConnectBut
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, isConnectButton = false, connectButtonProps, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, isConnectButton = false, connectMode = "all", connectOnConnect, connectHideDisconnect = false, connectButtonProps, ...props }, ref) => {
     if (isConnectButton) {
       const { client: _, ...restProps } = props as ThirdwebConnectButtonProps
       
-      // Configure wallets in priority order
-      const wallets = [
-        inAppWallet({
-          auth: {
-            options: [
-              "email",
-              "google", 
-              "apple",
-              "facebook",
-              "passkey"
-            ]
-          }
-        }),
-        createWallet("io.metamask"),
-        createWallet("com.coinbase.wallet"),
-        walletConnect()
-      ];
+      const wallets =
+        connectMode === "managed"
+          ? [managedWallet]
+          : connectMode === "native"
+            ? nativeWallets
+            : allWallets
       
       return (
         <ThirdwebConnectButton
           appMetadata={{
-            name: "OMA3 Attestation Portal",
-            url: "https://attestation.oma3.org",
-            description: "Create and manage attestations for the OMA3 ecosystem",
+            name: "OMATrust Portal",
+            url: "https://app.omatrust.org",
+            description: "Publish trust data and manage service trust with OMATrust",
             logoUrl: "/oma3_logo.svg"
           }}
           className={className}
-          autoConnect={{ timeout: 15000 }}
+          autoConnect={false}
           wallets={wallets}
-          chains={thirdwebChains}
+          chains={[activeThirdwebChain]}
           connectModal={{
             size: "wide",
             showThirdwebBranding: false,
           }}
+          detailsModal={{
+            hideDisconnect: connectHideDisconnect,
+          }}
           connectButton={{
             label: connectButtonProps?.label ?? "Connect Wallet",
           }}
+          onConnect={connectOnConnect as ((wallet: any) => void) | undefined}
           client={client}
           {...restProps}
         />

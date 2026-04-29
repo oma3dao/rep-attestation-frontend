@@ -95,7 +95,7 @@ export function TimestampInput({
             onChange(datetimeLocalToTimestamp(e.target.value))
           }}
           disabled={!enterCustomDate && hasAutoDefault}
-          className={`${error ? 'border-red-500' : ''} ${!enterCustomDate && hasAutoDefault ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`${error ? 'field-error' : ''} ${!enterCustomDate && hasAutoDefault ? 'cursor-not-allowed opacity-50' : ''}`}
         />
       )}
     </div>

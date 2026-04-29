@@ -29,10 +29,18 @@ describe('Header', () => {
       render(<Header />);
     });
     expect(screen.getByAltText('OMA3 Logo')).not.toBeNull();
-    expect(screen.getByText('Attestation Portal')).not.toBeNull();
     expect(screen.getByText('Home')).not.toBeNull();
-    expect(screen.getByText('Create Attestation')).not.toBeNull();
-    expect(screen.getByText('Dashboard')).not.toBeNull();
+    expect(screen.getByText('Registry')).not.toBeNull();
+    expect(screen.getByText('Docs')).not.toBeNull();
+  });
+
+  it('renders My Attestations nav link pointing to /dashboard', async () => {
+    await act(async () => {
+      render(<Header />);
+    });
+    const link = screen.getByText('My Attestations');
+    expect(link).not.toBeNull();
+    expect(link.closest('a')).toHaveAttribute('href', '/dashboard');
   });
 
   it('renders wallet connect button', async () => {

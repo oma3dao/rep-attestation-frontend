@@ -102,12 +102,12 @@ export function SubjectIdInput({
       </div>
 
       {/* Info Banner */}
-      <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+      <div className="info-panel p-3">
         <div className="flex gap-2 items-start">
-          <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-          <div className="flex-1 text-sm text-blue-900 dark:text-blue-100">
+          <InfoIcon size={16} className="mt-0.5 flex-shrink-0 text-primary" />
+          <div className="flex-1 text-sm">
             <p className="font-medium mb-1">What is a Subject ID?</p>
-            <p className="text-blue-700 dark:text-blue-300">
+            <p className="text-muted-foreground">
               A Subject ID is a decentralized identifier (DID) that uniquely identifies 
               the entity you&apos;re creating an attestation for. Choose the type that matches 
               your subject.

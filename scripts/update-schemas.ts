@@ -15,6 +15,9 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { CHAIN_IDS, DEPLOYMENT_FILE_MAPPINGS, getChainName } from '../src/config/chains'
 
+// Zero UID constant
+const ZERO_UID = '0x0000000000000000000000000000000000000000000000000000000000000000'
+
 // Cache for loaded external schemas
 let externalSchemaCache: Record<string, any> = {}
 let schemasDirectory: string = ''
@@ -139,12 +142,16 @@ async function transformToUISchema(jsonSchema, schemaId) {
   // Detect if schema should be revocable (has 'revoked' field with x-oma3-skip-reason: "eas")
   const revocable = detectRevocable(jsonSchema.properties)
 
+  // Extract witness configuration if present
+  const witness = jsonSchema['x-oma3-witness'] || undefined
+
   return {
     id: schemaId,
     title: jsonSchema.title,
     description: jsonSchema.description,
     fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId),
-    revocable
+    revocable,
+    witness
   }
 }
 
@@ -269,6 +276,19 @@ async function transformFields(properties, required = [], schemaId = '') {
         field.format = prop.format
       }
 
+      // Extract x-oma3-enum from array items as options (supports both flat strings and rich objects)
+      if (prop.type === 'array' && prop.items && prop.items['x-oma3-enum']) {
+        const enumValues = prop.items['x-oma3-enum']
+        if (Array.isArray(enumValues) && enumValues.length > 0) {
+          // Rich objects have a 'value' property; flat strings are just strings
+          field.options = enumValues.map(item =>
+            typeof item === 'object' && item.value
+              ? { value: item.value, label: item.label || item.value, ...(item.description ? { description: item.description } : {}) }
+              : item
+          )
+        }
+      }
+
     fields.push(field)
   }
 
@@ -306,6 +326,9 @@ async function readSchemasFromDirectory(directoryPath) {
     const schemas = {}
 
     for (const file of files) {
+      // Skip non-JSON files (e.g., README.md)
+      if (!file.endsWith('.json')) continue
+
       try {
         const filePath = path.join(fullPath, file)
         const content = await fs.readFile(filePath, 'utf8')
@@ -395,9 +418,131 @@ async function readDeploymentData(rootPath) {
 }
 
 /**
+ * Read EAS schema strings from generated .eas.json files (not .deployed.)
+ * These contain the Solidity-typed schema string used by SchemaEncoder.
+ */
+async function readEasSchemaStrings(rootPath) {
+  const generatedPath = path.join(rootPath, 'generated')
+  const schemaStrings: Record<string, string> = {}
+
+  try {
+    console.log(`📐 Reading EAS schema strings from: ${generatedPath}`)
+    const files = await fs.readdir(generatedPath)
+
+    for (const file of files) {
+      // Match .eas.json but NOT .deployed.*.json
+      if (!file.endsWith('.eas.json') || file.includes('.deployed.')) continue
+
+      const rawName = file.replace('.eas.json', '')
+
+      // Convert PascalCase/hyphenated filename to kebab-case to match schema IDs
+      const normalizedSchemaId = rawName
+        .replace(/([A-Z])/g, (match, letter, index) => {
+          if (index > 0 && rawName[index - 1] !== '-') {
+            return '-' + letter.toLowerCase()
+          }
+          return letter.toLowerCase()
+        })
+
+      try {
+        const filePath = path.join(generatedPath, file)
+        const content = await fs.readFile(filePath, 'utf8')
+        const data = JSON.parse(content)
+
+        if (data.schema) {
+          schemaStrings[normalizedSchemaId] = data.schema
+          console.log(`   ✅ ${normalizedSchemaId}: ${data.schema.substring(0, 60)}...`)
+        }
+      } catch (err) {
+        console.warn(`   ⚠️  Failed to read ${file}:`, err.message)
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️  Could not read generated directory for schema strings: ${error.message}`)
+  }
+
+  return schemaStrings
+}
+
+/**
  * Generate the schemas.ts file
  */
-async function generateSchemasFile(schemas, deployments = {}) {
+/**
+ * Read existing schemas.ts to preserve historical deployedUIDs.
+ *
+ * When a schema is redeployed (e.g., field layout change), the old UID
+ * disappears from the deployment data. But existing attestations under
+ * the old UID still need witness support. This function extracts all
+ * current deployedUIDs and priorUIDs so they can be merged into the
+ * regenerated file.
+ *
+ * Returns: Record<schemaId, Record<chainId, Set<uid>>> — all known UIDs per schema per chain.
+ */
+async function readExistingUIDs(): Promise<Record<string, Record<number, Set<string>>>> {
+  const schemasPath = path.resolve('src/config/schemas.ts')
+  const result: Record<string, Record<number, Set<string>>> = {}
+
+  try {
+    const content = await fs.readFile(schemasPath, 'utf8')
+
+    // Match each schema block: id + deployedUIDs + optional priorUIDs
+    const schemaBlockRegex = /id:\s*'([^']+)'[\s\S]*?deployedUIDs:\s*\{([^}]+)\}/g
+    let match
+
+    while ((match = schemaBlockRegex.exec(content)) !== null) {
+      const schemaId = match[1]
+      const uidsBlock = match[2]
+      const chainUIDs: Record<number, Set<string>> = {}
+
+      // Extract chainId: 'uid' pairs from the deployedUIDs block
+      const pairRegex = /(\d+):\s*'(0x[0-9a-fA-F]{64})'/g
+      let pairMatch
+      while ((pairMatch = pairRegex.exec(uidsBlock)) !== null) {
+        const chainId = parseInt(pairMatch[1], 10)
+        const uid = pairMatch[2].toLowerCase()
+        if (uid !== ZERO_UID.toLowerCase()) {
+          if (!chainUIDs[chainId]) chainUIDs[chainId] = new Set()
+          chainUIDs[chainId].add(uid)
+        }
+      }
+
+      // Also extract from priorUIDs if present: Record<chainId, string[]>
+      const afterDeployedUIDs = content.slice(match.index + match[0].length, match.index + match[0].length + 1000)
+      const priorMatch = afterDeployedUIDs.match(/priorUIDs:\s*\{([\s\S]*?)\}/)
+      if (priorMatch) {
+        const priorBlock = priorMatch[1]
+        // Match chainId: ['uid1', 'uid2'] patterns
+        const chainArrayRegex = /(\d+):\s*\[([\s\S]*?)\]/g
+        let chainArrayMatch
+        while ((chainArrayMatch = chainArrayRegex.exec(priorBlock)) !== null) {
+          const chainId = parseInt(chainArrayMatch[1], 10)
+          const arrayContent = chainArrayMatch[2]
+          const uidRegex = /'(0x[0-9a-fA-F]{64})'/g
+          let uidMatch
+          while ((uidMatch = uidRegex.exec(arrayContent)) !== null) {
+            if (!chainUIDs[chainId]) chainUIDs[chainId] = new Set()
+            chainUIDs[chainId].add(uidMatch[1].toLowerCase())
+          }
+        }
+      }
+
+      if (Object.keys(chainUIDs).length > 0) {
+        result[schemaId] = chainUIDs
+      }
+    }
+
+    const totalUIDs = Object.values(result).reduce(
+      (sum, chains) => sum + Object.values(chains).reduce((s, set) => s + set.size, 0), 0
+    )
+    console.log(`📜 Read ${totalUIDs} existing UIDs across ${Object.keys(result).length} schemas`)
+  } catch (error) {
+    console.log(`📜 No existing schemas.ts found — starting fresh`)
+  }
+
+  return result
+}
+
+async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: Record<string, string> = {}, existingUIDs: Record<string, Record<number, Set<string>>> = {}) {
   const uiSchemas = await Promise.all(
     Object.entries(schemas).map(([id, schema]) =>
       transformToUISchema(schema, id)
@@ -448,6 +593,17 @@ async function generateSchemasFile(schemas, deployments = {}) {
       exportLines.push(`  revocable: true,`)
     }
 
+    // Add witness configuration if present (from x-oma3-witness in JSON schema)
+    if (item.schema.witness) {
+      exportLines.push(`  witness: ${JSON.stringify(item.schema.witness)},`)
+    }
+
+    // Add EAS schema string if available (from generated .eas.json files)
+    const easStr = easSchemaStrings[item.schema.id]
+    if (easStr) {
+      exportLines.push(`  easSchemaString: '${escapeString(easStr)}',`)
+    }
+
     exportLines.push(
       `  deployedUIDs: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: '${escapeString(bscTestnetUID)}', // BSC Testnet`,
@@ -455,6 +611,49 @@ async function generateSchemasFile(schemas, deployments = {}) {
       `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAchain Testnet`,
       `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAchain Mainnet`,
       `  },`,
+    )
+
+    // Compute priorUIDs: any previously-deployed UIDs that differ from current, per chain
+    const currentByChain: Record<number, string> = {
+      [CHAIN_IDS.BSC_TESTNET]: bscTestnetUID,
+      [CHAIN_IDS.BSC_MAINNET]: bscMainnetUID,
+      [CHAIN_IDS.OMACHAIN_TESTNET]: omachainTestnetUID,
+      [CHAIN_IDS.OMACHAIN_MAINNET]: omachainMainnetUID,
+    }
+    const existingForSchema = existingUIDs[item.schema.id]
+    const priorByChain: Record<number, string[]> = {}
+
+    if (existingForSchema) {
+      for (const [chainIdStr, uidSet] of Object.entries(existingForSchema)) {
+        const chainId = parseInt(chainIdStr, 10)
+        const currentUID = (currentByChain[chainId] || ZERO_UID).toLowerCase()
+        const priors: string[] = []
+        for (const uid of uidSet) {
+          if (uid !== currentUID) {
+            priors.push(uid)
+          }
+        }
+        if (priors.length > 0) {
+          priorByChain[chainId] = priors.sort()
+        }
+      }
+    }
+
+    if (Object.keys(priorByChain).length > 0) {
+      const priorLines: string[] = []
+      for (const [chainId, uids] of Object.entries(priorByChain)) {
+        const chainName = getChainName(parseInt(chainId, 10))
+        const uidsStr = uids.map(u => `'${u}'`).join(', ')
+        priorLines.push(`    ${chainId}: [${uidsStr}]${chainName ? ` // ${chainName}` : ''}`)
+      }
+      exportLines.push(
+        `  priorUIDs: {`,
+        ...priorLines.map((line, i) => i < priorLines.length - 1 ? line + ',' : line),
+        `  },`,
+      )
+    }
+
+    exportLines.push(
       `  deployedBlocks: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: ${bscTestnetBlock}, // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: ${bscMainnetBlock}, // BSC Mainnet`,
@@ -476,6 +675,13 @@ async function generateSchemasFile(schemas, deployments = {}) {
 // Schema definitions for attestation forms
 export type FieldType = 'string' | 'integer' | 'array' | 'enum' | 'datetime' | 'uri' | 'object' | 'json'
 
+/** A rich option with a human-readable label and optional description */
+export interface RichOption {
+  value: string
+  label: string
+  description?: string
+}
+
 export interface FormField {
   name: string
   type: FieldType
@@ -483,7 +689,7 @@ export interface FormField {
   description?: string
   required: boolean
   placeholder?: string
-  options?: (string | number)[] // for enum fields (strings or integers)
+  options?: (string | number | RichOption)[] // for enum fields (strings or integers) or rich options with labels/descriptions
   format?: string // for validation (uri, date-time, etc.)
   pattern?: string // regex pattern for string validation
   min?: number // for integer fields
@@ -505,6 +711,9 @@ export interface AttestationSchema {
   deployedUIDs?: Record<number, string> // chainId -> schemaUID mapping
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
   revocable?: boolean // Whether attestations using this schema can be revoked (default: false)
+  easSchemaString?: string // Solidity-typed schema string for EAS SchemaEncoder
+  witness?: { subjectField: string; controllerField: string } // Controller Witness API config from x-oma3-witness
+  priorUIDs?: Record<number, string[]> // Previously-deployed schema UIDs per chain (preserved across redeployments for witness compatibility)
 }
 
 // Field definitions
@@ -568,7 +777,12 @@ async function main() {
 
     const deployments = await readDeploymentData(rootPath)
 
-    await generateSchemasFile(schemas, deployments)
+    const easSchemaStrings = await readEasSchemaStrings(rootPath)
+
+    // Read existing UIDs from current schemas.ts to preserve historical deployments
+    const existingUIDs = await readExistingUIDs()
+
+    await generateSchemasFile(schemas, deployments, easSchemaStrings, existingUIDs)
 
     console.log(`✅ Schema update completed successfully!`)
     console.log(`📊 Processed ${Object.keys(schemas).length} schemas:`)

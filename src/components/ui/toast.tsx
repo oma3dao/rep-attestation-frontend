@@ -24,10 +24,10 @@ export function Toast({ message, type = 'info', duration = 6000, onClose }: Toas
   }, [duration, onClose])
 
   const typeStyles = {
-    success: 'bg-green-50 text-green-800 border-green-200',
-    error: 'bg-red-50 text-red-800 border-red-200',
-    warning: 'bg-orange-50 text-orange-800 border-orange-200',
-    info: 'bg-blue-50 text-blue-800 border-blue-200'
+    success: 'border-success/20 bg-success/10 text-success',
+    error: 'border-destructive/20 bg-destructive/10 text-destructive',
+    warning: 'border-warning/30 bg-warning/10 text-warning-foreground',
+    info: 'border-primary/20 bg-primary/10 text-foreground'
   }
 
   const icons = {
@@ -40,7 +40,7 @@ export function Toast({ message, type = 'info', duration = 6000, onClose }: Toas
   return (
     <div
       className={cn(
-        'fixed top-20 right-4 z-50 flex items-center justify-center space-x-2 px-6 py-4 rounded-lg border shadow-lg transition-all duration-300',
+        'fixed top-20 right-4 z-50 flex items-center justify-center space-x-2 rounded-lg border px-6 py-4 shadow-lg shadow-slate-950/10 transition-all duration-300',
         'min-w-[320px] max-w-[90vw] md:max-w-md w-full text-center',
         typeStyles[type],
         isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full'

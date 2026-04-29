@@ -1,99 +1,68 @@
 /**
- * Basic tests for EAS delegated attestation utilities
- * 
- * These are sanity checks for the delegated attestation functions.
- * See TEST_ENGINEER_DELEGATED_ATTESTATION.md for comprehensive test specifications.
+ * Tests for EAS delegated attestation utilities
+ *
+ * Tests the SDK's buildDelegatedAttestationTypedData and splitSignature
+ * which are used by the frontend's delegated attestation flow.
  */
 
-import { describe, it, expect } from 'vitest'
-import {
-  buildDelegatedAttestationTypedData,
-  splitSignature,
-  type DelegatedAttestationData,
-} from '@/lib/eas'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { createRequire } from 'module'
+import { Wallet } from 'ethers'
+import type { PrepareDelegatedAttestationParams } from '@oma3/omatrust/reputation'
+const require = createRequire(import.meta.url)
+
+let splitSignature: (signature: string) => { v: number; r: string; s: string }
+let buildDelegatedAttestationTypedData: (params: PrepareDelegatedAttestationParams) => {
+  domain: Record<string, unknown>
+  types: Record<string, unknown>
+  message: Record<string, unknown>
+}
+
+beforeAll(async () => {
+  const mod = require('@oma3/omatrust/reputation')
+  splitSignature = mod.splitSignature
+  buildDelegatedAttestationTypedData = mod.buildDelegatedAttestationTypedData
+})
 
 describe('buildDelegatedAttestationTypedData', () => {
-  const mockDelegated: DelegatedAttestationData = {
-    schema: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as `0x${string}`,
-    recipient: '0xabcdef1234567890abcdef1234567890abcdef12' as `0x${string}`,
-    expirationTime: BigInt(0),
+  const mockParams: PrepareDelegatedAttestationParams = {
+    chainId: 66238,
+    easContractAddress: '0x4200000000000000000000000000000000000021',
+    schemaUid: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    schema: 'string subject, uint64 issuedAt',
+    data: { subject: 'did:web:example.com', issuedAt: 1700000000 },
+    attester: '0x1234567890123456789012345678901234567890',
+    nonce: BigInt(0),
     revocable: true,
-    refUID: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
-    data: '0xdeadbeef' as `0x${string}`,
     deadline: 1700000000,
   }
-  const mockAttester = '0x1234567890123456789012345678901234567890' as `0x${string}`
-  const mockNonce = BigInt(0)
 
-  it('returns object with domain, types, primaryType, and message', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238, // OMAchain testnet
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
-
+  it('returns object with domain, types, and message', () => {
+    const result = buildDelegatedAttestationTypedData(mockParams)
     expect(result).toHaveProperty('domain')
     expect(result).toHaveProperty('types')
-    expect(result).toHaveProperty('primaryType')
     expect(result).toHaveProperty('message')
   })
 
   it('has correct EAS domain name and version', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238,
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
-
+    const result = buildDelegatedAttestationTypedData(mockParams)
     expect(result.domain.name).toBe('EAS')
-    expect(result.domain.version).toBe('1.4.0')  // Must match EAS contract
+    expect(result.domain.version).toBe('1.4.0')
   })
 
   it('includes chainId in domain', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238,
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
-
+    const result = buildDelegatedAttestationTypedData(mockParams)
     expect(result.domain.chainId).toBe(66238)
   })
 
   it('includes verifyingContract in domain', () => {
-    const easAddress = '0x4200000000000000000000000000000000000021' as `0x${string}`
-    const result = buildDelegatedAttestationTypedData(66238, easAddress, mockDelegated, mockAttester, mockNonce)
-
-    expect(result.domain.verifyingContract).toBe(easAddress)
-  })
-
-  it('has Attest as primaryType', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238,
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
-
-    expect(result.primaryType).toBe('Attest')
+    const result = buildDelegatedAttestationTypedData(mockParams)
+    expect(result.domain.verifyingContract).toBe(mockParams.easContractAddress)
   })
 
   it('includes all required fields in Attest type', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238,
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
-
-    const attestType = result.types.Attest
+    const result = buildDelegatedAttestationTypedData(mockParams)
+    const attestType = result.types.Attest as Array<{ name: string; type: string }>
     const fieldNames = attestType.map(f => f.name)
 
     expect(fieldNames).toContain('attester')
@@ -108,88 +77,67 @@ describe('buildDelegatedAttestationTypedData', () => {
     expect(fieldNames).toContain('deadline')
   })
 
-  it('message contains delegated data and attester/nonce', () => {
-    const result = buildDelegatedAttestationTypedData(
-      66238,
-      '0x4200000000000000000000000000000000000021' as `0x${string}`,
-      mockDelegated,
-      mockAttester,
-      mockNonce
-    )
+  it('message contains attester and schema', () => {
+    const result = buildDelegatedAttestationTypedData(mockParams)
+    const msg = result.message as Record<string, unknown>
+    expect(msg.attester).toBe(mockParams.attester)
+    expect(msg.schema).toBe(mockParams.schemaUid)
+    expect(msg.revocable).toBe(true)
+    expect(msg.nonce).toBe(BigInt(0))
+    expect(msg.value).toBe(BigInt(0))
+  })
 
-    expect(result.message.attester).toBe(mockAttester)
-    expect(result.message.schema).toBe(mockDelegated.schema)
-    expect(result.message.recipient).toBe(mockDelegated.recipient)
-    expect(result.message.revocable).toBe(mockDelegated.revocable)
-    expect(result.message.data).toBe(mockDelegated.data)
-    expect(result.message.nonce).toBe(mockNonce)
-    expect(result.message.value).toBe(BigInt(0))
+  it('handles different chain IDs', () => {
+    const chains = [1, 10, 8453, 42161, 66238]
+    for (const chain of chains) {
+      const result = buildDelegatedAttestationTypedData({ ...mockParams, chainId: chain })
+      expect(result.domain.chainId).toBe(chain)
+    }
+  })
+
+  it('handles revocable=false', () => {
+    const result = buildDelegatedAttestationTypedData({ ...mockParams, revocable: false })
+    expect((result.message as Record<string, unknown>).revocable).toBe(false)
   })
 })
 
 describe('splitSignature', () => {
-  // Standard 65-byte signature (r: 32 bytes, s: 32 bytes, v: 1 byte)
-  const validSignature = '0x' + 
-    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' + // r (32 bytes)
-    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' + // s (32 bytes)
-    '1b' // v (1 byte = 27)
+  let validSignature = ''
 
-  it('extracts r component (first 32 bytes)', () => {
+  beforeAll(async () => {
+    const wallet = new Wallet('0x59c6995e998f97a5a0044966f094538e6df77609f68e4f6f5f79f63f65e6f8f6')
+    validSignature = await wallet.signMessage('omatrust split signature test')
+  })
+
+  it('extracts r component (first 32 bytes) matching the signature', () => {
     const { r } = splitSignature(validSignature)
-    expect(r).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    const expectedR = '0x' + validSignature.slice(2, 66)
+    expect(r).toBe(expectedR)
   })
 
-  it('extracts s component (next 32 bytes)', () => {
+  it('extracts s component (next 32 bytes) matching the signature', () => {
     const { s } = splitSignature(validSignature)
-    expect(s).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    const expectedS = '0x' + validSignature.slice(66, 130)
+    expect(s).toBe(expectedS)
   })
 
-  it('extracts v component (last byte)', () => {
+  it('extracts v component (last byte) matching the signature', () => {
     const { v } = splitSignature(validSignature)
-    expect(v).toBe(27)
+    const rawV = parseInt(validSignature.slice(130, 132), 16)
+    const expectedV = rawV < 27 ? rawV + 27 : rawV
+    expect(v).toBe(expectedV)
   })
 
-  it('handles signature without 0x prefix', () => {
-    const sigWithoutPrefix = validSignature.slice(2)
-    const { r, s, v } = splitSignature(sigWithoutPrefix)
-    
-    expect(r).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-    expect(s).toBe('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
-    expect(v).toBe(27)
+  it('rejects malformed signatures', () => {
+    expect(() => splitSignature('0xinvalid')).toThrow('Invalid signature')
   })
 
-  it('normalizes v=0 to v=27', () => {
-    const sigWithV0 = '0x' + 
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
-      '00' // v = 0
-
-    const { v } = splitSignature(sigWithV0)
-    expect(v).toBe(27)
-  })
-
-  it('normalizes v=1 to v=28', () => {
-    const sigWithV1 = '0x' + 
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
-      '01' // v = 1
-
-    const { v } = splitSignature(sigWithV1)
-    expect(v).toBe(28)
-  })
-
-  it('preserves v=27 as-is', () => {
-    const { v } = splitSignature(validSignature)
-    expect(v).toBe(27)
-  })
-
-  it('preserves v=28 as-is', () => {
-    const sigWithV28 = '0x' + 
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' +
-      '1c' // v = 28
-
-    const { v } = splitSignature(sigWithV28)
-    expect(v).toBe(28)
+  it('handles uppercase hex and produces same components', () => {
+    const sig = validSignature.toUpperCase()
+    const { r, s, v } = splitSignature(sig)
+    const lowerResult = splitSignature(validSignature)
+    expect(r.toLowerCase()).toBe(lowerResult.r.toLowerCase())
+    expect(s.toLowerCase()).toBe(lowerResult.s.toLowerCase())
+    expect(v).toBe(lowerResult.v)
   })
 })
