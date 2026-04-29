@@ -765,7 +765,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
         {step === "authenticated" ? (
           <div className="space-y-5">
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-              <p className="font-medium text-foreground">You're signed in.</p>
+              <p className="font-medium text-foreground">You&apos;re signed in.</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 Close this dialog and click Submit Attestation to publish.
               </p>
