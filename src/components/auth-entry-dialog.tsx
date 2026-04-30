@@ -98,7 +98,14 @@ function getFriendlyError(error: unknown) {
         return error.message
     }
   }
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    // User declined the signature in their wallet
+    if (msg.includes("rejected") || msg.includes("denied") || msg.includes("cancelled") || msg.includes("canceled") || msg.includes("user refused") || msg.includes("4001")) {
+      return "You declined the signature request. Please try again when you're ready."
+    }
+    return error.message
+  }
   return "Something went wrong. Please try again."
 }
 
@@ -363,20 +370,22 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       return currentSession
     } catch (error) {
       // If the user tried to create an account but one already exists,
-      // switch to the sign-in view instead of showing an error in the create form.
+      // redirect with a full page reload to clear wallet state, then
+      // re-open the sign-in dialog with an info message.
       if (error instanceof BackendApiError && error.code === "ACCOUNT_ALREADY_EXISTS") {
-        setErrorMessage(getFriendlyError(error))
-        setAuthIntent(null)
-        setStep("signin")
+        if (activeWallet) disconnect(activeWallet)
+        clearWalletBrowserState()
+        window.location.href = "/?action=signin&hint=account-exists"
         return
       }
 
       // If the user tried to sign in but no account exists,
-      // switch to the create account view.
+      // redirect with a full page reload to clear wallet state, then
+      // re-open the create account dialog with an info message.
       if (error instanceof BackendApiError && error.code === "ACCOUNT_NOT_FOUND") {
-        setErrorMessage(getFriendlyError(error))
-        setAuthIntent(null)
-        setStep("createSimple")
+        if (activeWallet) disconnect(activeWallet)
+        clearWalletBrowserState()
+        window.location.href = "/?action=signup&hint=no-account"
         return
       }
 
@@ -386,6 +395,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       if (activeWallet) {
         disconnect(activeWallet)
       }
+      clearWalletBrowserState()
     } finally {
       challengeFlowActiveRef.current = false
       setIsBootstrappingChallenge(false)
@@ -782,6 +792,12 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
             Connect a wallet, create an account, or continue with OMATrust.
           </DialogDescription>
         </DialogHeader>
+
+        {request.hintMessage ? (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
+            {request.hintMessage}
+          </div>
+        ) : null}
 
         {errorMessage ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

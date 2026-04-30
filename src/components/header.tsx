@@ -44,18 +44,28 @@ export function Header() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
+  const HINT_MESSAGES: Record<string, string> = {
+    "account-exists": "This wallet already has an account. Please sign in instead.",
+    "no-account": "No account found for this wallet. Please create an account first.",
+  }
+
   useEffect(() => {
-    if (searchParams.get("action") !== "signin") {
+    const action = searchParams.get("action")
+    if (action !== "signin" && action !== "signup") {
       return
     }
 
-    // Don't open the sign-in modal if the user already has a session
+    // Don't open the modal if the user already has a session
     if (!isSignedIn) {
-      openBackendAuthDialog({ mode: "chooser" })
+      const hint = searchParams.get("hint")
+      const hintMessage = hint ? HINT_MESSAGES[hint] ?? null : null
+      const mode = action === "signup" ? "signup" : "chooser"
+      openBackendAuthDialog({ mode, hintMessage })
     }
 
     const params = new URLSearchParams(searchParams.toString())
     params.delete("action")
+    params.delete("hint")
     const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
     router.replace(nextUrl, { scroll: false })
   }, [isSignedIn, openBackendAuthDialog, pathname, router, searchParams])

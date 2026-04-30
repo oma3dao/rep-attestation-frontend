@@ -19,6 +19,7 @@ export interface AuthDialogRequest {
   schemaTitle?: string
   subjectScoped?: boolean
   subjectHint?: string
+  hintMessage?: string | null
 }
 
 interface BackendSessionContextValue {
@@ -40,6 +41,7 @@ const defaultAuthDialog: AuthDialogRequest = {
   schemaTitle: undefined,
   subjectScoped: false,
   subjectHint: "",
+  hintMessage: null,
 }
 
 const BackendSessionContext = createContext<BackendSessionContextValue | null>(null)
