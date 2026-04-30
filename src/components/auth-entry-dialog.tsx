@@ -29,6 +29,7 @@ import {
   deriveSubjectUrlHint,
   listSubjects,
   patchAccountMe,
+  registerWalletSession,
   verifySubjectOwnership,
   type WalletExecutionMode,
   verifyWalletSession,
@@ -89,6 +90,10 @@ function getFriendlyError(error: unknown) {
         return "Your sign-in request expired or became invalid. Please try again."
       case "CHALLENGE_EXPIRED":
         return "Your sign-in request expired. Please try again."
+      case "ACCOUNT_NOT_FOUND":
+        return "No account found for this wallet. Please create an account first."
+      case "ACCOUNT_ALREADY_EXISTS":
+        return "This wallet already has an account. Please sign in instead."
       default:
         return error.message
     }
@@ -323,20 +328,30 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       setIsBootstrappingChallenge(false)
       setIsAuthenticating(true)
 
-      // Step 5: Verify with backend (creates account + session)
+      // Step 5: Call the right backend endpoint based on intent
       const executionMode = intent.kind === "signup" ? intent.executionMode : null
-      await verifyWalletSession({
-        challengeId: challenge.challengeId,
-        walletDid: connectedWalletDid,
-        signature,
-        siweMessage: challenge.siweMessage,
-        walletProviderId: connectedWalletProviderId,
-        executionMode,
-      })
+      if (intent.kind === "signup") {
+        await registerWalletSession({
+          challengeId: challenge.challengeId,
+          walletDid: connectedWalletDid,
+          signature,
+          siweMessage: challenge.siweMessage,
+          walletProviderId: connectedWalletProviderId,
+          executionMode,
+        })
 
-      // Step 6: Update display name if provided
-      if (accountName.trim()) {
-        await patchAccountMe({ displayName: accountName.trim() })
+        // Only set display name for newly created accounts
+        if (accountName.trim()) {
+          await patchAccountMe({ displayName: accountName.trim() })
+        }
+      } else {
+        await verifyWalletSession({
+          challengeId: challenge.challengeId,
+          walletDid: connectedWalletDid,
+          signature,
+          siweMessage: challenge.siweMessage,
+          walletProviderId: connectedWalletProviderId,
+        })
       }
 
       // Step 7: Hydrate session
@@ -347,6 +362,24 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       advanceAfterAuthenticatedFlow(currentSession, intent)
       return currentSession
     } catch (error) {
+      // If the user tried to create an account but one already exists,
+      // switch to the sign-in view instead of showing an error in the create form.
+      if (error instanceof BackendApiError && error.code === "ACCOUNT_ALREADY_EXISTS") {
+        setErrorMessage(getFriendlyError(error))
+        setAuthIntent(null)
+        setStep("signin")
+        return
+      }
+
+      // If the user tried to sign in but no account exists,
+      // switch to the create account view.
+      if (error instanceof BackendApiError && error.code === "ACCOUNT_NOT_FOUND") {
+        setErrorMessage(getFriendlyError(error))
+        setAuthIntent(null)
+        setStep("createSimple")
+        return
+      }
+
       setErrorMessage(getFriendlyError(error))
       // Disconnect the wallet on failure so the UI doesn't show a
       // connected wallet with no session (confusing state)
@@ -512,9 +545,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
           Check your wallet to continue
         </div>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {isSigningIn
-            ? "Sign a message in your wallet app to verify ownership and sign in to your account. This is free — no gas required."
-            : "Sign a message in your wallet app to verify ownership and create your account. This is free — no gas required."}
+          Sign a message to verify wallert ownership. This is free — no gas required.
         </p>
       </div>
     )

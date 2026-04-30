@@ -297,6 +297,20 @@ export async function verifyWalletSession(params: {
   })
 }
 
+export async function registerWalletSession(params: {
+  challengeId: string
+  walletDid: string
+  signature: string
+  siweMessage: string
+  walletProviderId?: string | null
+  executionMode?: WalletExecutionMode | null
+}) {
+  return backendFetch<WalletVerifyResponse>("/api/private/session/wallet/register", {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
+}
+
 export async function getSessionMe() {
   return backendFetch<BackendSessionMeResponse>("/api/private/session/me")
 }
