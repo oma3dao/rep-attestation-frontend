@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
-import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
+import { Shield, Award, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
 import { getActiveChain } from "@/lib/blockchain"
 
 interface AttestationDetailModalProps {
@@ -19,7 +19,6 @@ interface AttestationDetailModalProps {
 
 const schemaIcons: Record<string, any> = {
   'certification': Award,
-  'endorsement': FileCheck,
   'linked-identifier': LinkIcon,
   'security-assessment': Shield,
   'user-review': Star,

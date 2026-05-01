@@ -25,7 +25,7 @@ export default function HomePage() {
             <ShieldCheck className="mb-3 h-8 w-8 text-primary" />
             <CardTitle className="text-2xl tracking-tight">Publish Trust Data</CardTitle>
             <CardDescription className="text-base">
-              Submit reviews, audits, certifications, or endorsements for services.
+              Submit reviews and audits for services.
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-auto pt-0">
