@@ -217,13 +217,14 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       return
     }
 
-    // Non-submission — navigate immediately
-    if (intent?.kind === "signin" || request.mode === "signin") {
-      router.push("/dashboard")
-      return
-    }
-    router.push("/account")
-  }, [isSubmissionFlow, request, router])
+    // Non-submission — close the dialog explicitly, then navigate.
+    const defaultDestination =
+      intent?.kind === "signin" || request.mode === "signin"
+        ? "/dashboard"
+        : "/account"
+    onOpenChange(false)
+    router.push(request.redirectTo ?? defaultDestination)
+  }, [isSubmissionFlow, onOpenChange, request, router])
 
   const hydrateSessionAfterVerify = async () => {
     const response = await refreshSession()

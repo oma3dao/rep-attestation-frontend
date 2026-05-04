@@ -96,7 +96,7 @@ describe('Dashboard Page', () => {
     })
     mockGetChainById.mockReturnValue({
       id: 66238,
-      name: 'OMAchain Testnet',
+      name: 'OMAChain Testnet',
       blockExplorers: [{ name: 'Explorer', url: 'https://explorer.testnet.chain.oma3.org' }],
     })
     mockGetContractAddress.mockReturnValue('0x' + 'e'.repeat(40))

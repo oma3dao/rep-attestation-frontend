@@ -12,20 +12,20 @@ describe('chains config', () => {
   it('exports SUPPORTED_CHAINS as an array with known chains', () => {
     expect(Array.isArray(SUPPORTED_CHAINS)).toBe(true);
     expect(SUPPORTED_CHAINS.length).toBeGreaterThan(0);
-    // Check for known chain ids (OMAchain Testnet, BSC Testnet, BSC Mainnet, Sepolia, Mainnet)
+    // Check for known chain ids (OMAChain Testnet, BSC Testnet, BSC Mainnet, Sepolia, Mainnet)
     const chainIds = SUPPORTED_CHAINS.map(chain => chain.id);
     expect(chainIds).toEqual(expect.arrayContaining([66238, 97, 56, 11155111, 1]));
   });
 
   it('exports DEFAULT_CHAIN as one of the supported chains', () => {
     expect(SUPPORTED_CHAINS).toContain(DEFAULT_CHAIN);
-    expect(DEFAULT_CHAIN.id).toBe(66238); // OMAchain Testnet
+    expect(DEFAULT_CHAIN.id).toBe(66238); // OMAChain Testnet
   });
 });
 
 describe('getChainName', () => {
   it('returns known name for supported chain id', () => {
-    expect(getChainName(CHAIN_IDS.OMACHAIN_TESTNET)).toBe('OMAchain Testnet');
+    expect(getChainName(CHAIN_IDS.OMACHAIN_TESTNET)).toBe('OMAChain Testnet');
     expect(getChainName(CHAIN_IDS.BSC_TESTNET)).toBe('BSC Testnet');
     expect(getChainName(CHAIN_IDS.MAINNET)).toBe('Ethereum Mainnet');
   });
@@ -40,7 +40,7 @@ describe('getChainById', () => {
     const chain = getChainById(66238);
     expect(chain).toBeDefined();
     expect(chain?.id).toBe(66238);
-    expect(chain?.name).toBe('OMAchain Testnet');
+    expect(chain?.name).toBe('OMAChain Testnet');
   });
 
   it('returns undefined for unknown chain id', () => {

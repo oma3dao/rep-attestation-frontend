@@ -1,15 +1,39 @@
 "use client"
 
-import Link from "next/link"
-import { ArrowRight, FolderKanban, ShieldCheck } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
 import { LatestAttestations } from "@/components/latest-attestations"
-import { useBackendSession } from "@/components/backend-session-provider"
+import { WorkflowCards } from "@/components/home/WorkflowCards"
+import { LatestTrustProfiles } from "@/components/home/LatestTrustProfiles"
+import { getLatestAttestationsWithMetadata, type EnrichedAttestationResult } from "@/lib/attestation-queries"
+import { useWallet } from "@/lib/blockchain"
+import { ATTESTATION_QUERY_CONFIG } from "@/config/attestation-services"
 
 export default function HomePage() {
-  const { session } = useBackendSession()
-  const dashboardHref = session ? "/dashboard" : "/dashboard?action=signin"
+  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const { chainId } = useWallet()
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchData() {
+      try {
+        setIsLoading(true)
+        const results = await getLatestAttestationsWithMetadata(
+          chainId,
+          ATTESTATION_QUERY_CONFIG.defaultLimit
+        )
+        if (!cancelled) setAttestations(results)
+      } catch {
+        // Individual components handle their own error states
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    fetchData()
+    return () => { cancelled = true }
+  }, [chainId])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -19,51 +43,33 @@ export default function HomePage() {
         </h1>
       </section>
 
-      <section className="grid gap-6 md:grid-cols-2">
-        <Card className="flex h-full flex-col border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-lg hover:shadow-slate-950/10">
-          <CardHeader>
-            <ShieldCheck className="mb-3 h-8 w-8 text-primary" />
-            <CardTitle className="text-2xl tracking-tight">Publish Trust Data</CardTitle>
-            <CardDescription className="text-base">
-              Submit reviews and audits for services.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto pt-0">
-            <Link href="/publish">
-              <Button className="w-full sm:w-auto">
-                Start Publishing
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="flex h-full flex-col border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-lg hover:shadow-slate-950/10">
-          <CardHeader>
-            <FolderKanban className="mb-3 h-8 w-8 text-primary" />
-            <CardTitle className="text-2xl tracking-tight">Manage Trust For Your Service</CardTitle>
-            <CardDescription className="text-base">
-              Authorize signing keys, link identities, and respond to reviews.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-auto pt-0">
-            <Link href={dashboardHref}>
-              <Button className="w-full sm:w-auto">
-                Dashboard
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+      <section>
+        <WorkflowCards />
       </section>
 
-      <section className="mt-16">
+      <section className="mt-12">
+        <div className="mb-3 max-w-2xl">
+          <p className="technical-label text-primary">Latest Trust Profiles</p>
+        </div>
+
+        <div className="rounded-2xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
+          <LatestTrustProfiles
+            limit={5}
+            data={isLoading ? undefined : attestations}
+          />
+        </div>
+      </section>
+
+      <section className="mt-8">
         <div className="mb-3 max-w-2xl">
           <p className="technical-label text-primary">Latest Activity</p>
         </div>
 
         <div className="rounded-2xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
-          <LatestAttestations showHeading={false} />
+          <LatestAttestations
+            showHeading={false}
+            data={isLoading ? undefined : attestations}
+          />
         </div>
       </section>
     </div>

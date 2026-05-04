@@ -57,25 +57,25 @@ describe('attestation-services config', () => {
     it('has correct basic properties', () => {
       expect(EAS_CONFIG.id).toBe('eas');
       expect(EAS_CONFIG.name).toBe('Ethereum Attestation Service');
-      expect(EAS_CONFIG.description).toContain('OMAchain');
+      expect(EAS_CONFIG.description).toContain('OMAChain');
       expect(EAS_CONFIG.website).toBe('https://attest.org/');
       expect(EAS_CONFIG.docs).toBe('https://docs.attest.org/');
     });
 
-    it('supports OMAchain Testnet and Mainnet', () => {
+    it('supports OMAChain Testnet and Mainnet', () => {
       expect(EAS_CONFIG.supportedChains).toContain(CHAIN_IDS.OMACHAIN_TESTNET);
       expect(EAS_CONFIG.supportedChains).toContain(CHAIN_IDS.OMACHAIN_MAINNET);
     });
 
-    it('has contract addresses for OMAchain', () => {
+    it('has contract addresses for OMAChain', () => {
       expect(EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
     });
 
-    it('has OMAchain native feature', () => {
-      expect(EAS_CONFIG.features).toContain('OMAchain native');
+    it('has OMAChain native feature', () => {
+      expect(EAS_CONFIG.features).toContain('OMAChain native');
     });
 
-    it('has estimated gas costs for OMAchain', () => {
+    it('has estimated gas costs for OMAChain', () => {
       expect(EAS_CONFIG.estimatedGasCost?.[CHAIN_IDS.OMACHAIN_TESTNET]).toBe(BigInt('100000'));
       expect(EAS_CONFIG.estimatedGasCost?.[CHAIN_IDS.OMACHAIN_MAINNET]).toBe(BigInt('100000'));
     });
@@ -181,7 +181,7 @@ describe('attestation-services config', () => {
       expect(bscServices).toContain(BAS_CONFIG);
     });
 
-    it('returns EAS for OMAchain', () => {
+    it('returns EAS for OMAChain', () => {
       const omachainTestnetServices = getServicesForChain(CHAIN_IDS.OMACHAIN_TESTNET);
       expect(omachainTestnetServices).toContain(EAS_CONFIG);
     });
@@ -199,7 +199,7 @@ describe('attestation-services config', () => {
       expect(getContractAddress('bas', bsc.id)).toBe('0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC');
     });
 
-    it('returns contract address for EAS on OMAchain', () => {
+    it('returns contract address for EAS on OMAChain', () => {
       expect(getContractAddress('eas', CHAIN_IDS.OMACHAIN_TESTNET)).toBe(
         '0x8835AF90f1537777F52E482C8630cE4e947eCa32'
       );

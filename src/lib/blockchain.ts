@@ -23,7 +23,7 @@ export function getActiveChain() {
     case 'mainnet':
       return mainnet
     default:
-      return omachainTestnet // Fallback to OMAchain testnet
+      return omachainTestnet // Fallback to OMAChain testnet
   }
 }
 

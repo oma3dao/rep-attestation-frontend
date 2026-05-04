@@ -5,7 +5,7 @@
  */
 
 /**
- * OMAchain Testnet
+ * OMAChain Testnet
  * Chain ID: 66238
  * RPC: https://rpc.testnet.chain.oma3.org/
  * Explorer: https://explorer.testnet.chain.oma3.org/
@@ -14,7 +14,7 @@ export const omachainTestnet = {
   id: 66238,
   chainId: 66238,
   rpc: "https://rpc.testnet.chain.oma3.org/",
-  name: "OMAchain Testnet",
+  name: "OMAChain Testnet",
   nativeCurrency: {
     name: "OMA",
     symbol: "OMA",
@@ -22,7 +22,7 @@ export const omachainTestnet = {
   },
   blockExplorers: [
     {
-      name: "OMAchain Testnet Explorer",
+      name: "OMAChain Testnet Explorer",
       url: "https://explorer.testnet.chain.oma3.org",
       apiUrl: "https://explorer.testnet.chain.oma3.org/api",
     },
@@ -35,7 +35,7 @@ export const omachainTestnet = {
 };
 
 /**
- * OMAchain Mainnet (Placeholder)
+ * OMAChain Mainnet (Placeholder)
  * Chain ID: 6623
  * RPC: TBD
  * Explorer: TBD
@@ -44,7 +44,7 @@ export const omachainMainnet = {
   id: 6623,
   chainId: 6623,
   rpc: "https://rpc.chain.oma3.org/", // TODO: Update when mainnet is available
-  name: "OMAchain Mainnet",
+  name: "OMAChain Mainnet",
   nativeCurrency: {
     name: "OMA",
     symbol: "OMA",
@@ -52,7 +52,7 @@ export const omachainMainnet = {
   },
   blockExplorers: [
     {
-      name: "OMAchain Explorer",
+      name: "OMAChain Explorer",
       url: "https://explorer.chain.oma3.org",
       apiUrl: "https://explorer.chain.oma3.org/api",
     },
@@ -241,8 +241,8 @@ export const CHAIN_IDS = {
  * Chain names mapped by chain ID
  */
 export const CHAIN_NAMES = {
-  [CHAIN_IDS.OMACHAIN_TESTNET]: 'OMAchain Testnet',
-  [CHAIN_IDS.OMACHAIN_MAINNET]: 'OMAchain Mainnet',
+  [CHAIN_IDS.OMACHAIN_TESTNET]: 'OMAChain Testnet',
+  [CHAIN_IDS.OMACHAIN_MAINNET]: 'OMAChain Mainnet',
   [CHAIN_IDS.BSC_TESTNET]: 'BSC Testnet',
   [CHAIN_IDS.BSC_MAINNET]: 'BSC Mainnet',
   [CHAIN_IDS.SEPOLIA]: 'Sepolia',

@@ -10,11 +10,13 @@ import { ATTESTATION_QUERY_CONFIG } from '@/config/attestation-services'
 
 interface LatestAttestationsProps {
   showHeading?: boolean
+  /** Pre-fetched attestation data. When provided, the component skips its own fetch. */
+  data?: EnrichedAttestationResult[]
 }
 
-export function LatestAttestations({ showHeading = true }: LatestAttestationsProps) {
-  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+export function LatestAttestations({ showHeading = true, data }: LatestAttestationsProps) {
+  const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>(data ?? [])
+  const [isLoading, setIsLoading] = useState(!data)
   const [error, setError] = useState<string | null>(null)
   const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -22,6 +24,13 @@ export function LatestAttestations({ showHeading = true }: LatestAttestationsPro
   const sectionPadding = showHeading ? "py-16" : "py-4"
 
   useEffect(() => {
+    // Skip fetch if data was provided externally
+    if (data) {
+      setAttestations(data)
+      setIsLoading(false)
+      return
+    }
+
     async function fetchAttestations() {
       try {
         setIsLoading(true)
@@ -42,7 +51,7 @@ export function LatestAttestations({ showHeading = true }: LatestAttestationsPro
     }
 
     fetchAttestations()
-  }, [chainId])
+  }, [chainId, data])
 
   const handleCardClick = (attestation: EnrichedAttestationResult) => {
     setSelectedAttestation(attestation)

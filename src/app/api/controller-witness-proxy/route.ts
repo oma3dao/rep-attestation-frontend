@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { buildServiceUrl } from '@/lib/service-urls'
 
-const UPSTREAM_URL =
-  process.env.CONTROLLER_WITNESS_URL ??
-  'https://registry.omatrust.org/api/controller-witness'
+// In deployed environments, this proxies to the app-registry-frontend's controller witness API.
+// For local dev, set NEXT_PUBLIC_OMATRUST_REGISTRY_DOMAIN=localhost:3002 to point to a local instance.
+const REGISTRY_DOMAIN = process.env.NEXT_PUBLIC_OMATRUST_REGISTRY_DOMAIN ?? 'registry.omatrust.org'
+const UPSTREAM_URL = `${buildServiceUrl(REGISTRY_DOMAIN)}/api/controller-witness`
 
 const MAX_REDIRECTS = 3
 

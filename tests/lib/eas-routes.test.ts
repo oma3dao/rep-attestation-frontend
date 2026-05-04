@@ -36,12 +36,12 @@ vi.mock('@/config/attestation-services', () => ({
 vi.mock('@/config/chains', () => ({
   omachainTestnet: {
     id: 66238,
-    name: 'OMAchain Testnet',
+    name: 'OMAChain Testnet',
     rpc: 'https://rpc.testnet.chain.oma3.org/',
   },
   omachainMainnet: {
     id: 6623,
-    name: 'OMAchain Mainnet',
+    name: 'OMAChain Mainnet',
     rpc: 'https://rpc.chain.oma3.org/',
   },
 }));
@@ -223,7 +223,7 @@ describe('getNonce', () => {
       const result = await getNonce(validAddress);
       expect(result).toEqual({
         nonce: '42',
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
         chainId: 66238,
         easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
       });
@@ -564,7 +564,7 @@ describe('submitDelegatedAttestation', () => {
       expect(result.uid).toBe(MOCK_UID);
       expect(result.uid).not.toBe(MOCK_RECIPIENT);
       expect(result.blockNumber).toBe(99999);
-      expect(result.chain).toBe('OMAchain Testnet');
+      expect(result.chain).toBe('OMAChain Testnet');
     });
 
     it('handles case-insensitive attester address comparison', async () => {

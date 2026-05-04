@@ -15,6 +15,7 @@ export interface AuthDialogRequest {
   open: boolean
   mode: AuthDialogMode
   reason?: "navigation" | "submission"
+  redirectTo?: string
   schemaId?: string
   schemaTitle?: string
   subjectScoped?: boolean
@@ -37,6 +38,7 @@ const defaultAuthDialog: AuthDialogRequest = {
   open: false,
   mode: "chooser",
   reason: "navigation",
+  redirectTo: undefined,
   schemaId: undefined,
   schemaTitle: undefined,
   subjectScoped: false,

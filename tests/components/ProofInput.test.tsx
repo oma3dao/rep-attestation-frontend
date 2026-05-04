@@ -50,7 +50,7 @@ vi.mock('@/components/chain-search-input', () => ({
       >
         <option value="">{placeholder}</option>
         <option value="1">Ethereum</option>
-        <option value="66238">OMAchain</option>
+        <option value="66238">OMAChain</option>
       </select>
     </div>
   ),

@@ -10,34 +10,12 @@ import type { Hex, Did } from '@oma3/omatrust/reputation'
 import logger from '@/lib/logger'
 
 function getWitnessGatewayUrl() {
-  const configured = process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL?.trim()
-
-  if (!configured) {
-    return '/api/controller-witness-proxy'
-  }
-
-  if (typeof window === 'undefined') {
-    return configured
-  }
-
-  try {
-    const configuredUrl = new URL(configured, window.location.origin)
-    if (
-      configuredUrl.pathname === '/api/controller-witness-proxy' &&
-      configuredUrl.hostname === 'localhost' &&
-      configuredUrl.origin !== window.location.origin
-    ) {
-      return `${window.location.origin}/api/controller-witness-proxy`
-    }
-  } catch {
-    return configured
-  }
-
-  return configured
+  // Use the frontend's own proxy to avoid CORS issues and simplify local dev.
+  // The proxy forwards to the upstream controller witness API.
+  return '/api/controller-witness-proxy'
 }
 
 interface WitnessCallParams {
-  attestationUid: string
   chainId: number
   easContract: string
   schemaUid: string
@@ -53,7 +31,6 @@ export async function callControllerWitness(
   params: WitnessCallParams
 ): Promise<Record<string, any> | undefined> {
   logger.log('[controller-witness] Starting witness call:', {
-    attestationUid: params.attestationUid,
     subject: params.subject,
     controller: params.controller,
   })
@@ -61,7 +38,7 @@ export async function callControllerWitness(
   try {
     const result = await reputation.callControllerWitness({
       gatewayUrl: getWitnessGatewayUrl(),
-      attestationUid: params.attestationUid as Hex,
+      attestationUid: "" as Hex,
       chainId: params.chainId,
       easContract: params.easContract as Hex,
       schemaUid: params.schemaUid as Hex,

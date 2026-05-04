@@ -45,7 +45,7 @@ The postMessage signing protocol is defined in:
 |------------|----------------------------------------------------|
 | `url`      | `reputation.omatrust.org`                          |
 | `contract` | `0x8835AF90f1537777F52E482C8630cE4e947eCa32` (EAS) |
-| `chainId`  | `66238` (OMAchain Testnet)                         |
+| `chainId`  | `66238` (OMAChain Testnet)                         |
 | `name`     | `OMATrust Reputation Portal`                       |
 | `explorer` | `https://explorer.testnet.chain.oma3.org/api`      |
 

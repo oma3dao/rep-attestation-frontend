@@ -153,15 +153,7 @@ If you also deployed the schema on-chain, the deployment UIDs and block numbers 
 
 ### Key Schema Extensions
 
-The script processes `x-oma3-*` extension fields from the JSON schemas (e.g., `x-oma3-skip-reason`, `x-oma3-subtype`, `x-oma3-default`, `x-oma3-render`, `x-oma3-witness`). For the full reference on all supported extensions, see [`schemas-json/README.md`](https://github.com/oma3dao/rep-attestation-tools-evm-solidity/blob/main/schemas-json/README.md) in the tools repository.
-
-### Controller Witness
-
-Schemas that declare `x-oma3-witness` at the top level trigger an automatic, non-blocking call to the Controller Witness API after a successful attestation. Currently enabled on Key Binding and Linked Identifier schemas.
-
-The witness call tries `dns-txt` first, then falls back to `did-json`. Failures are logged but never block the user flow. The endpoint is configurable via `NEXT_PUBLIC_CONTROLLER_WITNESS_URL` (defaults to `https://api.omatrust.org/v1/controller-witness`).
-
-For details on the `x-oma3-witness` extension, see the tools repo's [`schemas-json/README.md`](https://github.com/oma3dao/rep-attestation-tools-evm-solidity/blob/main/schemas-json/README.md). For the API reference, see `developer-docs/docs/api/controller-witness.md`.
+The script processes `x-oma3-*` extension fields from the JSON schemas (e.g., `x-oma3-skip-reason`, `x-oma3-subtype`, `x-oma3-default`, `x-oma3-render`). For the full reference on all supported extensions, see [`schemas-json/README.md`](https://github.com/oma3dao/rep-attestation-tools-evm-solidity/blob/main/schemas-json/README.md) in the tools repository.
 
 ## Contributing
 
@@ -174,15 +166,15 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of cond
 ### Blockchain Networks
 
 The application targets:
-- **OMAchain Testnet** (chain ID 66238) - For development and testing
-- **OMAchain Mainnet** (chain ID 6623) - For production use (when available)
+- **OMAChain Testnet** (chain ID 66238) - For development and testing
+- **OMAChain Mainnet** (chain ID 6623) - For production use (when available)
 
 Legacy BSC and Ethereum chain configs remain in `chains.ts` but are not actively used for attestations.
 
 ### Attestation Services
 
 Currently integrated:
-- **EAS (Ethereum Attestation Service)** - Deployed on OMAchain Testnet
+- **EAS (Ethereum Attestation Service)** - Deployed on OMAChain Testnet
 - **Delegated attestations** - Server pays gas for subsidized schemas
 - **Controller Witness** - Automatic post-attestation witness for key-binding and linked-identifier schemas
 
@@ -194,10 +186,10 @@ For subsidized schemas, the server pays gas on behalf of users via EAS delegated
 
 | Environment | Address | Chain |
 |-------------|---------|-------|
-| Testnet | `0xe9e676a6c1160f6df7b296da0d02677294ba9423` | OMAchain Testnet |
-| Mainnet | TBD (Thirdweb Server Wallet) | OMAchain Mainnet |
+| Testnet | `0xe9e676a6c1160f6df7b296da0d02677294ba9423` | OMAChain Testnet |
+| Mainnet | TBD (Thirdweb Server Wallet) | OMAChain Mainnet |
 
-**Funding:** The testnet delegate wallet needs OMA tokens to pay for gas. Fund it via the OMAchain testnet faucet or transfer from another wallet.
+**Funding:** The testnet delegate wallet needs OMA tokens to pay for gas. Fund it via the OMAChain testnet faucet or transfer from another wallet.
 
 #### Environment Variables (Server-side)
 

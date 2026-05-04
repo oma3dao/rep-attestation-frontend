@@ -95,7 +95,7 @@ describe('useWallet', () => {
     process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'omachain-mainnet'
     const { result } = renderHook(() => useWallet())
     expect(result.current.chainId).toBe(6623)
-    expect(result.current.chain.name).toMatch(/OMAchain Mainnet/i)
+    expect(result.current.chain.name).toMatch(/OMAChain Mainnet/i)
   })
 
   it('uses bsc-mainnet when NEXT_PUBLIC_ACTIVE_CHAIN is bsc-mainnet', () => {
@@ -116,13 +116,13 @@ describe('useWallet', () => {
     process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'omachain-testnet'
     const { result } = renderHook(() => useWallet())
     expect(result.current.chainId).toBe(66238)
-    expect(result.current.chain.name).toMatch(/OMAchain Testnet/i)
+    expect(result.current.chain.name).toMatch(/OMAChain Testnet/i)
   })
 
   it('uses omachain-testnet when NEXT_PUBLIC_ACTIVE_CHAIN is invalid (default)', () => {
     process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'invalid-or-unset'
     const { result } = renderHook(() => useWallet())
     expect(result.current.chainId).toBe(66238)
-    expect(result.current.chain.name).toMatch(/OMAchain Testnet/i)
+    expect(result.current.chain.name).toMatch(/OMAChain Testnet/i)
   })
 }) 

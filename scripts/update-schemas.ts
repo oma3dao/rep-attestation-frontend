@@ -142,16 +142,12 @@ async function transformToUISchema(jsonSchema, schemaId) {
   // Detect if schema should be revocable (has 'revoked' field with x-oma3-skip-reason: "eas")
   const revocable = detectRevocable(jsonSchema.properties)
 
-  // Extract witness configuration if present
-  const witness = jsonSchema['x-oma3-witness'] || undefined
-
   return {
     id: schemaId,
     title: jsonSchema.title,
     description: jsonSchema.description,
     fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId),
     revocable,
-    witness
   }
 }
 
@@ -472,7 +468,7 @@ async function readEasSchemaStrings(rootPath) {
  *
  * When a schema is redeployed (e.g., field layout change), the old UID
  * disappears from the deployment data. But existing attestations under
- * the old UID still need witness support. This function extracts all
+ * the old UID still need to be queryable. This function extracts all
  * current deployedUIDs and priorUIDs so they can be merged into the
  * regenerated file.
  *
@@ -593,11 +589,6 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       exportLines.push(`  revocable: true,`)
     }
 
-    // Add witness configuration if present (from x-oma3-witness in JSON schema)
-    if (item.schema.witness) {
-      exportLines.push(`  witness: ${JSON.stringify(item.schema.witness)},`)
-    }
-
     // Add EAS schema string if available (from generated .eas.json files)
     const easStr = easSchemaStrings[item.schema.id]
     if (easStr) {
@@ -608,8 +599,8 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       `  deployedUIDs: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: '${escapeString(bscTestnetUID)}', // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: '${escapeString(bscMainnetUID)}', // BSC Mainnet`,
-      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAchain Testnet`,
-      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAchain Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAChain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAChain Mainnet`,
       `  },`,
     )
 
@@ -657,8 +648,8 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       `  deployedBlocks: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: ${bscTestnetBlock}, // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: ${bscMainnetBlock}, // BSC Mainnet`,
-      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: ${omachainTestnetBlock}, // OMAchain Testnet`,
-      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAchain Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: ${omachainTestnetBlock}, // OMAChain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAChain Mainnet`,
       `  }`,
       `};`
     )
@@ -712,8 +703,7 @@ export interface AttestationSchema {
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
   revocable?: boolean // Whether attestations using this schema can be revoked (default: false)
   easSchemaString?: string // Solidity-typed schema string for EAS SchemaEncoder
-  witness?: { subjectField: string; controllerField: string } // Controller Witness API config from x-oma3-witness
-  priorUIDs?: Record<number, string[]> // Previously-deployed schema UIDs per chain (preserved across redeployments for witness compatibility)
+  priorUIDs?: Record<number, string[]> // Previously-deployed schema UIDs per chain (preserved across redeployments)
 }
 
 // Field definitions

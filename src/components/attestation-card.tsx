@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Shield, Award, LinkIcon, Star, MessageSquare } from "lucide-react"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
+import { StarRating } from "@/components/star-rating"
 
 interface AttestationCardProps {
   attestation: EnrichedAttestationResult
@@ -61,7 +62,7 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
           {attestation.decodedData?.ratingValue && (
             <div>
               <span className="font-medium text-foreground">Rating:</span>{' '}
-              <span className="text-muted-foreground">{Number(attestation.decodedData.ratingValue)}/5</span>
+              <StarRating value={attestation.decodedData.ratingValue as string | number} />
             </div>
           )}
         </div>
