@@ -117,7 +117,7 @@ export async function getAttestationsForDIDWithMetadata(
     logger.log('[Query] Querying attestations for DID:', { did, schemaUID: options.schemaUID })
 
     const results = await reputation.getAttestationsForDid({
-        did,
+        subjectDid: did,
         provider,
         easContractAddress,
         schemas: [options.schemaUID as Hex],
@@ -128,6 +128,49 @@ export async function getAttestationsForDIDWithMetadata(
     return results.map(att => {
         const schema = findSchemaByUid(att.schema, chainId)
         return toFrontendResult(att, chainId, schema)
+    })
+}
+
+/**
+ * Query all attestations for a specific DID across all deployed schemas.
+ * Returns attestations where the DID is the recipient (subject).
+ * Useful for fetching reviews, controller witnesses, certifications, etc.
+ * about a service.
+ */
+export async function getAllAttestationsForDIDWithMetadata(
+    did: string,
+    limit: number = 100
+): Promise<EnrichedAttestationResult[]> {
+    const chainId = getActiveChain().id
+    const { provider, easContractAddress } = getProviderAndEas(chainId)
+
+    const schemas = getAllSchemas()
+    const deployedSchemaUids = schemas
+        .map(s => s.deployedUIDs?.[chainId])
+        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+
+    if (deployedSchemaUids.length === 0) {
+        return []
+    }
+
+    const results = await reputation.getAttestationsForDid({
+        subjectDid: did,
+        provider,
+        easContractAddress,
+        schemas: deployedSchemaUids,
+        limit,
+    })
+
+    return results.map(att => {
+        const schema = findSchemaByUid(att.schema, chainId)
+        let enriched = att
+        if (schema?.easSchemaString && att.raw) {
+            try {
+                const decoded = reputation.decodeAttestationData(schema.easSchemaString, att.raw)
+                enriched = { ...att, data: decoded }
+            } catch { /* skip decode failures */ }
+        }
+        return toFrontendResult(enriched, chainId, schema)
     })
 }
 

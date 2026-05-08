@@ -13,6 +13,7 @@ import { client } from "@/app/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { AttestationCard } from "@/components/attestation-card"
 import { AttestationDetailModal } from "@/components/attestation-detail-modal"
 import { RevokeConfirmationDialog } from "@/components/revoke-confirmation-dialog"
 import { PublishButton } from "@/components/dashboard/PublishButton"
@@ -21,19 +22,20 @@ import { StarRating } from "@/components/star-rating"
 import {
   getControllerConfirmation,
   resolvePublicIdentities,
+  getPublicTrustAnchors,
   type BackendSessionMeResponse,
   type IdentityResolution,
   type ControllerConfirmResponse,
+  type TrustAnchorApprovedIssuer,
 } from "@/lib/omatrust-backend"
 import {
   getAttestationsByAttesterWithMetadata,
-  getAttestationsForDIDWithMetadata,
+  getAllAttestationsForDIDWithMetadata,
   type EnrichedAttestationResult,
 } from "@/lib/attestation-queries"
 import { getActiveThirdwebChain, useWallet } from "@/lib/blockchain"
 import { getContractAddress } from "@/config/attestation-services"
 import { getChainById } from "@/config/chains"
-import { keyBindingSchema, userReviewSchema } from "@/config/schemas"
 import { callControllerWitness } from "@/lib/controller-witness-client"
 
 const activeThirdwebChain = getActiveThirdwebChain()
@@ -389,7 +391,35 @@ function buildServiceKeys({
 }): ServiceKey[] {
   const keyMap = new Map<string, ServiceKey>()
 
+  // Only allow private-key DID methods with a complete identifier.
+  // Rejects did:web:, incomplete DIDs like "did:pkh:eip155", etc.
+  // did:pkh — CAIP-10 blockchain account
+  // did:ethr — Ethereum address (legacy)
+  // did:key — Multicodec public key (Ed25519, secp256k1, P-256)
+  // did:jwk — JSON Web Key (RSA, EC, OKP)
+  const PRIVATE_KEY_DID_PREFIXES = ["did:pkh:", "did:ethr:", "did:key:", "did:jwk:"]
+
+  const isValidKeyDid = (did: string): boolean => {
+    if (!PRIVATE_KEY_DID_PREFIXES.some((prefix) => did.startsWith(prefix))) return false
+    // Structural completeness checks
+    const parts = did.split(":")
+    if (did.startsWith("did:pkh:") && parts.length < 5) return false
+    if (did.startsWith("did:ethr:") && parts.length < 4) return false
+    if (did.startsWith("did:key:") && parts.length < 3) return false
+    if (did.startsWith("did:jwk:") && parts.length < 3) return false
+    // Last segment must be non-empty
+    const lastPart = parts[parts.length - 1]
+    if (!lastPart || lastPart.length < 3) return false
+    return true
+  }
+
   const ensureKey = (keyDid: string, source: string, label?: string) => {
+    if (!isValidKeyDid(keyDid)) {
+      console.warn(
+        `[buildServiceKeys] Rejected non-private-key DID from source "${source}": ${keyDid}`
+      )
+      return null
+    }
     const canonicalKeyDid = canonicalIdentifier(keyDid)
     const existing = keyMap.get(canonicalKeyDid) ?? {
       keyDid,
@@ -410,8 +440,23 @@ function buildServiceKeys({
   }
 
   for (const controllerKey of controllerSummary?.controllerKeys ?? []) {
-    const key = ensureKey(controllerKey.canonicalId, controllerKey.sources.join(", "), controllerKey.label)
-    key.basic = key.basic || controllerKey.basic
+    // Normalize backend source labels to user-friendly display names
+    const sourceLabels = controllerKey.sources.map((s) => {
+      switch (s) {
+        case "account-wallet": return "Account wallet"
+        case "dns-txt": return "DNS TXT"
+        case "did-json": return "DID document"
+        default: return s
+      }
+    })
+    // Add each source individually so deduplication works correctly
+    const key = ensureKey(controllerKey.canonicalId, sourceLabels[0] ?? "Controller confirm", controllerKey.label)
+    if (key) {
+      for (const label of sourceLabels.slice(1)) {
+        if (!key.sources.includes(label)) key.sources.push(label)
+      }
+      key.basic = key.basic || controllerKey.basic
+    }
   }
 
   for (const attestation of attestations) {
@@ -421,7 +466,7 @@ function buildServiceKeys({
       const keyDid = getDecodedString(attestation, ["keyId"])
       if (!keyDid) continue
       const key = ensureKey(keyDid, "Key binding")
-      key.advanced = true
+      if (!key) continue
       key.keyBindingUid = attestation.uid
       key.keyBindingSchemaUid = attestation.schema
       continue
@@ -431,9 +476,15 @@ function buildServiceKeys({
       const keyDid = getDecodedString(attestation, ["controller"])
       if (!keyDid) continue
       const key = ensureKey(keyDid, "Controller witness")
+      if (!key) continue
       key.intermediate = true
       key.controllerWitnessUid = attestation.uid
     }
+  }
+
+  // Compute advanced: requires BOTH key-binding AND controller-witness
+  for (const key of keyMap.values()) {
+    key.advanced = Boolean(key.keyBindingUid) && key.intermediate
   }
 
   return Array.from(keyMap.values()).sort((a, b) => {
@@ -460,21 +511,16 @@ function ServiceKeyCard({
   const publishParams = serviceDid
     ? `subject=${encodeURIComponent(serviceDid)}&keyId=${encodeURIComponent(keyInfo.keyDid)}`
     : null
-  const keyBindingSchemaUid = keyInfo.keyBindingSchemaUid ?? keyBindingSchema.deployedUIDs?.[chainId]
-  const easContract = getContractAddress("eas", chainId)
 
   // Controller witness: available for any key that doesn't have one yet.
-  // The API will check endpoint evidence (DNS/DID.json) server-side.
+  // The backend handles chain/schema validation and evidence discovery.
   const canSubmitControllerWitness = Boolean(
     serviceDid &&
-    !keyInfo.intermediate &&
-    keyBindingSchemaUid &&
-    keyBindingSchemaUid !== "0x".padEnd(66, "0") &&
-    easContract
+    !keyInfo.intermediate
   )
 
   const submitControllerWitness = async () => {
-    if (!serviceDid || !keyBindingSchemaUid || !easContract) return
+    if (!serviceDid) return
 
     setShowWitnessConfirm(false)
     setIsSubmittingWitness(true)
@@ -483,9 +529,6 @@ function ServiceKeyCard({
 
     try {
       const result = await callControllerWitness({
-        chainId,
-        easContract,
-        schemaUid: keyBindingSchemaUid,
         subject: serviceDid,
         controller: keyInfo.keyDid,
       })
@@ -544,7 +587,7 @@ function ServiceKeyCard({
             {isSubmittingWitness ? "Submitting witness..." : "Add controller witness"}
           </Button>
         ) : null}
-        {!keyInfo.advanced && publishParams ? (
+        {!keyInfo.keyBindingUid && publishParams ? (
           <Button variant="outline" size="sm" asChild>
             <Link href={`/publish/key-binding?${publishParams}`}>
               Publish key binding
@@ -618,9 +661,29 @@ function ServiceTrustWorkspace({
   const [selectedServiceDid, setSelectedServiceDid] = useState<string | null>(serviceDids[0] ?? null)
   const [controllerSummary, setControllerSummary] = useState<ControllerConfirmResponse | null>(null)
   const [isLoadingControllerSummary, setIsLoadingControllerSummary] = useState(false)
-  const [serviceReviews, setServiceReviews] = useState<EnrichedAttestationResult[]>([])
-  const [isLoadingReviews, setIsLoadingReviews] = useState(false)
+  const [serviceAttestations, setServiceAttestations] = useState<EnrichedAttestationResult[]>([])
+  const [isLoadingServiceAttestations, setIsLoadingServiceAttestations] = useState(false)
+  const [serviceAttestationsRefreshKey, setServiceAttestationsRefreshKey] = useState(0)
   const [identityResolutions, setIdentityResolutions] = useState<Record<string, IdentityResolution>>({})
+  const [approvedIssuers, setApprovedIssuers] = useState<TrustAnchorApprovedIssuer[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadTrustAnchors() {
+      try {
+        const anchors = await getPublicTrustAnchors()
+        if (cancelled) return
+        const issuers = anchors.registries
+          .filter((r) => r.type === "approved-issuers")
+          .flatMap((r) => r.issuers)
+        setApprovedIssuers(issuers)
+      } catch {
+        if (!cancelled) setApprovedIssuers([])
+      }
+    }
+    void loadTrustAnchors()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!selectedServiceDid || !serviceDids.includes(selectedServiceDid)) {
@@ -657,42 +720,58 @@ function ServiceTrustWorkspace({
   }, [accountWalletDid, selectedServiceDid])
 
   useEffect(() => {
-    const schemaUID = userReviewSchema.deployedUIDs?.[chainId]
-    if (!selectedServiceDid || !schemaUID || schemaUID === "0x".padEnd(66, "0")) {
-      setServiceReviews([])
+    if (!selectedServiceDid) {
+      setServiceAttestations([])
       return
     }
 
     const serviceDid = selectedServiceDid
-    const reviewSchemaUID = schemaUID
     let cancelled = false
-    async function loadServiceReviews() {
+    async function loadServiceAttestations() {
       try {
-        setIsLoadingReviews(true)
-        const reviews = await getAttestationsForDIDWithMetadata(serviceDid, {
-          schemaUID: reviewSchemaUID,
-          limit: 50,
-        })
+        setIsLoadingServiceAttestations(true)
+        const results = await getAllAttestationsForDIDWithMetadata(serviceDid, 100)
         if (!cancelled) {
-          setServiceReviews([...reviews].sort((a, b) => b.time - a.time))
+          setServiceAttestations([...results].sort((a, b) => b.time - a.time))
         }
       } catch {
-        if (!cancelled) setServiceReviews([])
+        if (!cancelled) setServiceAttestations([])
       } finally {
-        if (!cancelled) setIsLoadingReviews(false)
+        if (!cancelled) setIsLoadingServiceAttestations(false)
       }
     }
 
-    void loadServiceReviews()
+    void loadServiceAttestations()
     return () => { cancelled = true }
-  }, [chainId, selectedServiceDid])
+  }, [chainId, selectedServiceDid, serviceAttestationsRefreshKey])
 
   const serviceKeys = useMemo(() => buildServiceKeys({
-    attestations,
+    attestations: [...attestations, ...serviceAttestations],
     serviceDid: selectedServiceDid,
     accountWalletDid,
     controllerSummary,
-  }), [accountWalletDid, attestations, controllerSummary, selectedServiceDid])
+  }), [accountWalletDid, attestations, serviceAttestations, controllerSummary, selectedServiceDid])
+
+  const serviceReviews = useMemo(() =>
+    serviceAttestations.filter((a) => a.schemaId === "user-review"),
+    [serviceAttestations]
+  )
+
+  const trustedAttestations = useMemo(() =>
+    serviceAttestations.filter((a) => {
+      const schemaId = a.schemaId ?? ""
+      if (!["certification", "security-assessment", "controller-witness"].includes(schemaId)) return false
+      return approvedIssuers.some(
+        (issuer) =>
+          issuer.address.toLowerCase() === a.attester.toLowerCase() &&
+          issuer.schemas.includes(schemaId)
+      )
+    }),
+    [serviceAttestations, approvedIssuers]
+  )
+
+  const [selectedTrustedAttestation, setSelectedTrustedAttestation] = useState<EnrichedAttestationResult | null>(null)
+  const [isTrustedModalOpen, setIsTrustedModalOpen] = useState(false)
 
   const linkedIdentifiers = useMemo(() => {
     if (!selectedServiceDid) return []
@@ -728,15 +807,15 @@ function ServiceTrustWorkspace({
   ], [respondedReviews, unrespondedReviews])
   const identityInputs = useMemo(() => uniqueValues([
     selectedServiceDid,
-    ...serviceReviews.flatMap((review) => [
-      review.attester,
-      getRecipientLabel(review),
+    ...serviceAttestations.flatMap((att) => [
+      att.attester,
+      getRecipientLabel(att),
     ]),
     ...serviceCredentials.flatMap((credential) => [
       credential.attester,
       getRecipientLabel(credential),
     ]),
-  ]), [selectedServiceDid, serviceCredentials, serviceReviews])
+  ]), [selectedServiceDid, serviceCredentials, serviceAttestations])
 
   useEffect(() => {
     if (identityInputs.length === 0) {
@@ -798,7 +877,10 @@ function ServiceTrustWorkspace({
                 keyInfo={keyInfo}
                 serviceDid={selectedServiceDid}
                 chainId={chainId}
-                onControllerWitnessSubmitted={onControllerWitnessSubmitted}
+                onControllerWitnessSubmitted={async () => {
+                  setServiceAttestationsRefreshKey((k) => k + 1)
+                  await onControllerWitnessSubmitted?.()
+                }}
               />
             ))}
             {serviceKeys.length === 0 ? (
@@ -888,13 +970,53 @@ function ServiceTrustWorkspace({
 
         <section className="space-y-3">
           <div>
+            <h3 className="font-semibold tracking-tight text-foreground">Trusted Attestations of My Services</h3>
+            <p className="text-sm text-muted-foreground">
+              Certifications, security assessments, and controller witnesses filed for the selected service.
+            </p>
+          </div>
+          {isLoadingServiceAttestations ? (
+            <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+              Loading trusted attestations...
+            </div>
+          ) : trustedAttestations.length === 0 ? (
+            <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+              No trusted attestations found for this service yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {trustedAttestations.map((attestation) => (
+                <AttestationCard
+                  key={attestation.uid}
+                  attestation={attestation}
+                  onClick={() => {
+                    setSelectedTrustedAttestation(attestation)
+                    setIsTrustedModalOpen(true)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <AttestationDetailModal
+            isOpen={isTrustedModalOpen}
+            onClose={() => {
+              setIsTrustedModalOpen(false)
+              setSelectedTrustedAttestation(null)
+            }}
+            attestation={selectedTrustedAttestation}
+          />
+        </section>
+
+        <section className="space-y-3">
+          <div>
             <h3 className="font-semibold tracking-tight text-foreground">Reviews of My Services</h3>
             <p className="text-sm text-muted-foreground">Third-party reviews filed against the selected service identity.</p>
           </div>
-          {isLoadingReviews ? (
+          {isLoadingServiceAttestations ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">Loading service reviews...</div>
           ) : null}
-          {!isLoadingReviews && serviceReviews.length === 0 ? (
+          {!isLoadingServiceAttestations && serviceReviews.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
               No reviews found for this service yet.
             </div>

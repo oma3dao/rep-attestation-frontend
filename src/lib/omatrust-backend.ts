@@ -413,6 +413,31 @@ export async function getRelayEasNonce(attester: string) {
   )
 }
 
+export type TrustAnchorApprovedIssuer = {
+  address: string
+  label: string
+  schemas: string[]
+}
+
+export type TrustAnchorsResponse = {
+  version: number
+  updatedAt: string
+  widgetOrigins: string[]
+  chains: Record<string, {
+    name: string
+    easContract: string
+    schemas: Record<string, string>
+  }>
+  registries: Array<{
+    type: "approved-issuers"
+    issuers: TrustAnchorApprovedIssuer[]
+  }>
+}
+
+export async function getPublicTrustAnchors() {
+  return backendFetch<TrustAnchorsResponse>("/api/public/trust-anchors")
+}
+
 export async function postRelayEasDelegatedAttest(params: {
   attester: string
   prepared: unknown

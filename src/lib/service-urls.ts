@@ -56,15 +56,7 @@ export function buildServiceUrl(baseDomain: string): string {
 const BACKEND_DOMAIN =
   process.env.NEXT_PUBLIC_OMATRUST_BACKEND_DOMAIN ?? "backend.omatrust.org"
 
-const API_GATEWAY_DOMAIN =
-  process.env.NEXT_PUBLIC_OMATRUST_API_DOMAIN ?? "api.omatrust.org"
-
 /** OMATrust backend origin (e.g., https://preview.backend.omatrust.org) */
 export function getBackendOrigin(): string {
   return buildServiceUrl(BACKEND_DOMAIN)
-}
-
-/** OMATrust API gateway origin (e.g., https://preview.api.omatrust.org) */
-export function getApiGatewayOrigin(): string {
-  return buildServiceUrl(API_GATEWAY_DOMAIN)
 }
