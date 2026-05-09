@@ -493,7 +493,12 @@ function buildServiceKeys({
     pair.advanced = Boolean(pair.keyBindingUid) && pair.intermediate
   }
 
-  return Array.from(pairMap.values()).sort((a, b) => {
+  // Filter out pairs where key === subject (nonsensical self-authorization)
+  const results = Array.from(pairMap.values()).filter(
+    (pair) => canonicalIdentifier(pair.keyDid) !== canonicalIdentifier(pair.subjectDid)
+  )
+
+  return results.sort((a, b) => {
     const score = (key: ServiceKey) => Number(key.advanced) * 3 + Number(key.intermediate) * 2 + Number(key.basic)
     return score(b) - score(a) || a.subjectDid.localeCompare(b.subjectDid) || a.keyDid.localeCompare(b.keyDid)
   })
@@ -675,12 +680,13 @@ function ServiceTrustWorkspace({
   onSubjectCreated?: (subject: import("@/lib/omatrust-backend").BackendSubject) => void
 }) {
   const serviceDids = useMemo(() => {
+    const walletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
     const attestationDids = attestations
       .filter((attestation) => ["key-binding", "controller-witness", "linked-identifier", "security-assessment", "certification"].includes(attestation.schemaId ?? ""))
       .map(getServiceDidFromAttestation)
     return uniqueValues([session.primarySubject?.canonicalDid, ...attestationDids])
-      .filter((did) => did.startsWith("did:"))
-  }, [attestations, session.primarySubject?.canonicalDid])
+      .filter((did) => did.startsWith("did:") && isRealSubjectDid(did, walletDid))
+  }, [attestations, session.primarySubject?.canonicalDid, session.wallet?.did, address, chainId])
 
   const [controllerSummaries, setControllerSummaries] = useState<Map<string, ControllerConfirmResponse>>(new Map())
   const [isLoadingControllerSummaries, setIsLoadingControllerSummaries] = useState(false)
