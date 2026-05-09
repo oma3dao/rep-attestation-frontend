@@ -52,22 +52,14 @@ function getDashboardContext(searchParams: Pick<URLSearchParams, "get">): Dashbo
   return "default"
 }
 
-interface SectionContext {
-  context: DashboardContext
-  hasReviews: boolean
-  hasServiceRecords: boolean
-  hasIssuerRecords: boolean
-}
-
-function getVisibleSections(ctx: SectionContext) {
-  return {
-    reviews: ctx.context === "review" || (ctx.context === "default" && ctx.hasReviews),
-    serviceTrust:
-      ctx.context === "service-management" ||
-      ctx.context === "issuer" ||
-      (ctx.context === "default" && (ctx.hasServiceRecords || ctx.hasIssuerRecords)),
-    issuerTools: ctx.context === "issuer" || (ctx.context === "default" && ctx.hasIssuerRecords),
-  }
+/**
+ * Determine whether a DID is a "real" subject (not just the user's wallet DID).
+ * A real subject is a did:web, or a did:pkh that differs from the connected wallet.
+ */
+function isRealSubjectDid(did: string, walletDid: string | null): boolean {
+  if (did.startsWith("did:web:")) return true
+  if (!walletDid) return true
+  return did.toLowerCase() !== walletDid.toLowerCase()
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +229,14 @@ function AccountSection({
                   <div key={did} className="break-all font-mono text-sm text-foreground">{did}</div>
                 ))
               ) : (
-                <div className="text-sm text-muted-foreground">No service identity configured yet.</div>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    No subject identifier configured.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    You only need a subject if you represent a service, application, or smart contract that others will review or attest to.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -1095,7 +1094,6 @@ function DashboardContent() {
   const { isConnected, address, chainId } = useWallet()
   const account = useActiveAccount()
   const searchParams = useSearchParams()
-  const dashboardContext = getDashboardContext(searchParams)
   const { session, isSessionLoading, openAuthDialog } = useBackendSession()
 
   const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>([])
@@ -1110,32 +1108,26 @@ function DashboardContent() {
   const easContractAddress = useMemo(() => getContractAddress("eas", chainId), [chainId])
 
   // Derive which sections to show based on context + attestation data
-  const sectionCtx: SectionContext = useMemo(() => ({
-    context: dashboardContext,
-    hasReviews: attestations.some((a) => a.schemaId === "user-review"),
-    hasServiceRecords: attestations.some((a) =>
-      ["key-binding", "controller-witness", "linked-identifier"].includes(a.schemaId ?? "")
-    ),
-    hasIssuerRecords: attestations.some(isIssuerAttestation),
-  }), [dashboardContext, attestations])
-
-  const visibleSections = useMemo(() => getVisibleSections(sectionCtx), [sectionCtx])
-  const shouldCheckApprovedIssuer = visibleSections.serviceTrust && (
-    dashboardContext === "issuer" || sectionCtx.hasIssuerRecords
-  )
-  const dashboardReturnTo = useMemo(() => {
-    const query = searchParams.toString()
-    return query ? `/dashboard?${query}` : "/dashboard"
-  }, [searchParams])
+  const accountWalletDid = session?.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
 
   const serviceDids = useMemo(() => {
     if (!session) return []
+    const walletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
     const attestationDids = attestations
       .filter((a) => ["key-binding", "controller-witness", "linked-identifier", "security-assessment", "certification"].includes(a.schemaId ?? ""))
       .map(getServiceDidFromAttestation)
     return uniqueValues([session.primarySubject?.canonicalDid, ...attestationDids])
-      .filter((did) => did.startsWith("did:"))
-  }, [attestations, session])
+      .filter((did) => did.startsWith("did:") && isRealSubjectDid(did, walletDid))
+  }, [attestations, session, address, chainId])
+
+  const hasValidSubject = serviceDids.length > 0
+  const hasIssuerRecords = attestations.some(isIssuerAttestation)
+  const hasAttestations = attestations.length > 0
+
+  const dashboardReturnTo = useMemo(() => {
+    const query = searchParams.toString()
+    return query ? `/dashboard?${query}` : "/dashboard"
+  }, [searchParams])
 
   const loadAttestations = useCallback(async () => {
     if (!session || !isConnected || !address) {
@@ -1277,27 +1269,20 @@ function DashboardContent() {
 
       <AccountSection session={session} serviceDids={serviceDids} />
 
-      {/* Contextual sections */}
-      {visibleSections.reviews && (
-        <ActionGrid
-          title="Reviews"
-          description="Submit and manage your service reviews."
-          actions={REVIEW_ACTIONS}
-        />
-      )}
-
-      {visibleSections.serviceTrust && (
+      {/* Service Controller — only if user has a valid subject */}
+      {hasValidSubject && (
         <ServiceTrustWorkspace
           session={session}
           address={address}
           chainId={chainId}
           attestations={attestations}
-          shouldCheckApprovedIssuer={shouldCheckApprovedIssuer}
+          shouldCheckApprovedIssuer={hasIssuerRecords}
           onControllerWitnessSubmitted={loadAttestations}
         />
       )}
 
-      {visibleSections.issuerTools && (
+      {/* Issuer Tools — only if user has submitted a certification or security-assessment */}
+      {hasIssuerRecords && (
         <ActionGrid
           title="Issuer Tools"
           description="Publish security assessments and certifications as a professional issuer."
@@ -1312,7 +1297,8 @@ function DashboardContent() {
         </Card>
       )}
 
-      {/* My Attestations */}
+      {/* My Attestations — only if there are attestations */}
+      {hasAttestations && (
       <Card>
         <CardHeader>
           <CardTitle>My Attestations</CardTitle>
@@ -1419,6 +1405,14 @@ function DashboardContent() {
           )}
         </CardContent>
       </Card>
+      )}
+
+      {/* User Reviews — always visible (bottom) */}
+      <ActionGrid
+        title="Reviews"
+        description="Submit and manage your service reviews."
+        actions={REVIEW_ACTIONS}
+      />
 
       <AttestationDetailModal
         isOpen={isModalOpen}
