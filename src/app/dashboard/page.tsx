@@ -17,13 +17,16 @@ import { AttestationCard } from "@/components/attestation-card"
 import { AttestationDetailModal } from "@/components/attestation-detail-modal"
 import { RevokeConfirmationDialog } from "@/components/revoke-confirmation-dialog"
 import { PublishButton } from "@/components/dashboard/PublishButton"
+import { SubjectConfirmationDialog } from "@/components/subject-confirmation-dialog"
 import { useBackendSession } from "@/components/backend-session-provider"
 import { StarRating } from "@/components/star-rating"
 import {
   getControllerConfirmation,
   resolvePublicIdentities,
   getPublicTrustAnchors,
+  listSubjects,
   type BackendSessionMeResponse,
+  type BackendSubject,
   type IdentityResolution,
   type ControllerConfirmResponse,
   type TrustAnchorApprovedIssuer,
@@ -367,6 +370,7 @@ function ApprovedIssuerRequest({
 type ServiceKey = {
   keyDid: string
   canonicalKeyDid: string
+  subjectDid: string
   label: string
   sources: string[]
   basic: boolean
@@ -379,50 +383,47 @@ type ServiceKey = {
 
 function buildServiceKeys({
   attestations,
-  serviceDid,
+  serviceDids,
   accountWalletDid,
-  controllerSummary,
+  controllerSummaries,
 }: {
   attestations: EnrichedAttestationResult[]
-  serviceDid: string | null
+  serviceDids: string[]
   accountWalletDid: string | null
-  controllerSummary: ControllerConfirmResponse | null
+  controllerSummaries: Map<string, ControllerConfirmResponse>
 }): ServiceKey[] {
-  const keyMap = new Map<string, ServiceKey>()
+  // Each key+subject pair is unique
+  const pairMap = new Map<string, ServiceKey>()
 
-  // Only allow private-key DID methods with a complete identifier.
-  // Rejects did:web:, incomplete DIDs like "did:pkh:eip155", etc.
-  // did:pkh — CAIP-10 blockchain account
-  // did:ethr — Ethereum address (legacy)
-  // did:key — Multicodec public key (Ed25519, secp256k1, P-256)
-  // did:jwk — JSON Web Key (RSA, EC, OKP)
   const PRIVATE_KEY_DID_PREFIXES = ["did:pkh:", "did:ethr:", "did:key:", "did:jwk:"]
 
   const isValidKeyDid = (did: string): boolean => {
     if (!PRIVATE_KEY_DID_PREFIXES.some((prefix) => did.startsWith(prefix))) return false
-    // Structural completeness checks
     const parts = did.split(":")
     if (did.startsWith("did:pkh:") && parts.length < 5) return false
     if (did.startsWith("did:ethr:") && parts.length < 4) return false
     if (did.startsWith("did:key:") && parts.length < 3) return false
     if (did.startsWith("did:jwk:") && parts.length < 3) return false
-    // Last segment must be non-empty
     const lastPart = parts[parts.length - 1]
     if (!lastPart || lastPart.length < 3) return false
     return true
   }
 
-  const ensureKey = (keyDid: string, source: string, label?: string) => {
+  const pairKey = (keyDid: string, subjectDid: string) =>
+    `${canonicalIdentifier(keyDid)}::${canonicalIdentifier(subjectDid)}`
+
+  const ensurePair = (keyDid: string, subjectDid: string, source: string, label?: string) => {
     if (!isValidKeyDid(keyDid)) {
       console.warn(
         `[buildServiceKeys] Rejected non-private-key DID from source "${source}": ${keyDid}`
       )
       return null
     }
-    const canonicalKeyDid = canonicalIdentifier(keyDid)
-    const existing = keyMap.get(canonicalKeyDid) ?? {
+    const pk = pairKey(keyDid, subjectDid)
+    const existing = pairMap.get(pk) ?? {
       keyDid,
-      canonicalKeyDid,
+      canonicalKeyDid: canonicalIdentifier(keyDid),
+      subjectDid,
       label: label ?? truncateMiddle(keyDid, 16, 8),
       sources: [],
       basic: false,
@@ -430,86 +431,93 @@ function buildServiceKeys({
       advanced: false,
     }
     if (!existing.sources.includes(source)) existing.sources.push(source)
-    keyMap.set(canonicalKeyDid, existing)
+    pairMap.set(pk, existing)
     return existing
   }
 
-  if (accountWalletDid) {
-    ensureKey(accountWalletDid, "Account wallet")
-  }
+  // For each subject, add keys from controller summaries and attestations
+  for (const subjectDid of serviceDids) {
+    const controllerSummary = controllerSummaries.get(canonicalIdentifier(subjectDid)) ?? null
 
-  for (const controllerKey of controllerSummary?.controllerKeys ?? []) {
-    // Normalize backend source labels to user-friendly display names
-    const sourceLabels = controllerKey.sources.map((s) => {
-      switch (s) {
-        case "account-wallet": return "Account wallet"
-        case "dns-txt": return "DNS TXT"
-        case "did-json": return "DID document"
-        default: return s
-      }
-    })
-    // Add each source individually so deduplication works correctly
-    const key = ensureKey(controllerKey.canonicalId, sourceLabels[0] ?? "Controller confirm", controllerKey.label)
-    if (key) {
-      for (const label of sourceLabels.slice(1)) {
-        if (!key.sources.includes(label)) key.sources.push(label)
-      }
-      key.basic = key.basic || controllerKey.basic
-    }
-  }
-
-  for (const attestation of attestations) {
-    if (!serviceDid || !serviceMatchesAttestation(attestation, serviceDid)) continue
-
-    if (attestation.schemaId === "key-binding") {
-      const keyDid = getDecodedString(attestation, ["keyId"])
-      if (!keyDid) continue
-      const key = ensureKey(keyDid, "Key binding")
-      if (!key) continue
-      key.keyBindingUid = attestation.uid
-      key.keyBindingSchemaUid = attestation.schema
-      continue
+    // Account wallet is a key for every subject
+    if (accountWalletDid) {
+      ensurePair(accountWalletDid, subjectDid, "Account wallet")
     }
 
-    if (attestation.schemaId === "controller-witness") {
-      const keyDid = getDecodedString(attestation, ["controller"])
-      if (!keyDid) continue
-      const key = ensureKey(keyDid, "Controller witness")
-      if (!key) continue
-      key.intermediate = true
-      key.controllerWitnessUid = attestation.uid
+    // Controller keys from backend
+    for (const controllerKey of controllerSummary?.controllerKeys ?? []) {
+      const sourceLabels = controllerKey.sources.map((s) => {
+        switch (s) {
+          case "account-wallet": return "Account wallet"
+          case "dns-txt": return "DNS TXT"
+          case "did-json": return "DID document"
+          default: return s
+        }
+      })
+      const pair = ensurePair(controllerKey.canonicalId, subjectDid, sourceLabels[0] ?? "Controller confirm", controllerKey.label)
+      if (pair) {
+        for (const label of sourceLabels.slice(1)) {
+          if (!pair.sources.includes(label)) pair.sources.push(label)
+        }
+        pair.basic = pair.basic || controllerKey.basic
+      }
+    }
+
+    // Key-binding attestations for this subject
+    for (const attestation of attestations) {
+      if (!serviceMatchesAttestation(attestation, subjectDid)) continue
+
+      if (attestation.schemaId === "key-binding") {
+        const keyDid = getDecodedString(attestation, ["keyId"])
+        if (!keyDid) continue
+        const pair = ensurePair(keyDid, subjectDid, "Key binding")
+        if (!pair) continue
+        pair.keyBindingUid = attestation.uid
+        pair.keyBindingSchemaUid = attestation.schema
+        continue
+      }
+
+      if (attestation.schemaId === "controller-witness") {
+        const keyDid = getDecodedString(attestation, ["controller"])
+        if (!keyDid) continue
+        const pair = ensurePair(keyDid, subjectDid, "Controller witness")
+        if (!pair) continue
+        pair.intermediate = true
+        pair.controllerWitnessUid = attestation.uid
+      }
     }
   }
 
   // Compute advanced: requires BOTH key-binding AND controller-witness
-  for (const key of keyMap.values()) {
-    key.advanced = Boolean(key.keyBindingUid) && key.intermediate
+  for (const pair of pairMap.values()) {
+    pair.advanced = Boolean(pair.keyBindingUid) && pair.intermediate
   }
 
-  return Array.from(keyMap.values()).sort((a, b) => {
+  return Array.from(pairMap.values()).sort((a, b) => {
     const score = (key: ServiceKey) => Number(key.advanced) * 3 + Number(key.intermediate) * 2 + Number(key.basic)
-    return score(b) - score(a) || a.keyDid.localeCompare(b.keyDid)
+    return score(b) - score(a) || a.subjectDid.localeCompare(b.subjectDid) || a.keyDid.localeCompare(b.keyDid)
   })
 }
 
 function ServiceKeyCard({
   keyInfo,
-  serviceDid,
   chainId,
+  isSubjectRegistered,
+  onAddSubjectToAccount,
   onControllerWitnessSubmitted,
 }: {
   keyInfo: ServiceKey
-  serviceDid: string | null
   chainId: number
+  isSubjectRegistered: boolean
+  onAddSubjectToAccount?: (subjectDid: string) => void
   onControllerWitnessSubmitted?: () => Promise<void> | void
 }) {
   const [isSubmittingWitness, setIsSubmittingWitness] = useState(false)
   const [witnessMessage, setWitnessMessage] = useState<string | null>(null)
   const [witnessError, setWitnessError] = useState<string | null>(null)
   const [showWitnessConfirm, setShowWitnessConfirm] = useState(false)
-  const publishParams = serviceDid
-    ? `subject=${encodeURIComponent(serviceDid)}&keyId=${encodeURIComponent(keyInfo.keyDid)}`
-    : null
+  const serviceDid = keyInfo.subjectDid
+  const publishParams = `subject=${encodeURIComponent(serviceDid)}&keyId=${encodeURIComponent(keyInfo.keyDid)}`
 
   // Controller witness: available for any key that doesn't have one yet.
   // The backend handles chain/schema validation and evidence discovery.
@@ -560,7 +568,10 @@ function ServiceKeyCard({
     <div className="rounded-xl border border-border/70 bg-background p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h4 className="font-semibold tracking-tight text-foreground">Authorized key</h4>
+          <h4 className="font-semibold tracking-tight text-foreground">Key Authorization</h4>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Subject: <span className="font-mono text-xs text-foreground">{keyInfo.subjectDid}</span>
+          </p>
           <p className="mt-1 font-medium text-foreground">{keyInfo.label}</p>
           <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{keyInfo.keyDid}</p>
           <p className="mt-2 text-xs text-muted-foreground">
@@ -575,6 +586,16 @@ function ServiceKeyCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        {!isSubjectRegistered && onAddSubjectToAccount ? (
+          <Button
+            variant="default"
+            size="sm"
+            type="button"
+            onClick={() => onAddSubjectToAccount(keyInfo.subjectDid)}
+          >
+            Add to account
+          </Button>
+        ) : null}
         {canSubmitControllerWitness ? (
           <Button
             variant="outline"
@@ -586,7 +607,7 @@ function ServiceKeyCard({
             {isSubmittingWitness ? "Submitting witness..." : "Add controller witness"}
           </Button>
         ) : null}
-        {!keyInfo.keyBindingUid && publishParams ? (
+        {!keyInfo.keyBindingUid ? (
           <Button variant="outline" size="sm" asChild>
             <Link href={`/publish/key-binding?${publishParams}`}>
               Publish key binding
@@ -640,14 +661,18 @@ function ServiceTrustWorkspace({
   chainId,
   attestations,
   shouldCheckApprovedIssuer,
+  registeredSubjectDids,
   onControllerWitnessSubmitted,
+  onSubjectCreated,
 }: {
   session: BackendSessionMeResponse
   address: string | null
   chainId: number
   attestations: EnrichedAttestationResult[]
   shouldCheckApprovedIssuer: boolean
+  registeredSubjectDids: string[]
   onControllerWitnessSubmitted?: () => Promise<void> | void
+  onSubjectCreated?: (subject: import("@/lib/omatrust-backend").BackendSubject) => void
 }) {
   const serviceDids = useMemo(() => {
     const attestationDids = attestations
@@ -657,14 +682,15 @@ function ServiceTrustWorkspace({
       .filter((did) => did.startsWith("did:"))
   }, [attestations, session.primarySubject?.canonicalDid])
 
-  const [selectedServiceDid, setSelectedServiceDid] = useState<string | null>(serviceDids[0] ?? null)
-  const [controllerSummary, setControllerSummary] = useState<ControllerConfirmResponse | null>(null)
-  const [isLoadingControllerSummary, setIsLoadingControllerSummary] = useState(false)
+  const [controllerSummaries, setControllerSummaries] = useState<Map<string, ControllerConfirmResponse>>(new Map())
+  const [isLoadingControllerSummaries, setIsLoadingControllerSummaries] = useState(false)
   const [serviceAttestations, setServiceAttestations] = useState<EnrichedAttestationResult[]>([])
   const [isLoadingServiceAttestations, setIsLoadingServiceAttestations] = useState(false)
   const [serviceAttestationsRefreshKey, setServiceAttestationsRefreshKey] = useState(0)
   const [identityResolutions, setIdentityResolutions] = useState<Record<string, IdentityResolution>>({})
   const [approvedIssuers, setApprovedIssuers] = useState<TrustAnchorApprovedIssuer[]>([])
+  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false)
+  const [subjectDialogDid, setSubjectDialogDid] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -684,54 +710,75 @@ function ServiceTrustWorkspace({
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    if (!selectedServiceDid || !serviceDids.includes(selectedServiceDid)) {
-      setSelectedServiceDid(serviceDids[0] ?? null)
-    }
-  }, [selectedServiceDid, serviceDids])
-
   const accountWalletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
 
+  // Load controller summaries for ALL service DIDs
   useEffect(() => {
-    if (!selectedServiceDid) {
-      setControllerSummary(null)
+    if (serviceDids.length === 0) {
+      setControllerSummaries(new Map())
       return
     }
 
     let cancelled = false
-    async function loadControllerSummary() {
+    async function loadAllControllerSummaries() {
       try {
-        setIsLoadingControllerSummary(true)
-        const summary = await getControllerConfirmation({
-          subjectDid: selectedServiceDid!,
-          walletDid: accountWalletDid,
-        })
-        if (!cancelled) setControllerSummary(summary)
+        setIsLoadingControllerSummaries(true)
+        const entries = await Promise.all(
+          serviceDids.map(async (did) => {
+            try {
+              const summary = await getControllerConfirmation({
+                subjectDid: did,
+                walletDid: accountWalletDid,
+              })
+              return [canonicalIdentifier(did), summary] as const
+            } catch {
+              return null
+            }
+          })
+        )
+        if (!cancelled) {
+          setControllerSummaries(new Map(
+            entries.filter((e): e is [string, ControllerConfirmResponse] => e !== null)
+          ))
+        }
       } catch {
-        if (!cancelled) setControllerSummary(null)
+        if (!cancelled) setControllerSummaries(new Map())
       } finally {
-        if (!cancelled) setIsLoadingControllerSummary(false)
+        if (!cancelled) setIsLoadingControllerSummaries(false)
       }
     }
 
-    void loadControllerSummary()
+    void loadAllControllerSummaries()
     return () => { cancelled = true }
-  }, [accountWalletDid, selectedServiceDid])
+  }, [accountWalletDid, serviceDids])
 
+  // Load attestations for ALL service DIDs
   useEffect(() => {
-    if (!selectedServiceDid) {
+    if (serviceDids.length === 0) {
       setServiceAttestations([])
       return
     }
 
-    const serviceDid = selectedServiceDid
     let cancelled = false
-    async function loadServiceAttestations() {
+    async function loadAllServiceAttestations() {
       try {
         setIsLoadingServiceAttestations(true)
-        const results = await getAllAttestationsForDIDWithMetadata(serviceDid, 100)
+        const results = await Promise.all(
+          serviceDids.map((did) => getAllAttestationsForDIDWithMetadata(did, 100))
+        )
         if (!cancelled) {
-          setServiceAttestations([...results].sort((a, b) => b.time - a.time))
+          // Deduplicate by UID across subjects
+          const seen = new Set<string>()
+          const merged: EnrichedAttestationResult[] = []
+          for (const batch of results) {
+            for (const att of batch) {
+              if (!seen.has(att.uid)) {
+                seen.add(att.uid)
+                merged.push(att)
+              }
+            }
+          }
+          setServiceAttestations(merged.sort((a, b) => b.time - a.time))
         }
       } catch {
         if (!cancelled) setServiceAttestations([])
@@ -740,16 +787,30 @@ function ServiceTrustWorkspace({
       }
     }
 
-    void loadServiceAttestations()
+    void loadAllServiceAttestations()
     return () => { cancelled = true }
-  }, [chainId, selectedServiceDid, serviceAttestationsRefreshKey])
+  }, [chainId, serviceDids, serviceAttestationsRefreshKey])
 
   const serviceKeys = useMemo(() => buildServiceKeys({
     attestations: [...attestations, ...serviceAttestations],
-    serviceDid: selectedServiceDid,
+    serviceDids,
     accountWalletDid,
-    controllerSummary,
-  }), [accountWalletDid, attestations, serviceAttestations, controllerSummary, selectedServiceDid])
+    controllerSummaries,
+  }), [accountWalletDid, attestations, serviceAttestations, controllerSummaries, serviceDids])
+
+  // Determine which subjects are registered in the user's account
+  const registeredSubjectSet = useMemo(
+    () => new Set(registeredSubjectDids.map((d) => canonicalIdentifier(d))),
+    [registeredSubjectDids]
+  )
+
+  const isSubjectRegistered = useCallback(
+    (subjectDid: string) => registeredSubjectSet.has(canonicalIdentifier(subjectDid)),
+    [registeredSubjectSet]
+  )
+
+  // Use the first serviceDid for sections that still need a single subject context
+  const primaryServiceDid = serviceDids[0] ?? null
 
   const serviceReviews = useMemo(() =>
     serviceAttestations.filter((a) => a.schemaId === "user-review"),
@@ -773,15 +834,15 @@ function ServiceTrustWorkspace({
   const [isTrustedModalOpen, setIsTrustedModalOpen] = useState(false)
 
   const linkedIdentifiers = useMemo(() => {
-    if (!selectedServiceDid) return []
     return attestations
-      .filter((attestation) => attestation.schemaId === "linked-identifier" && serviceMatchesAttestation(attestation, selectedServiceDid))
+      .filter((attestation) => attestation.schemaId === "linked-identifier" &&
+        serviceDids.some((did) => serviceMatchesAttestation(attestation, did)))
       .map((attestation) => ({
         uid: attestation.uid,
         linkedId: getDecodedString(attestation, ["linkedId"]),
       }))
       .filter((item): item is { uid: string; linkedId: string } => !!item.linkedId)
-  }, [attestations, selectedServiceDid])
+  }, [attestations, serviceDids])
 
   const responseRefUids = useMemo(() => new Set(
     attestations
@@ -793,19 +854,18 @@ function ServiceTrustWorkspace({
   const unrespondedReviews = serviceReviews.filter((review) => !responseRefUids.has(review.uid))
   const respondedReviews = serviceReviews.filter((review) => responseRefUids.has(review.uid))
   const serviceCredentials = useMemo(() => {
-    if (!selectedServiceDid) return []
     return attestations
       .filter((attestation) =>
-        isIssuerAttestation(attestation) && serviceMatchesAttestation(attestation, selectedServiceDid)
+        isIssuerAttestation(attestation) && serviceDids.some((did) => serviceMatchesAttestation(attestation, did))
       )
       .sort((a, b) => b.time - a.time)
-  }, [attestations, selectedServiceDid])
+  }, [attestations, serviceDids])
   const reviewRows = useMemo(() => [
     ...unrespondedReviews.map((review) => ({ review, needsResponse: true })),
     ...respondedReviews.map((review) => ({ review, needsResponse: false })),
   ], [respondedReviews, unrespondedReviews])
   const identityInputs = useMemo(() => uniqueValues([
-    selectedServiceDid,
+    ...serviceDids,
     ...serviceAttestations.flatMap((att) => [
       att.attester,
       getRecipientLabel(att),
@@ -814,7 +874,7 @@ function ServiceTrustWorkspace({
       credential.attester,
       getRecipientLabel(credential),
     ]),
-  ]), [selectedServiceDid, serviceCredentials, serviceAttestations])
+  ]), [serviceDids, serviceCredentials, serviceAttestations])
 
   useEffect(() => {
     if (identityInputs.length === 0) {
@@ -838,9 +898,36 @@ function ServiceTrustWorkspace({
     void loadIdentityLabels()
     return () => { cancelled = true }
   }, [identityInputs])
-  const selectedServiceLabel = getIdentityLabel(identityResolutions, selectedServiceDid)
+
+  // Collect all warnings from all controller summaries
+  const allWarnings = useMemo(() => {
+    const warnings: string[] = []
+    for (const summary of controllerSummaries.values()) {
+      for (const w of summary.warnings) {
+        if (!warnings.includes(w)) warnings.push(w)
+      }
+    }
+    return warnings
+  }, [controllerSummaries])
+
+  // Approved issuer status from any summary
+  const approvedIssuerStatus = useMemo(() => {
+    for (const summary of controllerSummaries.values()) {
+      if (summary.approvedIssuer.status === "approved") return "approved" as const
+    }
+    for (const summary of controllerSummaries.values()) {
+      return summary.approvedIssuer.status
+    }
+    return null
+  }, [controllerSummaries])
+
+  const handleAddSubjectToAccount = useCallback((subjectDid: string) => {
+    setSubjectDialogDid(subjectDid)
+    setSubjectDialogOpen(true)
+  }, [])
 
   return (
+    <>
     <Card className="mb-6">
       <CardHeader>
         <CardTitle>Service Controller Workspace</CardTitle>
@@ -851,19 +938,19 @@ function ServiceTrustWorkspace({
       <CardContent className="space-y-6">
         <section className="space-y-3">
           <div>
-            <h3 className="font-semibold tracking-tight text-foreground">Authorized keys</h3>
+            <h3 className="font-semibold tracking-tight text-foreground">Key Authorizations</h3>
             <p className="text-sm text-muted-foreground">
-              Keys are deduplicated from key bindings, controller witnesses, account context, and domain metadata.
+              Each card represents a key+subject pair from key bindings, controller witnesses, account context, and domain metadata.
             </p>
           </div>
 
-          {isLoadingControllerSummary ? (
+          {isLoadingControllerSummaries ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
               Checking DNS TXT, did.json, and issuer approval through the OMATrust API...
             </div>
           ) : null}
 
-          {controllerSummary?.warnings.map((warning) => (
+          {allWarnings.map((warning) => (
             <div key={warning} className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
               {warning}
             </div>
@@ -872,10 +959,11 @@ function ServiceTrustWorkspace({
           <div className="space-y-3">
             {serviceKeys.map((keyInfo) => (
               <ServiceKeyCard
-                key={keyInfo.keyDid}
+                key={`${keyInfo.canonicalKeyDid}::${keyInfo.subjectDid}`}
                 keyInfo={keyInfo}
-                serviceDid={selectedServiceDid}
                 chainId={chainId}
+                isSubjectRegistered={isSubjectRegistered(keyInfo.subjectDid)}
+                onAddSubjectToAccount={handleAddSubjectToAccount}
                 onControllerWitnessSubmitted={async () => {
                   setServiceAttestationsRefreshKey((k) => k + 1)
                   await onControllerWitnessSubmitted?.()
@@ -884,7 +972,7 @@ function ServiceTrustWorkspace({
             ))}
             {serviceKeys.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
-                No service keys found yet. Add a service identity or publish a key binding to start building trust.
+                No key authorizations found yet. Add a service identity or publish a key binding to start building trust.
               </div>
             ) : null}
           </div>
@@ -897,7 +985,7 @@ function ServiceTrustWorkspace({
               <p className="text-sm text-muted-foreground">Connect related DIDs, handles, wallets, or service identities under common control.</p>
             </div>
             <Link
-              href="https://docs.omatrust.org/docs/reputation/attestation-types#linked-identifiers"
+              href="https://docs.omatrust.org/reputation/attestation-types#linked-identifier"
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm font-medium text-primary hover:text-primary/85"
@@ -919,7 +1007,7 @@ function ServiceTrustWorkspace({
             </div>
           )}
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/publish/linked-identifier${selectedServiceDid ? `?subject=${encodeURIComponent(selectedServiceDid)}` : ""}`}>
+            <Link href={`/publish/linked-identifier${primaryServiceDid ? `?subject=${encodeURIComponent(primaryServiceDid)}` : ""}`}>
               Link another identity
             </Link>
           </Button>
@@ -929,7 +1017,7 @@ function ServiceTrustWorkspace({
           <section className="space-y-3">
             <div>
               <h3 className="font-semibold tracking-tight text-foreground">Security Reviews and Certifications</h3>
-              <p className="text-sm text-muted-foreground">Professional credentials issued for the selected service.</p>
+              <p className="text-sm text-muted-foreground">Professional credentials issued for your services.</p>
             </div>
             <div className="overflow-x-auto rounded-xl border border-border/70">
               <table className="w-full text-sm">
@@ -971,7 +1059,7 @@ function ServiceTrustWorkspace({
           <div>
             <h3 className="font-semibold tracking-tight text-foreground">Trusted Attestations of My Services</h3>
             <p className="text-sm text-muted-foreground">
-              Certifications, security assessments, and controller witnesses filed for the selected service.
+              Certifications, security assessments, and controller witnesses filed for your services.
             </p>
           </div>
           {isLoadingServiceAttestations ? (
@@ -980,7 +1068,7 @@ function ServiceTrustWorkspace({
             </div>
           ) : trustedAttestations.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
-              No trusted attestations found for this service yet.
+              No trusted attestations found for your services yet.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -1010,14 +1098,14 @@ function ServiceTrustWorkspace({
         <section className="space-y-3">
           <div>
             <h3 className="font-semibold tracking-tight text-foreground">Reviews of My Services</h3>
-            <p className="text-sm text-muted-foreground">Third-party reviews filed against the selected service identity.</p>
+            <p className="text-sm text-muted-foreground">Third-party reviews filed against your service identities.</p>
           </div>
           {isLoadingServiceAttestations ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">Loading service reviews...</div>
           ) : null}
           {!isLoadingServiceAttestations && serviceReviews.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
-              No reviews found for this service yet.
+              No reviews found for your services yet.
             </div>
           ) : null}
           {reviewRows.length > 0 ? (
@@ -1058,7 +1146,7 @@ function ServiceTrustWorkspace({
                         <td className="py-4 pr-4">
                           {needsResponse ? (
                             <Button variant="outline" size="sm" asChild>
-                              <Link href={`/publish/user-review-response?refUID=${encodeURIComponent(review.uid)}&subject=${encodeURIComponent(selectedServiceDid ?? recipient)}`}>
+                              <Link href={`/publish/user-review-response?refUID=${encodeURIComponent(review.uid)}&subject=${encodeURIComponent(primaryServiceDid ?? recipient)}`}>
                                 Respond
                               </Link>
                             </Button>
@@ -1079,10 +1167,23 @@ function ServiceTrustWorkspace({
           address={address}
           walletDid={session.wallet?.did ?? null}
           shouldCheck={shouldCheckApprovedIssuer}
-          approvedIssuerStatus={controllerSummary?.approvedIssuer.status ?? null}
+          approvedIssuerStatus={approvedIssuerStatus}
         />
       </CardContent>
     </Card>
+
+    <SubjectConfirmationDialog
+      open={subjectDialogOpen}
+      onOpenChange={setSubjectDialogOpen}
+      walletDid={accountWalletDid}
+      existingSubjectDids={registeredSubjectDids}
+      initialSubjectDid={subjectDialogDid}
+      onSubjectCreated={(subject) => {
+        setSubjectDialogOpen(false)
+        onSubjectCreated?.(subject)
+      }}
+    />
+    </>
   )
 }
 
@@ -1103,6 +1204,7 @@ function DashboardContent() {
   const [revokeTarget, setRevokeTarget] = useState<EnrichedAttestationResult | null>(null)
   const [selectedAttestation, setSelectedAttestation] = useState<EnrichedAttestationResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [registeredSubjects, setRegisteredSubjects] = useState<BackendSubject[]>([])
 
   const chain = useMemo(() => getChainById(chainId), [chainId])
   const easContractAddress = useMemo(() => getContractAddress("eas", chainId), [chainId])
@@ -1123,6 +1225,35 @@ function DashboardContent() {
   const hasValidSubject = serviceDids.length > 0
   const hasIssuerRecords = attestations.some(isIssuerAttestation)
   const hasAttestations = attestations.length > 0
+
+  // Load registered subjects from the backend
+  const loadSubjects = useCallback(async () => {
+    if (!session) return
+    try {
+      const response = await listSubjects()
+      setRegisteredSubjects(response.subjects)
+    } catch {
+      // Non-critical — subjects list is used for "Add to account" button visibility
+    }
+  }, [session])
+
+  useEffect(() => {
+    void loadSubjects()
+  }, [loadSubjects])
+
+  const registeredSubjectDids = useMemo(
+    () => registeredSubjects.map((s) => s.canonicalDid),
+    [registeredSubjects]
+  )
+
+  const handleSubjectCreated = useCallback(async (subject: BackendSubject) => {
+    setRegisteredSubjects((current) => {
+      const next = current.filter((item) => item.id !== subject.id)
+      next.unshift(subject)
+      return next
+    })
+    await loadSubjects()
+  }, [loadSubjects])
 
   const dashboardReturnTo = useMemo(() => {
     const query = searchParams.toString()
@@ -1277,7 +1408,9 @@ function DashboardContent() {
           chainId={chainId}
           attestations={attestations}
           shouldCheckApprovedIssuer={hasIssuerRecords}
+          registeredSubjectDids={registeredSubjectDids}
           onControllerWitnessSubmitted={loadAttestations}
+          onSubjectCreated={handleSubjectCreated}
         />
       )}
 

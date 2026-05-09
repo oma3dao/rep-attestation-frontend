@@ -37,6 +37,7 @@ interface SubjectConfirmationDialogProps {
   existingSubjectDids: string[]
   onSubjectCreated: (subject: BackendSubject) => void
   initialMessage?: string | null
+  initialSubjectDid?: string | null
 }
 
 function getDidMethod(value: string): SupportedDidMethod | "" {
@@ -75,6 +76,7 @@ export function SubjectConfirmationDialog({
   existingSubjectDids,
   onSubjectCreated,
   initialMessage,
+  initialSubjectDid,
 }: SubjectConfirmationDialogProps) {
   const [subjectDid, setSubjectDid] = useState("")
   const [selectedMethod, setSelectedMethod] = useState<SupportedDidMethod>("did:web")
@@ -95,10 +97,17 @@ export function SubjectConfirmationDialog({
       setErrorMessage(null)
       setIsVerifying(false)
       setIsSubmitting(false)
-    } else if (initialMessage) {
-      setErrorMessage(initialMessage)
+    } else {
+      if (initialSubjectDid) {
+        setSubjectDid(initialSubjectDid)
+        const method = getDidMethod(initialSubjectDid)
+        if (method) setSelectedMethod(method)
+      }
+      if (initialMessage) {
+        setErrorMessage(initialMessage)
+      }
     }
-  }, [open, initialMessage])
+  }, [open, initialMessage, initialSubjectDid])
 
   const currentMethod = useMemo(() => {
     const inferred = getDidMethod(subjectDid)

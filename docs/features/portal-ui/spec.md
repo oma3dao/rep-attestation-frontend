@@ -136,13 +136,15 @@ Primary service-management actions include:
 - Verify or claim a service identity 
   - enter in the service DID
   - verify
-  - add the key as an authorized key in the "authorize a signing key" section
-- Authorize a signing key.
-  - different cards per key, the first one being the sign in wallet.
-  - each key card has the following verification levels:
+  - add the key as an authorized key in the "Key Authorizations" section
+- Key Authorizations (key+subject pairs).
+  - Each card represents a unique key+subject pair.
+  - The card shows the subject DID, key DID, sources, and verification levels.
+  - Verification levels per pair:
     - basic verification: DNS or json check (Already completed for the default key that was used to sign in to the account but perhaps, and most likely with x402, it's a separate sign-in key).
     - intermediate verification: trigger a controller witness (describe the value of a controller witness, Mainly that it maintains the verification of proofs if the developer's DNS or JSON check gets removed for some reason).
     - advanced verification: key binding attestation
+  - "Add to account" button on cards where the subject is not yet registered in the user's account.
 - Link related identities.  Each linked ID attestation and which identities it links.
 - Manage reviews and responses (lists unresponded to review and responded to reviews in different subsections, and clicking on any review opens the user review response form with everything filled out).
 
@@ -311,9 +313,11 @@ The section should include:
 
 - Account summary with a link to the account page.
   - Display name.
-  - Primary subject ID, if one exists.
+  - Service identities (all discovered service DIDs), if any exist.
 
 Connected wallets and service keys belong in the Service Controller Workspace, not in the Account section.
+
+Subject management (adding subjects to account) is handled in the Service Controller Workspace via the "Add to account" button on key authorization cards. The Account page is read-only for subjects — it does not display or manage them.
 
 ### 6.4.2 My Attestations
 
@@ -351,19 +355,25 @@ This section should help users confirm and manage service controllers for a serv
 
 The section should include:
 
-- Signing key authorization.
-  - Show connected wallet/key candidates associated with the selected service controller context.
-  - Include keys found through Key Binding and Controller Witness attestations, even when those keys are separate from the connected wallet.
-  - For domain service identities, use the OMATrust service-controller summary API to inspect DNS TXT, `did.json`, and `agent.json` metadata for authorized keys.
-  - Smart contract proof discovery is out of scope for this version.
-  - Deduplicate keys across connected wallets, attestations, and domain metadata.
-  - Allow users to authorize additional signing keys.
-  - Show verification levels for each key:
+- Key Authorizations (key+subject pairs).
+  - Each card represents a unique key+subject pair, not a deduplicated key.
+  - The subject DID is shown on each card (e.g. "did:web:lumian.org").
+  - The key DID is shown on each card (e.g. "did:pkh:eip155:66238:0x...").
+  - Sources are listed (Account wallet, DNS TXT, DID document, Key binding, Controller witness).
+  - Verification levels are shown for each pair:
     - Basic verification: DNS TXT or DID document proof.
     - Intermediate verification: controller witness.
     - Advanced verification: key binding attestation.
+  - All service DIDs are shown flat — there is no single-subject selector/dropdown. The workspace loads controller summaries and attestations for ALL discovered service DIDs simultaneously.
+  - Service DIDs are discovered from: the user's registered subjects (primarySubject), and subjects appearing in key-binding, controller-witness, linked-identifier, security-assessment, and certification attestations.
+  - The user's wallet DID is filtered out via `isRealSubjectDid()` — only real service subjects are shown.
+  - "Add to account" button: if a subject appears in key-binding attestations but is NOT in the user's registered account subjects, an "Add to account" button is shown on that card. Clicking it opens the SubjectConfirmationDialog pre-filled with that subject DID. On success, the subjects list refreshes and the button disappears.
+  - The dashboard is the primary place to manage subjects. The Account page no longer has a subject add flow.
+  - For domain service identities, use the OMATrust service-controller summary API to inspect DNS TXT, `did.json`, and `agent.json` metadata for authorized keys.
+  - Smart contract proof discovery is out of scope for this version.
+  - Allow users to authorize additional signing keys.
 - Linked identities.
-  - Show linked identifiers for the service.
+  - Show linked identifiers across all service DIDs.
   - If no linked identifiers exist, the section may remain empty.
   - Provide a "What is this?" link to the full Linked Identifiers documentation.
   - Provide a CTA to link another identity.
@@ -375,8 +385,10 @@ The section should include:
   - Separate unresponded and responded reviews.
   - Allow opening a response form prefilled from the selected review.
 - Security reviews and certifications.
-  - Show Security Assessment and Certification attestations for the selected service.
-  - Do not show this subsection if the selected service has no Security Assessment or Certification attestations.
+  - Show Security Assessment and Certification attestations across all service DIDs.
+  - Do not show this subsection if no service has Security Assessment or Certification attestations.
+- Trusted attestations.
+  - Show certifications, security assessments, and controller witnesses filed by approved issuers for the user's services.
 
 In the Service Controller Workspace there should be a "Request" button only when:
 
@@ -563,7 +575,11 @@ The existing Publish item should be removed from primary navigation.
 
 - Clicking Manage Your Trust opens the dashboard in service-management context.
 - The dashboard shows the Service Controller Workspace, not a raw schema form.
-- The Service Controller Workspace displays per-key cards with verification levels (basic, intermediate, advanced).
+- The Service Controller Workspace displays per key+subject pair cards with verification levels (basic, intermediate, advanced).
+- Each card shows the subject DID and key DID.
+- Cards for subjects not registered in the user's account show an "Add to account" button.
+- Clicking "Add to account" opens the SubjectConfirmationDialog pre-filled with that subject DID.
+- There is no single-subject selector/dropdown — all key+subject pairs are shown flat.
 
 ### 10.4 Professional Issuer CTA
 
@@ -599,6 +615,9 @@ The existing Publish item should be removed from primary navigation.
 - Empty Service Controller Workspace, Issuer Tools, and Reviews sections are not shown to ordinary users by default.
 - The approved-issuer request button appears only inside the Service Controller Workspace when the context is issuer or the user has security assessment/certification records, and the wallet is not approved according to the service-controller summary API.
 - No developer/integrator dashboard context exists.
+- The dashboard is the primary place to manage subjects (add subjects to account). The Account page does not have a subject add flow.
+- The Account page does not display registered subjects. Subject information is visible only in the dashboard's Key Authorizations cards and the Account section's service identities display.
+- Backend subject registration no longer blocks on "owned by another account" — ownership verification (DNS/did.json/contract) is the real gate.
 
 ### 10.8 Dashboard Publish Button
 
