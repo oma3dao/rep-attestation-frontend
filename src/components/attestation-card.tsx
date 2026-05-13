@@ -21,14 +21,10 @@ const schemaIcons: Record<string, any> = {
 export function AttestationCard({ attestation, onClick }: AttestationCardProps) {
   const Icon = schemaIcons[attestation.schemaId || ''] || Shield
   const date = new Date(attestation.time * 1000).toLocaleDateString()
-  const attesterShort = `${attestation.attester.slice(0, 6)}...${attestation.attester.slice(-4)}`
   const revoked = attestation.revocationTime > 0
   
   // Get subject from decoded data if available
   const subject = attestation.decodedData?.subject || attestation.recipient
-  const subjectShort = subject.length > 40 
-    ? `${subject.slice(0, 20)}...${subject.slice(-10)}`
-    : subject
 
   return (
     <Card 
@@ -53,11 +49,11 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
         <div className="space-y-2 text-sm">
           <div>
             <span className="font-medium text-foreground">Attester:</span>{' '}
-            <span className="font-mono text-muted-foreground">{attesterShort}</span>
+            <span className="font-mono text-muted-foreground break-all">{attestation.attester}</span>
           </div>
           <div>
-            <span className="font-medium text-foreground">Subject:</span>{' '}
-            <span className="font-mono text-muted-foreground break-all">{subjectShort}</span>
+            <span className="font-medium text-foreground">Service ID:</span>{' '}
+            <span className="font-mono text-muted-foreground break-all">{subject}</span>
           </div>
           {attestation.decodedData?.ratingValue && (
             <div>

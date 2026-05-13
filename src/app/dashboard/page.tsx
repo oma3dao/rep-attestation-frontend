@@ -217,14 +217,14 @@ function AccountSection({
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Display name</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</div>
             <div className="mt-2 break-words font-medium text-foreground">
               {formatValue(session.account.displayName)}
             </div>
           </div>
           <div className="rounded-xl border border-border/70 bg-muted/40 p-4 md:col-span-2">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {serviceDids.length > 1 ? "Service identities" : "Subject ID"}
+              {serviceDids.length > 1 ? "Service IDs" : "Service ID"}
             </div>
             <div className="mt-2 space-y-1">
               {serviceDids.length > 0 ? (
@@ -573,13 +573,15 @@ function ServiceKeyCard({
     <div className="rounded-xl border border-border/70 bg-background p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h4 className="font-semibold tracking-tight text-foreground">Key Authorization</h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Subject: <span className="font-mono text-xs text-foreground">{keyInfo.subjectDid}</span>
+          <p className="text-sm text-foreground">
+            <span className="font-bold">Service ID:</span>{' '}
+            <span className="font-mono">{keyInfo.subjectDid}</span>
           </p>
-          <p className="mt-1 font-medium text-foreground">{keyInfo.label}</p>
-          <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{keyInfo.keyDid}</p>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-1 text-sm text-foreground">
+            <span className="font-bold">Key ID:</span>{' '}
+            <span className="font-mono">{keyInfo.keyDid}</span>
+          </p>
+          <p className="mt-2 text-sm font-medium text-foreground/70">
             Sources: {keyInfo.sources.join(", ")}
           </p>
         </div>
@@ -936,19 +938,13 @@ function ServiceTrustWorkspace({
     <>
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Service Controller Workspace</CardTitle>
+        <CardTitle>Key Authorizations</CardTitle>
         <CardDescription>
-          Confirm service controllers, linked identifiers, credentials, and third-party reviews for services you manage.
+          Authorize signing keys for each of your services.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <section className="space-y-3">
-          <div>
-            <h3 className="font-semibold tracking-tight text-foreground">Key Authorizations</h3>
-            <p className="text-sm text-muted-foreground">
-              Each card represents a key+subject pair from key bindings, controller witnesses, account context, and domain metadata.
-            </p>
-          </div>
 
           {isLoadingControllerSummaries ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
@@ -1014,7 +1010,7 @@ function ServiceTrustWorkspace({
           )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/publish/linked-identifier${primaryServiceDid ? `?subject=${encodeURIComponent(primaryServiceDid)}` : ""}`}>
-              Link another identity
+              Add Link
             </Link>
           </Button>
         </section>
@@ -1388,11 +1384,10 @@ function DashboardContent() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
           <p className="mt-1 text-muted-foreground">
-            Wallet{" "}
+            User ID{" "}
             <Link href="/account" className="font-medium text-primary transition-colors hover:text-primary/80">
-              {truncateMiddle(address || "")}
-            </Link>{" "}
-            on {chain?.name || `Chain ${chainId}`}
+              {address || ""}
+            </Link>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1456,7 +1451,7 @@ function DashboardContent() {
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-3 pr-4 font-medium">Schema</th>
-                    <th className="py-3 pr-4 font-medium">Recipient</th>
+                    <th className="py-3 pr-4 font-medium">Service</th>
                     <th className="py-3 pr-4 font-medium">Date</th>
                     <th className="py-3 pr-4 font-medium">Rating</th>
                     <th className="py-3 pr-4 font-medium">Status</th>
@@ -1483,8 +1478,8 @@ function DashboardContent() {
                           </div>
                         </td>
                         <td className="py-4 pr-4">
-                          <div className="font-mono text-foreground/80" title={recipientLabel}>
-                            {truncateMiddle(recipientLabel, 20, 10)}
+                          <div className="font-mono text-foreground/80 break-all" title={recipientLabel}>
+                            {recipientLabel}
                           </div>
                         </td>
                         <td className="py-4 pr-4 text-foreground/80">

@@ -34,7 +34,7 @@ export const PUBLISH_MENU_ITEMS = [
   {
     id: "review",
     label: "User Review",
-    href: "/publish?category=review",
+    href: "/publish/user-review",
   },
   {
     id: "issuer",

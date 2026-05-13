@@ -238,13 +238,13 @@ export default function AccountPage() {
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-3">
                 <div>
-                  <h2 className="text-sm font-medium text-muted-foreground">Wallet</h2>
+                  <h2 className="text-sm font-medium text-muted-foreground">User ID</h2>
                   <p className="mt-1 break-all font-mono text-xs tracking-wide text-foreground">
                     {walletDid ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Wallet Type</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">Type</h3>
                   <p className="mt-1 text-foreground">
                     {getWalletTypeLabel(session.wallet?.isManagedWallet)}
                   </p>
