@@ -7,9 +7,8 @@ import { useActiveAccount } from 'thirdweb/react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
 import { SubjectConfirmationDialog } from '@/components/subject-confirmation-dialog'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
@@ -122,9 +121,6 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         ? 'Submitting with your OMATrust subscription.'
         : 'Check your wallet to sign the attestation request, then return here. OMATrust will sponsor the on-chain write.'
       : 'Please check your wallet and approve the transaction.'
-
-  const requiredFields = schema.fields.filter(field => field.required)
-  const optionalFields = schema.fields.filter(field => !field.required)
 
   // Pre-fill form fields from URL query parameters (e.g., ?subject=did:web:example.com)
   React.useEffect(() => {
@@ -398,6 +394,12 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
   }
 
   const renderField = (field: typeof schema.fields[0]) => {
+    // Conditional visibility: hide proofs field unless method is 'proof'
+    // Only applies to schemas that have a 'method' field (e.g., linked-identifier)
+    if (field.name === 'proofs' && schema.fields.some(f => f.name === 'method') && formData['method'] !== 'proof') {
+      return null
+    }
+
     return (
       <FieldRenderer
         key={field.name}
@@ -434,14 +436,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         </div>
 
         <Card>
-          <CardHeader>
-            <CardDescription>Fields marked with * are required.</CardDescription>
-          </CardHeader>
-
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {requiredFields.map((field) => renderField(field))}
-              {optionalFields.length > 0 && optionalFields.map((field) => renderField(field))}
+              {schema.fields.map((field) => renderField(field))}
 
               <div className="flex flex-wrap gap-4 pt-6">
                 <Button

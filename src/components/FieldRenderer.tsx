@@ -5,10 +5,12 @@ import { FormField, RichOption } from '@/config/schemas'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { SubjectIdInput } from '@/components/SubjectIdInput'
 import { ObjectFieldRenderer } from '@/components/ObjectFieldRenderer'
 import { TimestampInput } from '@/components/TimestampInput'
-import { ProofInput } from '@/components/ProofInput'
+import { ProofArrayInput } from '@/components/ProofArrayInput'
+import { HelpCircle } from 'lucide-react'
 import { useState } from 'react'
 
 interface FieldRendererProps {
@@ -94,12 +96,14 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
   let fieldElement
 
   // Special case: Subject field - always use original value, no defaults
-  if (field.name === 'subject') {
+  if (field.format === 'did') {
     fieldElement = (
       <SubjectIdInput
         value={typeof value === 'string' ? value : ''}
         onChange={(did) => onChange(did || '')}
         error={error}
+        allowedMethods={field.didMethods}
+        handlePlatforms={field.handlePlatforms}
       />
     )
   }
@@ -192,8 +196,11 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
         const isRichEnumOption = (opt: string | number | RichOption): opt is RichOption =>
           typeof opt === 'object' && 'value' in opt
 
-        if (enumOptions.length > 0 && enumOptions.length <= 7) {
-          // Radio buttons for small option sets
+        // Use radio buttons only for rich options (with descriptions) — they benefit from expanded layout
+        const hasRichOptions = enumOptions.some(opt => isRichEnumOption(opt) && opt.description)
+
+        if (hasRichOptions && enumOptions.length <= 7) {
+          // Radio buttons for rich option sets with descriptions
           fieldElement = (
             <div className="space-y-2">
               {enumOptions.map((opt) => {
@@ -232,7 +239,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
             </div>
           )
         } else {
-          // Dropdown for large option sets or no options
+          // Dropdown for all other enums
           fieldElement = (
             <select
               id={field.name}
@@ -257,6 +264,23 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
       case 'array': {
         const arrayValue = Array.isArray(value) ? value : []
 
+        // Special case: proofs field uses the guided ProofArrayInput component
+        if (field.name === 'proofs') {
+          const proofPurpose = (field as any).proofPurpose || 'commercial-tx'
+          const proofTypes = (field as any).proofTypes as string[] | undefined
+
+          fieldElement = (
+            <ProofArrayInput
+              value={value}
+              onChange={onChange}
+              defaultPurpose={proofPurpose}
+              allowedTypes={proofTypes}
+              error={error}
+            />
+          )
+          break
+        }
+
         // If options are provided, render as checkboxes (≤7) or multi-select listbox (>7)
         if (field.options && field.options.length > 0) {
           const isRichOption = (opt: string | number | RichOption): opt is RichOption =>
@@ -273,7 +297,7 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
           if (field.options.length <= 7) {
             // Checkboxes for small option sets
             fieldElement = (
-              <div className="space-y-2">
+              <div className="ml-4 rounded-lg border border-border/70 bg-muted/30 p-4 space-y-2">
                 {field.options.map((opt) => {
                   const optValue = isRichOption(opt) ? opt.value : String(opt)
                   const optLabel = isRichOption(opt) ? opt.label : String(opt)
@@ -285,8 +309,8 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
                     <label
                       key={optValue}
                       htmlFor={checkboxId}
-                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        checked ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/50'
+                      className={`flex items-start gap-3 p-3 cursor-pointer transition-colors ${
+                        checked ? 'text-primary' : ''
                       }`}
                     >
                       <input
@@ -388,34 +412,15 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
       default:
         // Handle proofs field specially
         if (field.name === 'proofs') {
-          // Parse existing proof from JSON string if present
-          let proofValue = null
-          if (typeof value === 'string' && value) {
-            try {
-              const parsed = JSON.parse(value)
-              // If it's an array, take the first proof
-              proofValue = Array.isArray(parsed) ? parsed[0] : parsed
-            } catch {
-              // Invalid JSON, ignore
-            }
-          }
-
-          // Determine proof purpose from field config or default to commercial-tx
-          // Use 'shared-control' for linking attestations (linked-identifier, key-binding)
           const proofPurpose = (field as any).proofPurpose || 'commercial-tx'
+          const proofTypes = (field as any).proofTypes as string[] | undefined
 
           fieldElement = (
-            <ProofInput
-              value={proofValue}
-              onChange={(proof) => {
-                // Store as JSON string array with single proof
-                if (proof) {
-                  onChange(JSON.stringify([proof]))
-                } else {
-                  onChange('')
-                }
-              }}
+            <ProofArrayInput
+              value={value}
+              onChange={onChange}
               defaultPurpose={proofPurpose}
+              allowedTypes={proofTypes}
               error={error}
             />
           )
@@ -437,13 +442,24 @@ export function FieldRenderer({ field, value, onChange, error }: FieldRendererPr
   // Single wrapper for ALL field types - no duplication
   return (
     <div className="space-y-2">
-      <Label htmlFor={field.name} className="text-sm font-medium">
-        {field.label}
-        {field.required && <span className="ml-1 text-destructive">*</span>}
-      </Label>
-      {field.description && (
-        <p className="text-sm text-muted-foreground">{field.description}</p>
-      )}
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={field.name} className="text-sm font-medium">
+          {field.label}
+          {field.required && <span className="ml-1 text-destructive">*</span>}
+        </Label>
+        {field.description && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger type="button" tabIndex={-1}>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                <p className="text-sm">{field.description}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
       {fieldElement}
       {error && <p className="text-sm text-destructive" data-testid="field-error">{error}</p>}
     </div>

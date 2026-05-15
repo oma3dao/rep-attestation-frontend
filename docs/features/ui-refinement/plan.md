@@ -51,10 +51,22 @@
   - cybersecurity assessment from trusted entity
   - aggregated user review stars
 
-## Forms UX (not yet implemented)
+## Forms UX ✅
 
-- Make the attestation forms more user-friendly
-- Likely requires changes to:
-  - `schemas.json` (field metadata, labels, descriptions, validation hints)
-  - `rep-attestation-tools-evm-solidity` (schema definitions on-chain)
-  - Form rendering logic in the frontend (how schema fields map to UI inputs)
+- Make the attestation forms more user-friendly by updating field titles in the JSON schemas
+- Approach: `title` is the user-facing label. If a DID field, title ends with "ID".
+- Changes applied to `schemas-json/*.schema.json` and regenerated `src/config/schemas.ts`:
+  - key-binding: subject → "Service ID", keyId → "Key ID", keyPurpose → "Authorized Use"
+  - controller-witness: subject → "Service ID", controller → "Key ID", method → "Verification Method", observedAt → "Observed At"
+  - user-review: subject → "Service ID", version → "Version"
+  - security-assessment: subject → "Service ID"
+  - certification: subject → "Service ID", assessor → "Assessor ID"
+  - linked-identifier: subject → "Primary ID", linkedId → "Linked ID", method description simplified
+  - user-review-response: already good (Reviewer ID, Response)
+- Descriptions also updated to be more conversational and explain field relationships
+- Field descriptions moved from inline text to tooltips (hover/tap info icon)
+- Proofs field now correctly routes to the guided ProofInput component (was broken — fell into generic array input)
+- Timestamp fields: picker hidden by default, only shown when user checks "Override current time"
+- Card content top padding restored after removing required fields indicator text
+- Field ordering: render in schema order, not required-first (not yet implemented — waiting on schema field order review)
+

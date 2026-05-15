@@ -26,6 +26,7 @@ interface DidHandleInputProps {
   onChange: (did: string | null) => void
   className?: string
   error?: string
+  platforms?: string[] // filter to specific platforms (e.g. ["twitter", "github"])
 }
 
 /**
@@ -37,11 +38,17 @@ export function DidHandleInput({
   onChange,
   className = "",
   error: externalError,
+  platforms,
 }: DidHandleInputProps) {
   const [open, setOpen] = useState(false)
   const [platformId, setPlatformId] = useState("")
   const [handle, setHandle] = useState("")
   const [internalError, setInternalError] = useState<string | null>(null)
+
+  // Filter platforms if a filter list is provided
+  const availablePlatforms = platforms
+    ? socialPlatforms.filter(p => platforms.includes(p.id))
+    : socialPlatforms
 
   // Parse existing DID on mount
   useEffect(() => {
@@ -118,7 +125,7 @@ export function DidHandleInput({
               <CommandList>
                 <CommandEmpty>No platform found.</CommandEmpty>
                 <CommandGroup>
-                  {socialPlatforms.map((platform) => (
+                  {availablePlatforms.map((platform) => (
                     <CommandItem
                       key={platform.id}
                       value={platform.label}

@@ -236,14 +236,16 @@ async function transformFields(properties, required = [], schemaId = '') {
         field.default = prop.default
       }
 
-      // Add auto-default marker if present
-      if (prop['x-oma3-default']) {
-        field.autoDefault = prop['x-oma3-default']
-      }
-
-      // Add subtype if present
-      if (prop['x-oma3-subtype']) {
-        field.subtype = prop['x-oma3-subtype']
+      // Generic x-oma3-* passthrough: collect all non-directive annotations onto the field
+      // Directives (handled elsewhere): skip-reason, render, nested, enum
+      const oma3Directives = new Set(['skip-reason', 'render', 'nested', 'enum'])
+      for (const key of Object.keys(prop)) {
+        if (!key.startsWith('x-oma3-')) continue
+        const shortKey = key.replace('x-oma3-', '')
+        if (oma3Directives.has(shortKey)) continue
+        // Convert kebab-case to camelCase
+        const camelKey = shortKey.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+        field[camelKey] = prop[key]
       }
 
       // Add type-specific properties
@@ -295,6 +297,9 @@ async function transformFields(properties, required = [], schemaId = '') {
  * Generate placeholder text based on field name and properties
  */
 function generatePlaceholder(name, prop) {
+  if (prop.format === 'did') {
+    return 'Select an ID type above'
+  }
   if (name.includes('did') || name.includes('DID')) {
     return 'did:example:123...'
   }
@@ -307,7 +312,7 @@ function generatePlaceholder(name, prop) {
   if (prop.type === 'integer') {
     return '0'
   }
-  return `Enter ${name.toLowerCase()}`
+  return `Enter ${(prop.title || name).toLowerCase()}`
 }
 
 /**
@@ -689,9 +694,13 @@ export interface FormField {
   maxLength?: number // for string fields
   subFields?: FormField[] // for object fields with nested properties
   default?: any // default value for the field
-  autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
-  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields)
+  autoDefault?: string // auto-generate default (e.g., 'current-timestamp') — from x-oma3-default
+  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields) — from x-oma3-subtype
   nested?: boolean // for object fields: true = render with container/heading, false/omitted = render flat
+  didMethods?: string[] // allowed DID methods — from x-oma3-did-methods
+  handlePlatforms?: string[] // allowed handle platforms — from x-oma3-handle-platforms
+  // Additional x-oma3-* annotations are passed through automatically (camelCased, prefix stripped)
+  [key: string]: any
 }
 
 export interface AttestationSchema {

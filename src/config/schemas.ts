@@ -27,9 +27,13 @@ export interface FormField {
   maxLength?: number // for string fields
   subFields?: FormField[] // for object fields with nested properties
   default?: any // default value for the field
-  autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
-  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields)
+  autoDefault?: string // auto-generate default (e.g., 'current-timestamp') — from x-oma3-default
+  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields) — from x-oma3-subtype
   nested?: boolean // for object fields: true = render with container/heading, false/omitted = render flat
+  didMethods?: string[] // allowed DID methods — from x-oma3-did-methods
+  handlePlatforms?: string[] // allowed handle platforms — from x-oma3-handle-platforms
+  // Additional x-oma3-* annotations are passed through automatically (camelCased, prefix stripped)
+  [key: string]: any
 }
 
 export interface AttestationSchema {
@@ -49,10 +53,15 @@ const certificationFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject ID",
-    "description": "DID of the product, system, or organization being certified.",
+    "label": "Recipient ID",
+    "description": "ID of the thing or entity being certified. For IDs not based on DID, use did:web:<product path>",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "jwk"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -61,9 +70,13 @@ const certificationFields: FormField[] = [
     "name": "organization",
     "type": "string",
     "label": "Organization",
-    "description": "DID of the parent organization that owns or governs the certified subject. For example, when certifying did:web:example.com:service:api, set organization to did:web:example.com. Leave empty when certifying an organization itself.",
+    "description": "DID of the parent organization that owns or governs the certification recipient. For example, when certifying did:web:example.com:service:api, set organization to did:web:example.com. Leave empty when certifying an organization itself.",
     "required": false,
-    "placeholder": "Enter organization",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -72,25 +85,25 @@ const certificationFields: FormField[] = [
     "name": "version",
     "type": "string",
     "label": "Software Version",
-    "description": "Software version of the certified subject.",
+    "description": "Software version of the certification recipient, if applicable.",
     "required": false,
-    "placeholder": "Enter version",
+    "placeholder": "Enter software version",
     "maxLength": 50
   },
   {
     "name": "versionHW",
     "type": "string",
     "label": "Hardware Version",
-    "description": "Hardware version of the certified subject, if applicable.",
+    "description": "Hardware version of the certification recipient, if applicable.",
     "required": false,
-    "placeholder": "Enter versionhw",
+    "placeholder": "Enter hardware version",
     "maxLength": 50
   },
   {
     "name": "subjectURI",
     "type": "uri",
     "label": "Subject Informational URI",
-    "description": "Optional URI controlled by the subject that provides mutable, human-readable metadata.",
+    "description": "Optional URI that provides mutable, human-readable metadata about the certification recipient.",
     "required": false,
     "placeholder": "https://example.com",
     "maxLength": 256,
@@ -102,7 +115,10 @@ const certificationFields: FormField[] = [
     "label": "Program ID",
     "description": "DID of the certification program under which this certification was issued. Program release version should be included in the DID.",
     "required": true,
-    "placeholder": "Enter programid",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -120,10 +136,14 @@ const certificationFields: FormField[] = [
   {
     "name": "assessor",
     "type": "string",
-    "label": "Assessor DID",
-    "description": "DID of the authorized assessor (test lab, auditor) who evaluated the subject.",
+    "label": "Assessor ID",
+    "description": "ID of the authorized assessor (test lab, auditor) who evaluated the service.",
     "required": true,
-    "placeholder": "Enter assessor",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -144,7 +164,7 @@ const certificationFields: FormField[] = [
     "label": "Certification Level",
     "description": "Optional classification level of certification (e.g., 'Gold', 'Level 2').",
     "required": false,
-    "placeholder": "Enter certificationlevel",
+    "placeholder": "Enter certification level",
     "maxLength": 256
   },
   {
@@ -181,27 +201,27 @@ const certificationFields: FormField[] = [
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the certification was issued by the certification body.",
+    "description": "When the certification was issued by the certification body. Default is the current time.",
     "required": true,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
-    "subtype": "timestamp"
+    "subtype": "timestamp",
+    "autoDefault": "current-timestamp"
   },
   {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Unix timestamp (in seconds) when the certification becomes effective.",
+    "description": "Time the certification becomes effective. Default is the current time.",
     "required": false,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
-    "subtype": "timestamp"
+    "subtype": "timestamp",
+    "autoDefault": "current-timestamp"
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Optional expiration timestamp (in seconds).",
+    "description": "Time the certification expires. Default is no expiration",
     "required": false,
     "placeholder": "0",
     "subtype": "timestamp"
@@ -214,10 +234,23 @@ const controllerWitnessFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject DID",
-    "description": "The DID identity (typically did:web) of the entity authorizing the controller.",
+    "label": "Authorizer ID",
+    "description": "ID of the entity or service that is authorizing the key.",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "handle"
+    ],
+    "handlePlatforms": [
+      "twitter",
+      "github",
+      "discord",
+      "telegram",
+      "lens",
+      "farcaster"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -225,10 +258,15 @@ const controllerWitnessFields: FormField[] = [
   {
     "name": "controller",
     "type": "string",
-    "label": "Controller DID",
-    "description": "The identity of the controller (e.g., did:pkh or did:key for keys, did:handle for usernames).",
+    "label": "Key ID",
+    "description": "ID of the key being authorized (e.g., did:pkh, did:jwk, or did:key). Most blockchain wallets use did:pkh.",
     "required": true,
-    "placeholder": "Enter controller",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "pkh",
+      "jwk",
+      "key"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -236,10 +274,16 @@ const controllerWitnessFields: FormField[] = [
   {
     "name": "method",
     "type": "enum",
-    "label": "Observation Method",
-    "description": "How the witness observed the controller assertion.",
+    "label": "Verification Method",
+    "description": "How the witness verified the key's relationship to the service.",
     "required": true,
-    "placeholder": "Enter method",
+    "placeholder": "Enter verification method",
+    "enumDescriptions": {
+      "dns-txt": "Key ID was found in a DNS TXT record (e.g., _controllers.example.com)",
+      "did-json": "Key ID was found in /.well-known/did.json",
+      "social-profile": "Key ID was found in a social media profile (bio, pinned post, etc.)",
+      "manual": "Relationship verified manually using a custom mechanism"
+    },
     "options": [
       "dns-txt",
       "did-json",
@@ -250,12 +294,12 @@ const controllerWitnessFields: FormField[] = [
   {
     "name": "observedAt",
     "type": "integer",
-    "label": "Observation Timestamp",
-    "description": "Unix timestamp (seconds) when the witness observed the controller assertion. This is the witness's local observation time, not the blockchain block timestamp.",
+    "label": "Observed At",
+    "description": "When the witness observed the verification. This is the witness's local observation time, not the blockchain block timestamp.",
     "required": true,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   }
 ]
@@ -264,10 +308,15 @@ const keyBindingFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject ID",
-    "description": "DID to which this key is bound.",
+    "label": "Service ID",
+    "description": "ID of the service that is authorizing the Key ID.",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "jwk"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -275,10 +324,15 @@ const keyBindingFields: FormField[] = [
   {
     "name": "keyId",
     "type": "string",
-    "label": "Key Identifier",
+    "label": "Key ID",
     "description": "DID representing this key. If using did:key or did:pkh:eip155, publicKeyJwk is optional.",
     "required": true,
-    "placeholder": "Enter keyid",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "key",
+      "pkh",
+      "web"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -294,10 +348,10 @@ const keyBindingFields: FormField[] = [
   {
     "name": "keyPurpose",
     "type": "array",
-    "label": "Key Purpose",
-    "description": "Permitted W3C DID Core verification relationships for this key. A key should not be used for both signing and encryption — use separate keys for each purpose.",
+    "label": "Authorized Use",
+    "description": "What the key is authorized to do based on the W3C DID Core specification. A key should not be used for both signing and encryption.",
     "required": true,
-    "placeholder": "Enter keypurpose",
+    "placeholder": "Enter authorized use",
     "options": [
       {
         "value": "authentication",
@@ -320,36 +374,44 @@ const keyBindingFields: FormField[] = [
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "Array of cryptographic proofs demonstrating the subject's control over the key. Use proofPurpose='shared-control' for key binding attestations.",
+    "description": "One or more proofs that demonstrate the service's authorization of the key.",
     "required": true,
-    "placeholder": "Enter proofs"
+    "placeholder": "Enter proofs",
+    "proofPurpose": "shared-control",
+    "proofTypes": [
+      "evidence-pointer",
+      "pop-eip712",
+      "pop-jws",
+      "tx-encoded-value"
+    ]
   },
   {
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the key binding was issued.",
+    "description": "Time the key binding was issued. Default is current time.",
     "required": true,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Unix timestamp (in seconds) when the key binding becomes effective.",
+    "description": "Time the key binding becomes effective. Default is current time.",
     "required": false,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
+    "description": "Time the key binding expires. Default is no expiration.",
     "required": false,
     "placeholder": "0",
     "subtype": "timestamp",
@@ -361,10 +423,25 @@ const linkedIdentifierFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject ID",
-    "description": "DID of the identity initiating the link (e.g., did:pkh for wallets, did:web for domains, did:handle for social accounts, did:key for keys).",
+    "label": "Primary ID",
+    "description": "Your primary identity initiating the link (e.g., did:pkh for wallets, did:web for domains, did:handle for social accounts, did:key for keys).",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "handle",
+      "web",
+      "pkh",
+      "jwk",
+      "key"
+    ],
+    "handlePlatforms": [
+      "twitter",
+      "github",
+      "discord",
+      "telegram",
+      "lens",
+      "farcaster"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -372,58 +449,84 @@ const linkedIdentifierFields: FormField[] = [
   {
     "name": "linkedId",
     "type": "string",
-    "label": "Linked Identifier",
-    "description": "DID of the identity being linked (e.g., did:handle for social accounts, did:web for domains, did:pkh for wallets, did:key for keys). The DID method encodes the platform/type internally.",
+    "label": "Linked ID",
+    "description": "The identity you want to link to your primary ID (e.g., did:handle for social accounts, did:web for domains, did:pkh for wallets, did:key for keys).",
     "required": true,
-    "placeholder": "Enter linkedid",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "handle",
+      "web",
+      "pkh",
+      "jwk",
+      "key"
+    ],
+    "handlePlatforms": [
+      "twitter",
+      "github",
+      "discord",
+      "telegram",
+      "lens",
+      "farcaster"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
   },
   {
     "name": "method",
-    "type": "string",
+    "type": "enum",
     "label": "Verification Method",
-    "description": "Verification method used by the attester to confirm the subject's control of the linkedId. Use 'proof' for cryptographic proofs (pop-eip712, pop-jwt, evidence-pointer). Platform authority or URL-based evidence may be used to prove control of did:handle identifiers. Custom methods are permitted.",
+    "description": "How to verify the link. Use 'proof' if there is public ownership evidence like a DNS entry or social post. If you are an authorized attester and verified the link manually use 'manual'.",
     "required": true,
-    "placeholder": "Enter method",
+    "placeholder": "Enter verification method",
+    "options": [
+      "proof",
+      "manual"
+    ],
     "maxLength": 64
   },
   {
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "Array of cryptographic proofs demonstrating the subject's control over the linked identifier. Use proofPurpose='shared-control' for linked identifier attestations.",
+    "description": "One or more proofs that demonstrate the two linked IDs have the same ownership.",
     "required": false,
-    "placeholder": "Enter proofs"
+    "placeholder": "Enter proofs",
+    "proofPurpose": "shared-control",
+    "proofTypes": [
+      "evidence-pointer",
+      "pop-eip712",
+      "pop-jws",
+      "tx-encoded-value"
+    ]
   },
   {
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the attestation was issued. Default is the current time.",
+    "description": "Time the attestation was issued. Default is the current time.",
     "required": true,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Optional Unix timestamp (in seconds) when the assessment becomes effective. Default is the current time.",
+    "description": "Time the assessment becomes effective. Default is the current time.",
     "required": false,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Unix timestamp (in seconds) after which the assessment expires. Leave empty if the assessment does not expire.",
+    "description": "Time the assessment expires. Default is no expiration.",
     "required": false,
     "placeholder": "0",
     "subtype": "timestamp",
@@ -435,10 +538,15 @@ const securityAssessmentFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject ID",
-    "description": "ID of the assessed application/contract/service. Select an ID type below and enter the proper identity.",
+    "label": "Service ID",
+    "description": "ID of the service being assessed. Select an ID type below and enter the proper identity.",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "jwk"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -449,7 +557,11 @@ const securityAssessmentFields: FormField[] = [
     "label": "Organization",
     "description": "DID of the parent organization. Use this when assessing a service or resource that belongs to an organization (e.g., assessing did:web:example.com:service:api, set organization to did:web:example.com). Leave empty when assessing an organization directly.",
     "required": false,
-    "placeholder": "Enter organization",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -460,7 +572,7 @@ const securityAssessmentFields: FormField[] = [
     "label": "Software Version",
     "description": "Semantic version of the software/code that was assessed (e.g., '1.2.3').",
     "required": false,
-    "placeholder": "Enter version",
+    "placeholder": "Enter software version",
     "subtype": "semver",
     "maxLength": 50,
     "pattern": "^\\d+(\\.\\d+){0,2}$"
@@ -471,14 +583,14 @@ const securityAssessmentFields: FormField[] = [
     "label": "Hardware Version",
     "description": "Hardware version of the assessed subject, if applicable.",
     "required": false,
-    "placeholder": "Enter versionhw",
+    "placeholder": "Enter hardware version",
     "maxLength": 50
   },
   {
     "name": "payload",
     "type": "object",
     "label": "Assessment Payload",
-    "description": "Assessment details. Evolvable without changing the envelope. When stored on-chain via EAS, this object is JSON-stringified.",
+    "description": "Assessment details. Always stored as a JSON-stringified object. Evolvable without changing the envelope.",
     "required": true,
     "subFields": [
       {
@@ -487,7 +599,7 @@ const securityAssessmentFields: FormField[] = [
         "label": "Assessment Kind",
         "description": "High-level category of the assessment. Registered kinds are defined in the OMA3 Assessment Kind Registry.",
         "required": true,
-        "placeholder": "Enter assessmentkind",
+        "placeholder": "Enter assessment kind",
         "maxLength": 64
       },
       {
@@ -538,7 +650,7 @@ const securityAssessmentFields: FormField[] = [
     "label": "Payload Version",
     "description": "Semver describing the shape of the payload.",
     "required": true,
-    "placeholder": "Enter payloadversion",
+    "placeholder": "Enter payload version",
     "default": "1.0.0",
     "maxLength": 50
   },
@@ -564,29 +676,29 @@ const securityAssessmentFields: FormField[] = [
     "name": "issuedAt",
     "type": "integer",
     "label": "Issued Date",
-    "description": "Unix timestamp (in seconds) when the attestation was issued. Default is the current time.",
+    "description": "Time the attestation was issued. Default is the current time.",
     "required": true,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "effectiveAt",
     "type": "integer",
     "label": "Effective Date",
-    "description": "Optional Unix timestamp (in seconds) when the assessment becomes effective. Default is the current time.",
+    "description": "Time the assessment becomes effective. Default is the current time.",
     "required": false,
     "placeholder": "0",
-    "autoDefault": "current-timestamp",
     "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
     "min": 0
   },
   {
     "name": "expiresAt",
     "type": "integer",
     "label": "Expiration Date",
-    "description": "Unix timestamp (in seconds) after which the assessment expires. Leave empty if the assessment does not expire.",
+    "description": "Time the assessment expires. Default is no expiration.",
     "required": false,
     "placeholder": "0",
     "subtype": "timestamp",
@@ -601,7 +713,10 @@ const userReviewResponseFields: FormField[] = [
     "label": "Reviewer ID",
     "description": "DID of the original reviewer being responded to.",
     "required": false,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "pkh"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -612,7 +727,7 @@ const userReviewResponseFields: FormField[] = [
     "label": "User Review UID",
     "description": "The UID of the user review being responded to.",
     "required": true,
-    "placeholder": "Enter refuid",
+    "placeholder": "Enter user review uid",
     "maxLength": 66
   },
   {
@@ -621,7 +736,7 @@ const userReviewResponseFields: FormField[] = [
     "label": "Response",
     "description": "Free-form text containing the response to the review.",
     "required": true,
-    "placeholder": "Enter responsebody",
+    "placeholder": "Enter response",
     "maxLength": 500
   }
 ]
@@ -630,10 +745,15 @@ const userReviewFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Review Subject",
-    "description": "DID of the thing being reviewed.",
+    "label": "Service ID",
+    "description": "ID of the service you are reviewing.",
     "required": true,
-    "placeholder": "Enter subject",
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "jwk"
+    ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
@@ -641,8 +761,8 @@ const userReviewFields: FormField[] = [
   {
     "name": "version",
     "type": "string",
-    "label": "Subject Version",
-    "description": "Version of the reviewed subject (e.g., app or API version).",
+    "label": "Version",
+    "description": "Version of the service being reviewed (e.g., app or API version).",
     "required": false,
     "placeholder": "Enter version",
     "subtype": "semver",
@@ -670,7 +790,7 @@ const userReviewFields: FormField[] = [
     "label": "Review",
     "description": "Free-form text describing your experience or feedback.",
     "required": false,
-    "placeholder": "Enter reviewbody",
+    "placeholder": "Enter review",
     "maxLength": 500
   },
   {
@@ -679,15 +799,22 @@ const userReviewFields: FormField[] = [
     "label": "Screenshots",
     "description": "Optional screenshots showing the app during review.",
     "required": false,
-    "placeholder": "Enter screenshoturls"
+    "placeholder": "Enter screenshots"
   },
   {
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "Array of cryptographic proofs demonstrating the reviewer used the service. Use proofPurpose='commercial-tx' for user review attestations.",
+    "description": "One or more proofs that demonstrate the reviewer used the service.",
     "required": false,
-    "placeholder": "Enter proofs"
+    "placeholder": "Enter proofs",
+    "proofPurpose": "commercial-tx",
+    "proofTypes": [
+      "x402-receipt",
+      "x402-offer",
+      "tx-interaction",
+      "tx-encoded-value"
+    ]
   }
 ]
 
@@ -734,7 +861,7 @@ export const commonSchema: AttestationSchema = {
 export const controllerWitnessSchema: AttestationSchema = {
   id: 'controller-witness',
   title: 'Controller Witness',
-  description: 'A witness attestation anchoring that, at observedAt, the controller of the subject DID was asserted via a mutable offchain method. The witness identity is the EAS attester address.',
+  description: 'An attestation by a trusted third party that witnessed that a key was authorized at a specific point in time with a specific verification method',
   fields: controllerWitnessFields,
   easSchemaString: 'string subject, string controller, string method, uint256 observedAt',
   deployedUIDs: {
