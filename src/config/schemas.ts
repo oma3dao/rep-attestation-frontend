@@ -894,6 +894,9 @@ export const keyBindingSchema: AttestationSchema = {
   priorUIDs: {
     66238: ['0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d'] // OMAChain Testnet
   },
+  priorUIDs: {
+    66238: ['0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d'] // OMAchain Testnet
+  },
   deployedBlocks: {
     97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
@@ -917,6 +920,9 @@ export const linkedIdentifierSchema: AttestationSchema = {
   },
   priorUIDs: {
     66238: ['0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac'] // OMAChain Testnet
+  },
+  priorUIDs: {
+    66238: ['0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac'] // OMAchain Testnet
   },
   deployedBlocks: {
     97: 52415311, // BSC Testnet

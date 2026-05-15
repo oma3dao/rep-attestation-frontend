@@ -3,7 +3,10 @@ import { useBASClient } from './bas'
 import { useEASClient } from './eas'
 import { useWallet } from './blockchain'
 import type { AttestationData, AttestationResult } from './types'
-import { ATTESTATION_SERVICES, getServicesForChain, getAttestationService } from '@/config/attestation-services'
+import { ATTESTATION_SERVICES, getServicesForChain, getAttestationService, getContractAddress } from '@/config/attestation-services'
+import { getSchema } from '@/config/schemas'
+import { callControllerWitness } from './controller-witness-client'
+import logger from '@/lib/logger'
 
 type ServiceType = keyof typeof ATTESTATION_SERVICES
 

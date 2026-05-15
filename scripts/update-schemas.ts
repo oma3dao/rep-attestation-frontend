@@ -142,6 +142,9 @@ async function transformToUISchema(jsonSchema, schemaId) {
   // Detect if schema should be revocable (has 'revoked' field with x-oma3-skip-reason: "eas")
   const revocable = detectRevocable(jsonSchema.properties)
 
+  // Extract witness configuration if present
+  const witness = jsonSchema['x-oma3-witness'] || undefined
+
   return {
     id: schemaId,
     title: jsonSchema.title,
