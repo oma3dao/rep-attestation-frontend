@@ -159,14 +159,6 @@ const ISSUER_ACTIONS = [
   },
 ]
 
-const REVIEW_ACTIONS = [
-  {
-    title: "Review an app or service",
-    description: "Submit a public review with verifiable trust data for a service you used.",
-    href: "/publish/user-review",
-  },
-]
-
 // ---------------------------------------------------------------------------
 // Section components
 // ---------------------------------------------------------------------------
@@ -184,15 +176,22 @@ function ActionGrid({ title, description, actions, children }: {
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {actions.map((action) => (
-          <div key={action.href} className="rounded-xl border border-border/70 bg-muted/40 p-4">
-            <h3 className="font-semibold tracking-tight text-foreground">{action.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{action.description}</p>
-            <Link href={action.href} className="mt-4 inline-flex">
-              <Button variant="outline" size="sm">Open</Button>
-            </Link>
-          </div>
-        ))}
+        {actions.map((action) => {
+          const isExternal = action.href.startsWith("http")
+          return (
+            <div key={action.href} className="rounded-xl border border-border/70 bg-muted/40 p-4">
+              <h3 className="font-semibold tracking-tight text-foreground">{action.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{action.description}</p>
+              <Link
+                href={action.href}
+                className="mt-4 inline-flex"
+                {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              >
+                <Button variant="outline" size="sm">Open</Button>
+              </Link>
+            </div>
+          )
+        })}
       </CardContent>
       {children ? <CardContent className="pt-0">{children}</CardContent> : null}
     </Card>
@@ -946,13 +945,17 @@ function ServiceTrustWorkspace({
     <>
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Key Authorizations</CardTitle>
+        <CardTitle>Service Management</CardTitle>
         <CardDescription>
-          Authorize signing keys for each of your services.
+          Manage keys, identities, and reputation for your services.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <section className="space-y-3">
+          <div>
+            <h3 className="font-semibold tracking-tight text-foreground">Key Authorizations</h3>
+            <p className="text-sm text-muted-foreground">Authorize signing keys for each of your services.</p>
+          </div>
 
           {isLoadingControllerSummaries ? (
             <div className="flex items-center gap-3 rounded-xl border border-yellow-400/40 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-200">
@@ -1107,9 +1110,26 @@ function ServiceTrustWorkspace({
         </section>
 
         <section className="space-y-3">
-          <div>
-            <h3 className="font-semibold tracking-tight text-foreground">Reviews of My Services</h3>
-            <p className="text-sm text-muted-foreground">Third-party reviews filed against your service identities.</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="font-semibold tracking-tight text-foreground">Reviews of My Services</h3>
+              <p className="text-sm text-muted-foreground">Third-party reviews filed against your service identities.</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="default" size="sm" asChild>
+                <a href="https://preview.app.omatrust.org/widgets/reviews/create" target="_blank" rel="noopener noreferrer">
+                  Create review widget
+                </a>
+              </Button>
+              <a
+                href="https://docs.omatrust.org/widgets/overview"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                Docs
+              </a>
+            </div>
           </div>
           {isLoadingServiceAttestations ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">Loading service reviews...</div>
@@ -1549,13 +1569,6 @@ function DashboardContent() {
         </CardContent>
       </Card>
       )}
-
-      {/* User Reviews — always visible (bottom) */}
-      <ActionGrid
-        title="Reviews"
-        description="Submit and manage your service reviews."
-        actions={REVIEW_ACTIONS}
-      />
 
       <AttestationDetailModal
         isOpen={isModalOpen}
