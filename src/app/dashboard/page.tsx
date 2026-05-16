@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { normalizeDid } from "@oma3/omatrust/identity"
+import { normalizeDid, isSameControllerId } from "@oma3/omatrust/identity"
 import * as reputation from "@oma3/omatrust/reputation"
 import type { Hex } from "@oma3/omatrust/reputation"
 import { useActiveAccount } from "thirdweb/react"
@@ -392,8 +392,8 @@ function buildServiceKeys({
   accountWalletDid: string | null
   controllerSummaries: Map<string, ControllerConfirmResponse>
 }): ServiceKey[] {
-  // Each key+subject pair is unique
-  const pairMap = new Map<string, ServiceKey>()
+  // Each key+subject pair is unique (using isSameControllerId for key equivalence)
+  const pairs: ServiceKey[] = []
 
   const PRIVATE_KEY_DID_PREFIXES = ["did:pkh:", "did:ethr:", "did:key:", "did:jwk:"]
 
@@ -409,8 +409,14 @@ function buildServiceKeys({
     return true
   }
 
-  const pairKey = (keyDid: string, subjectDid: string) =>
-    `${canonicalIdentifier(keyDid)}::${canonicalIdentifier(subjectDid)}`
+  const findExistingPair = (keyDid: string, subjectDid: string): ServiceKey | undefined => {
+    const canonicalSubject = canonicalIdentifier(subjectDid)
+    return pairs.find(
+      (pair) =>
+        canonicalIdentifier(pair.subjectDid) === canonicalSubject &&
+        isSameControllerId(pair.keyDid, keyDid)
+    )
+  }
 
   const ensurePair = (keyDid: string, subjectDid: string, source: string, label?: string) => {
     if (!isValidKeyDid(keyDid)) {
@@ -419,19 +425,21 @@ function buildServiceKeys({
       )
       return null
     }
-    const pk = pairKey(keyDid, subjectDid)
-    const existing = pairMap.get(pk) ?? {
-      keyDid,
-      canonicalKeyDid: canonicalIdentifier(keyDid),
-      subjectDid,
-      label: label ?? truncateMiddle(keyDid, 16, 8),
-      sources: [],
-      basic: false,
-      intermediate: false,
-      advanced: false,
+    let existing = findExistingPair(keyDid, subjectDid)
+    if (!existing) {
+      existing = {
+        keyDid,
+        canonicalKeyDid: canonicalIdentifier(keyDid),
+        subjectDid,
+        label: label ?? truncateMiddle(keyDid, 16, 8),
+        sources: [],
+        basic: false,
+        intermediate: false,
+        advanced: false,
+      }
+      pairs.push(existing)
     }
     if (!existing.sources.includes(source)) existing.sources.push(source)
-    pairMap.set(pk, existing)
     return existing
   }
 
@@ -489,13 +497,13 @@ function buildServiceKeys({
   }
 
   // Compute advanced: requires BOTH key-binding AND controller-witness
-  for (const pair of pairMap.values()) {
+  for (const pair of pairs) {
     pair.advanced = Boolean(pair.keyBindingUid) && pair.intermediate
   }
 
   // Filter out pairs where key === subject (nonsensical self-authorization)
-  const results = Array.from(pairMap.values()).filter(
-    (pair) => canonicalIdentifier(pair.keyDid) !== canonicalIdentifier(pair.subjectDid)
+  const results = pairs.filter(
+    (pair) => !isSameControllerId(pair.keyDid, pair.subjectDid)
   )
 
   return results.sort((a, b) => {
@@ -947,7 +955,8 @@ function ServiceTrustWorkspace({
         <section className="space-y-3">
 
           {isLoadingControllerSummaries ? (
-            <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 rounded-xl border border-yellow-400/40 bg-yellow-50 p-4 text-sm text-yellow-900 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-200">
+              <RefreshCw className="h-4 w-4 shrink-0 animate-spin" />
               Checking DNS TXT, did.json, and issuer approval through the OMATrust API...
             </div>
           ) : null}
