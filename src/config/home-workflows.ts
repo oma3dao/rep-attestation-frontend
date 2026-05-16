@@ -53,10 +53,6 @@ export const HOME_WORKFLOWS: WorkflowCardConfig[] = [
       "Query reviews, key bindings, controller witnesses, and trust records for your app, agent, or discovery tool.",
     ctaLabel: "View API Docs",
     href: "https://docs.omatrust.org", // exact path TBD
-    secondaryCta: {
-      label: "Compare API Plans",
-      href: "https://docs.omatrust.org", // exact path TBD
-    },
     external: true,
   },
 ]

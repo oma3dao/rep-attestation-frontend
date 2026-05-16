@@ -644,14 +644,20 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
             >
               Create Account
             </Button>
-            <button
-              type="button"
-              className="text-sm font-semibold text-primary transition hover:text-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!hasName || isBusy}
-              onClick={() => void performChallengeSignVerify({ kind: "signup", executionMode: "native" })}
-            >
-              Pay transactions with OMA tokens instead →
-            </button>
+            <span className="group relative inline-block">
+              <button
+                type="button"
+                className="text-sm font-semibold text-muted-foreground cursor-not-allowed opacity-50"
+                disabled
+                aria-disabled="true"
+                aria-label="Pay transactions with OMA tokens — coming soon"
+              >
+                Pay transactions with OMA tokens instead →
+              </button>
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-popover px-3 py-1.5 text-xs font-medium text-popover-foreground shadow-md border border-border opacity-0 transition-opacity group-hover:opacity-100">
+                Coming soon — OMA token is not yet available to the public
+              </span>
+            </span>
           </div>
         </div>
 
