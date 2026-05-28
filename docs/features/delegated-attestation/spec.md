@@ -32,10 +32,12 @@ This means non-crypto users cannot submit attestations beyond the two subsidized
 
 All wallets create or load a backend account and session before attestation submission. The execution path is then determined by wallet-scoped `executionMode`.
 
-| Wallet provider | Allowed execution modes | Backend account + session | `user-review` / `linked-identifier` | All other schemas |
-|---|---|---|---|---|
-| `inApp` | `subscription` only | required | backend relay | backend relay |
-| anything else | `subscription` or `native` | required | `subscription` -> backend relay, `native` -> current frontend-hosted delegated-attest path | `subscription` -> backend relay, `native` -> current direct transaction path |
+| Wallet provider | Execution modes            | Account required | Subsidized schemas              | All other schemas              |
+|-----------------|----------------------------|------------------|---------------------------------|--------------------------------|
+| `inApp`         | `subscription` only        | yes              | backend relay                   | backend relay                  |
+| anything else   | `subscription` or `native` | yes              | `sub` → relay | `nat` → fe-hosted delegated | `sub` → relay | `nat` → direct tx |
+
+`sub` = subscription mode, `nat` = native mode, `relay` = backend relay, `fe-hosted delegated` = current frontend-hosted delegated-attest server, `direct tx` = user pays gas via wallet.
 
 The current frontend-hosted delegated-attest path remains part of the V1 `native` execution experience for the two subsidized schemas. This is an execution-mode rule constrained by wallet provider type, not a route-based or migration-era split.
 
@@ -119,10 +121,10 @@ Benefits:
 
 When the user clicks "Submit" on `AttestationForm`, the button is always enabled and always labeled "Submit Attestation." The form does not inspect wallet or session state to decide the button label or disabled state. Instead, `handleSubmit` evaluates a 2×2 matrix:
 
-| | Wallet connected | Wallet not connected |
-|---|---|---|
-| **Session exists** | Submit directly (happy path) | Clear session, open auth dialog |
-| **No session** | Open auth dialog (wallet already available for SIWE) | Open auth dialog |
+|                    | Wallet connected                                     | Wallet not connected               |
+|--------------------|------------------------------------------------------|------------------------------------|
+| **Session exists** | Submit directly (happy path)                         | Clear session, open auth dialog    |
+| **No session**     | Open auth dialog (wallet already available for SIWE) | Open auth dialog                   |
 
 Only the top-left cell (session + wallet) proceeds to submission directly. All other cells route through the auth dialog, which handles wallet connection and session creation in one flow.
 
@@ -228,11 +230,32 @@ After sign-in completes (and subject setup if needed), the auth dialog shows a s
 - the auth dialog does not submit the attestation — it only establishes the session and subject, then the user clicks submit again
 - `/account` remains the general management surface for subjects, but first-time subject-scoped submission does not force the user to leave the publish funnel
 
-### Backend account creation behavior
+### Backend session endpoints
 
-After wallet connection:
+The backend provides separate endpoints for sign-in and account registration:
 
-- frontend calls `POST /api/private/session/wallet/challenge` then `POST /api/private/session/wallet/verify`
+- **`POST /api/private/session/wallet/challenge`** — creates a SIWE challenge (shared by both flows)
+- **`POST /api/private/session/wallet/verify`** — sign-in to an existing account. If the wallet has no account, returns 404 with error code `ACCOUNT_NOT_FOUND`. The frontend shows: "No account found for this wallet. Please create an account first."
+- **`POST /api/private/session/wallet/register`** — create a new account. If the wallet already has an account, returns 409 with error code `ACCOUNT_ALREADY_EXISTS`. The frontend shows: "This wallet already has an account. Please sign in instead."
+
+Both `verify` and `register` accept the same SIWE challenge/signature payload. The difference is intent:
+
+- `verify` only loads existing accounts — it never creates
+- `register` only creates new accounts — it never loads existing ones
+- `register` accepts `executionMode` (required for new wallets); `verify` ignores it
+
+The frontend calls the correct endpoint based on the user's chosen path:
+
+- "Sign In" / "Existing account" → `verify`
+- "Create Account" / "New account" → `register`
+
+Display name updates (`PATCH /api/private/accounts/me`) are only sent after a successful `register` call, never after `verify`. This prevents sign-in from overwriting an existing account's display name.
+
+### Account creation flow
+
+After wallet connection via the "Create Account" path:
+
+- frontend calls `POST /api/private/session/wallet/challenge` then `POST /api/private/session/wallet/register`
 - backend creates account, wallet, default `did:pkh` subject, free-tier subscription, credential, and session
 - `walletProviderId` is sent to the backend (detected from `useActiveWallet().id`)
 - backend returns wallet context via `session/me`, including `walletProviderId` and wallet-scoped `executionMode`
@@ -240,13 +263,19 @@ After wallet connection:
 - for social/in-app wallets: SIWE signature is auto-signed, user sees no pop-up
 - for self-custody wallets: user sees a wallet pop-up to sign the SIWE message
 
+### Sign-in flow
+
+After wallet connection via the "Sign In" / "Existing account" path:
+
+- frontend calls `POST /api/private/session/wallet/challenge` then `POST /api/private/session/wallet/verify`
+- backend loads the existing account, creates a new session
+- no display name patch is sent — the existing account's data is preserved
+
 Execution-mode rules on first sign-in:
 
 - `inApp` wallets are automatically set to `subscription`
 - non-`inApp` wallets choose `subscription` or `native` on first sign-in
 - the chosen `executionMode` is persisted on the wallet and reused on later sessions
-
-Every wallet creates or loads a backend account and session here, including wallets that will later use `native` execution mode.
 
 ### Attestation submission gate
 

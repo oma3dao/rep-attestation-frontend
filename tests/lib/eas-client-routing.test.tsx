@@ -37,7 +37,7 @@ vi.mock('@/lib/blockchain', () => ({
     chainId: 66238,
     isChainSupported: true,
   }),
-  getActiveThirdwebChain: () => ({ id: 66238, name: 'OMAchain Testnet' }),
+  getActiveThirdwebChain: () => ({ id: 66238, name: 'OMAChain Testnet' }),
 }))
 
 vi.mock('thirdweb/react', () => ({
@@ -112,7 +112,7 @@ describe('useEASClient execution-mode routing', () => {
     easMocks.getRelayEasNonce.mockResolvedValue({
       nonce: '7',
       chainId: 66238,
-      chain: 'OMAchain Testnet',
+      chain: 'OMAChain Testnet',
       easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
     })
     easMocks.prepareDelegatedAttestation.mockResolvedValue({

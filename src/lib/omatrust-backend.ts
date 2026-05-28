@@ -123,13 +123,48 @@ export interface SubjectOwnershipVerificationResponse {
   controllingWalletDid?: string | null
 }
 
+export type IdentityResolution = {
+  input: string
+  canonical: string
+  label: string
+  type: string
+  source: string
+}
+
+export type ControllerConfirmResponse = {
+  subject: IdentityResolution
+  domain: string | null
+  controllerKeys: Array<{
+    id: string
+    canonicalId: string
+    label: string
+    sources: string[]
+    basic: boolean
+  }>
+  evidence: Array<{
+    kind: string
+    status: string
+    location: string
+    keys: string[]
+    error?: string
+  }>
+  approvedIssuer: {
+    status: "approved" | "not-approved" | "unavailable" | "not-configured"
+    checkedIdentifiers: string[]
+    registryUrl: string | null
+  }
+  warnings: string[]
+}
+
 type BackendErrorShape = {
   error?: string
   code?: string
   details?: string
 }
 
-const DEFAULT_BACKEND_ORIGIN = "https://preview.backend.omatrust.org"
+import { getBackendOrigin } from "@/lib/service-urls"
+
+export { getBackendOrigin }
 
 export class BackendApiError extends Error {
   status: number
@@ -147,11 +182,6 @@ export class BackendApiError extends Error {
 
 export function isBackendNetworkError(error: unknown) {
   return error instanceof BackendApiError && error.code === "BACKEND_UNREACHABLE"
-}
-
-export function getBackendOrigin() {
-  const configured = process.env.NEXT_PUBLIC_OMATRUST_BACKEND_URL?.trim()
-  return (configured && configured.length > 0 ? configured : DEFAULT_BACKEND_ORIGIN).replace(/\/+$/, "")
 }
 
 async function parseError(response: Response) {
@@ -297,6 +327,20 @@ export async function verifyWalletSession(params: {
   })
 }
 
+export async function registerWalletSession(params: {
+  challengeId: string
+  walletDid: string
+  signature: string
+  siweMessage: string
+  walletProviderId?: string | null
+  executionMode?: WalletExecutionMode | null
+}) {
+  return backendFetch<WalletVerifyResponse>("/api/private/session/wallet/register", {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
+}
+
 export async function getSessionMe() {
   return backendFetch<BackendSessionMeResponse>("/api/private/session/me")
 }
@@ -343,10 +387,55 @@ export async function verifySubjectOwnership(params: {
   })
 }
 
+export async function getControllerConfirmation(params: {
+  subjectDid: string
+  walletDid?: string | null
+}) {
+  const query = new URLSearchParams({ subjectDid: params.subjectDid })
+  if (params.walletDid) {
+    query.set("walletDid", params.walletDid)
+  }
+  return backendFetch<ControllerConfirmResponse>(
+    `/api/public/controller-confirm?${query.toString()}`
+  )
+}
+
+export async function resolvePublicIdentities(identifiers: string[]) {
+  return backendFetch<{ identities: IdentityResolution[] }>("/api/public/identity-resolve", {
+    method: "POST",
+    body: JSON.stringify({ identifiers }),
+  })
+}
+
 export async function getRelayEasNonce(attester: string) {
   return backendFetch<RelayEasNonceResponse>(
     `/api/private/relay/eas/nonce?attester=${encodeURIComponent(attester)}`
   )
+}
+
+export type TrustAnchorApprovedIssuer = {
+  address: string
+  label: string
+  schemas: string[]
+}
+
+export type TrustAnchorsResponse = {
+  version: number
+  updatedAt: string
+  widgetOrigins: string[]
+  chains: Record<string, {
+    name: string
+    easContract: string
+    schemas: Record<string, string>
+  }>
+  registries: Array<{
+    type: "approved-issuers"
+    issuers: TrustAnchorApprovedIssuer[]
+  }>
+}
+
+export async function getPublicTrustAnchors() {
+  return backendFetch<TrustAnchorsResponse>("/api/public/trust-anchors")
 }
 
 export async function postRelayEasDelegatedAttest(params: {

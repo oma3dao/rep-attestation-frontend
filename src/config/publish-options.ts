@@ -3,7 +3,7 @@ export interface PublishOption {
   title: string
   description: string
   href: string
-  icon: "star" | "shield" | "award" | "file-check" | "link" | "eye" | "key-round" | "message-square"
+  icon: "star" | "shield" | "award" | "link" | "eye" | "key-round" | "message-square"
   docsHref?: string
 }
 
@@ -55,14 +55,6 @@ export const publishOptions: PublishOption[] = [
     docsHref: "https://docs.omatrust.org/reputation/attestation-types#certification",
   },
   {
-    schemaId: "endorsement",
-    title: "Endorse a service",
-    description: "Publish an endorsement or recommendation for a service or organization.",
-    href: "/publish/endorsement",
-    icon: "file-check",
-    docsHref: "https://docs.omatrust.org/reputation/attestation-types#endorsement",
-  },
-  {
     schemaId: "linked-identifier",
     title: "Link two identities under common ownership",
     description: "Publish a trust record showing that two identifiers are controlled by the same entity.",
@@ -84,7 +76,7 @@ export const landingUseCases: string[] = [
   "Developers authorize signing keys for their services",
   "Auditors publish security assessments",
   "Certification bodies issue verifiable certifications",
-  "Users submit reviews and endorsements",
+  "Users submit reviews for services they have used",
   "Service providers respond to user reviews",
 ]
 

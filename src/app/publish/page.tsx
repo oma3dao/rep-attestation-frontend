@@ -1,8 +1,8 @@
 "use client"
 
-import { Suspense, useEffect, useRef } from "react"
+import { Suspense, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowRight,
   Award,
@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { publishOptions } from "@/config/publish-options"
+import { PUBLISH_CATEGORIES, getPublishCategory } from "@/config/publish-categories"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useBackendSession } from "@/components/backend-session-provider"
@@ -33,11 +34,24 @@ const iconMap: Record<string, LucideIcon> = {
 }
 
 function PublishPageContent() {
-  const { session } = useBackendSession()
+  const { session, openAuthDialog } = useBackendSession()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const highlightedType = searchParams.get("type")
   const highlightRef = useRef<HTMLDivElement>(null)
-  const dashboardHref = session ? "/dashboard" : "/dashboard?action=signin"
+
+  // Category filtering
+  const category = getPublishCategory(searchParams)
+  const categoryConfig = category ? PUBLISH_CATEGORIES[category] : null
+
+  const visibleOptions = useMemo(() => {
+    if (!categoryConfig) return publishOptions
+    return publishOptions.filter((option) =>
+      categoryConfig.forms.includes(option.schemaId)
+    )
+  }, [categoryConfig])
+
+  const pageTitle = categoryConfig ? categoryConfig.label : "Publish"
 
   useEffect(() => {
     if (highlightedType && highlightRef.current) {
@@ -45,14 +59,38 @@ function PublishPageContent() {
     }
   }, [highlightedType])
 
+  const openDashboard = () => {
+    if (session) {
+      router.push("/dashboard")
+      return
+    }
+
+    openAuthDialog({
+      mode: "chooser",
+      reason: "navigation",
+      redirectTo: "/dashboard",
+    })
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-3 max-w-2xl">
-        <h1 className="technical-label uppercase text-primary">Publish</h1>
+        <h1 className="technical-label uppercase text-primary">{pageTitle}</h1>
       </div>
 
+      {category && (
+        <div className="mb-6">
+          <Link
+            href="/publish"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← View all attestation types
+          </Link>
+        </div>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {publishOptions.map((option) => {
+        {visibleOptions.map((option) => {
           const Icon = iconMap[option.icon]
           const isHighlighted = highlightedType === option.schemaId
 
@@ -96,18 +134,20 @@ function PublishPageContent() {
         })}
       </div>
 
-      <div className="mt-12 rounded-2xl border border-border/80 bg-card p-6 shadow-sm shadow-slate-950/5">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">
-          Managing trust for your own service?
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Authorizing keys and responding to reviews live in the dashboard, where service
-          operators can manage ongoing trust activity.
-        </p>
-        <Link href={dashboardHref} className="mt-4 inline-flex">
-          <Button variant="outline">Open Dashboard</Button>
-        </Link>
-      </div>
+      {!category && (
+        <div className="mt-12 rounded-2xl border border-border/80 bg-card p-6 shadow-sm shadow-slate-950/5">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            Managing trust for your own service?
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            Authorizing keys and responding to reviews live in the dashboard, where service
+            operators can manage ongoing trust activity.
+          </p>
+          <Button type="button" variant="outline" className="mt-4" onClick={openDashboard}>
+            Open Dashboard
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 /*
- * EAS (Ethereum Attestation Service) Client for OMAchain
+ * EAS (Ethereum Attestation Service) Client for OMAChain
  *
  * Thin hook around the @oma3/omatrust SDK. The SDK handles encoding,
  * typed-data construction, and relay submission. This file only adds

@@ -65,7 +65,7 @@ describe('schemas config', () => {
       });
     });
 
-    it('schemas with OMAchain Testnet deployments have correct UIDs', () => {
+    it('schemas with OMAChain Testnet deployments have correct UIDs', () => {
       const expectedDeployedUIDs: Record<string, string> = {
         'certification': '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805',
         'controller-witness': '0xc81419f828755c0be2c49091dcad0887b5ca7342316dfffb4314aadbf8205090',
@@ -145,7 +145,7 @@ describe('schemas config', () => {
       );
     });
 
-    it('has deployedUID on OMAchain Testnet', () => {
+    it('has deployedUID on OMAChain Testnet', () => {
       expect(controllerWitnessSchema.deployedUIDs?.[66238]).toBe(
         '0xc81419f828755c0be2c49091dcad0887b5ca7342316dfffb4314aadbf8205090'
       );
@@ -179,7 +179,7 @@ describe('schemas config', () => {
       expect(keyPurpose?.required).toBe(true);
     });
 
-    it('has priorUIDs for OMAchain Testnet', () => {
+    it('has priorUIDs for OMAChain Testnet', () => {
       expect(keyBindingSchema.priorUIDs).toBeDefined();
       expect(keyBindingSchema.priorUIDs?.[66238]).toEqual([
         '0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d'

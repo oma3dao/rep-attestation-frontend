@@ -60,11 +60,11 @@ export const BAS_CONFIG: AttestationServiceConfig = {
 //   }
 // }
 
-// EAS (Ethereum Attestation Service) Configuration for OMAchain
+// EAS (Ethereum Attestation Service) Configuration for OMAChain
 export const EAS_CONFIG: AttestationServiceConfig = {
   id: 'eas',
   name: 'Ethereum Attestation Service',
-  description: 'Decentralized attestation service on OMAchain',
+  description: 'Decentralized attestation service on OMAChain',
   website: 'https://attest.org/',
   docs: 'https://docs.attest.org/',
   supportedChains: [CHAIN_IDS.OMACHAIN_TESTNET, CHAIN_IDS.OMACHAIN_MAINNET],
@@ -77,7 +77,7 @@ export const EAS_CONFIG: AttestationServiceConfig = {
     'Schema registry',
     'Revocation support',
     'Composable attestations',
-    'OMAchain native'
+    'OMAChain native'
   ],
   estimatedGasCost: {
     [CHAIN_IDS.OMACHAIN_TESTNET]: BigInt('100000'), // Adjust based on actual costs
@@ -124,15 +124,4 @@ export const ATTESTATION_QUERY_CONFIG = {
   defaultLimit: 20,
   // Safety multiplier when fetching events (to account for filtering)
   fetchMultiplier: 2
-}
-
-// Controller Witness grace period configuration
-// When creating key-binding or linked-identifier attestations, the effectiveAt
-// default is pushed forward by this amount so the Controller Witness API can
-// observe and attest controller evidence before the attestation becomes effective.
-export const CONTROLLER_WITNESS_CONFIG = {
-  /** Schema IDs whose effectiveAt default gets the grace period */
-  graceSchemaIds: ['key-binding', 'linked-identifier'],
-  /** Seconds added to current time for the default effectiveAt */
-  graceSeconds: 120, // 2 minutes — enough for OMAchain finality + witness call
 }

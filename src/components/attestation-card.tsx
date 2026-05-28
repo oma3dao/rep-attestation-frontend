@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare } from "lucide-react"
+import { Shield, Award, LinkIcon, Star, MessageSquare } from "lucide-react"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
+import { StarRating } from "@/components/star-rating"
 
 interface AttestationCardProps {
   attestation: EnrichedAttestationResult
@@ -11,7 +12,6 @@ interface AttestationCardProps {
 // Map schema IDs to icons
 const schemaIcons: Record<string, any> = {
   'certification': Award,
-  'endorsement': FileCheck,
   'linked-identifier': LinkIcon,
   'security-assessment': Shield,
   'user-review': Star,
@@ -21,14 +21,10 @@ const schemaIcons: Record<string, any> = {
 export function AttestationCard({ attestation, onClick }: AttestationCardProps) {
   const Icon = schemaIcons[attestation.schemaId || ''] || Shield
   const date = new Date(attestation.time * 1000).toLocaleDateString()
-  const attesterShort = `${attestation.attester.slice(0, 6)}...${attestation.attester.slice(-4)}`
   const revoked = attestation.revocationTime > 0
   
   // Get subject from decoded data if available
   const subject = attestation.decodedData?.subject || attestation.recipient
-  const subjectShort = subject.length > 40 
-    ? `${subject.slice(0, 20)}...${subject.slice(-10)}`
-    : subject
 
   return (
     <Card 
@@ -53,16 +49,16 @@ export function AttestationCard({ attestation, onClick }: AttestationCardProps) 
         <div className="space-y-2 text-sm">
           <div>
             <span className="font-medium text-foreground">Attester:</span>{' '}
-            <span className="font-mono text-muted-foreground">{attesterShort}</span>
+            <span className="font-mono text-muted-foreground break-all">{attestation.attester}</span>
           </div>
           <div>
-            <span className="font-medium text-foreground">Subject:</span>{' '}
-            <span className="font-mono text-muted-foreground break-all">{subjectShort}</span>
+            <span className="font-medium text-foreground">Service ID:</span>{' '}
+            <span className="font-mono text-muted-foreground break-all">{subject}</span>
           </div>
           {attestation.decodedData?.ratingValue && (
             <div>
               <span className="font-medium text-foreground">Rating:</span>{' '}
-              <span className="text-muted-foreground">{Number(attestation.decodedData.ratingValue)}/5</span>
+              <StarRating value={attestation.decodedData.ratingValue as string | number} />
             </div>
           )}
         </div>

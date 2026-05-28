@@ -290,7 +290,7 @@ export function Caip10Input({
                       const val = e.target.value;
                       setEvmChainId(val ? parseInt(val, 10) : null);
                     }}
-                    placeholder="e.g., 66238 for OMAchain Testnet"
+                    placeholder="e.g., 6623 for OMAChain Mainnet"
                     className="font-mono"
                   />
                 </div>

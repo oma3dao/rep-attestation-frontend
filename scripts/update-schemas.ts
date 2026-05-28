@@ -151,7 +151,6 @@ async function transformToUISchema(jsonSchema, schemaId) {
     description: jsonSchema.description,
     fields: await transformFields(jsonSchema.properties || {}, jsonSchema.required || [], schemaId),
     revocable,
-    witness
   }
 }
 
@@ -240,14 +239,16 @@ async function transformFields(properties, required = [], schemaId = '') {
         field.default = prop.default
       }
 
-      // Add auto-default marker if present
-      if (prop['x-oma3-default']) {
-        field.autoDefault = prop['x-oma3-default']
-      }
-
-      // Add subtype if present
-      if (prop['x-oma3-subtype']) {
-        field.subtype = prop['x-oma3-subtype']
+      // Generic x-oma3-* passthrough: collect all non-directive annotations onto the field
+      // Directives (handled elsewhere): skip-reason, render, nested, enum
+      const oma3Directives = new Set(['skip-reason', 'render', 'nested', 'enum'])
+      for (const key of Object.keys(prop)) {
+        if (!key.startsWith('x-oma3-')) continue
+        const shortKey = key.replace('x-oma3-', '')
+        if (oma3Directives.has(shortKey)) continue
+        // Convert kebab-case to camelCase
+        const camelKey = shortKey.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+        field[camelKey] = prop[key]
       }
 
       // Add type-specific properties
@@ -299,6 +300,9 @@ async function transformFields(properties, required = [], schemaId = '') {
  * Generate placeholder text based on field name and properties
  */
 function generatePlaceholder(name, prop) {
+  if (prop.format === 'did') {
+    return 'Select an ID type above'
+  }
   if (name.includes('did') || name.includes('DID')) {
     return 'did:example:123...'
   }
@@ -311,7 +315,7 @@ function generatePlaceholder(name, prop) {
   if (prop.type === 'integer') {
     return '0'
   }
-  return `Enter ${name.toLowerCase()}`
+  return `Enter ${(prop.title || name).toLowerCase()}`
 }
 
 /**
@@ -472,7 +476,7 @@ async function readEasSchemaStrings(rootPath) {
  *
  * When a schema is redeployed (e.g., field layout change), the old UID
  * disappears from the deployment data. But existing attestations under
- * the old UID still need witness support. This function extracts all
+ * the old UID still need to be queryable. This function extracts all
  * current deployedUIDs and priorUIDs so they can be merged into the
  * regenerated file.
  *
@@ -593,11 +597,6 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       exportLines.push(`  revocable: true,`)
     }
 
-    // Add witness configuration if present (from x-oma3-witness in JSON schema)
-    if (item.schema.witness) {
-      exportLines.push(`  witness: ${JSON.stringify(item.schema.witness)},`)
-    }
-
     // Add EAS schema string if available (from generated .eas.json files)
     const easStr = easSchemaStrings[item.schema.id]
     if (easStr) {
@@ -608,8 +607,8 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       `  deployedUIDs: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: '${escapeString(bscTestnetUID)}', // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: '${escapeString(bscMainnetUID)}', // BSC Mainnet`,
-      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAchain Testnet`,
-      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAchain Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: '${escapeString(omachainTestnetUID)}', // OMAChain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: '${escapeString(omachainMainnetUID)}'  // OMAChain Mainnet`,
       `  },`,
     )
 
@@ -657,8 +656,8 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       `  deployedBlocks: {`,
       `    ${CHAIN_IDS.BSC_TESTNET}: ${bscTestnetBlock}, // BSC Testnet`,
       `    ${CHAIN_IDS.BSC_MAINNET}: ${bscMainnetBlock}, // BSC Mainnet`,
-      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: ${omachainTestnetBlock}, // OMAchain Testnet`,
-      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAchain Mainnet`,
+      `    ${CHAIN_IDS.OMACHAIN_TESTNET}: ${omachainTestnetBlock}, // OMAChain Testnet`,
+      `    ${CHAIN_IDS.OMACHAIN_MAINNET}: ${omachainMainnetBlock}  // OMAChain Mainnet`,
       `  }`,
       `};`
     )
@@ -698,9 +697,13 @@ export interface FormField {
   maxLength?: number // for string fields
   subFields?: FormField[] // for object fields with nested properties
   default?: any // default value for the field
-  autoDefault?: string // auto-generate default (e.g., 'current-timestamp')
-  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields)
+  autoDefault?: string // auto-generate default (e.g., 'current-timestamp') — from x-oma3-default
+  subtype?: string // semantic subtype (e.g., 'timestamp' for integer fields) — from x-oma3-subtype
   nested?: boolean // for object fields: true = render with container/heading, false/omitted = render flat
+  didMethods?: string[] // allowed DID methods — from x-oma3-did-methods
+  handlePlatforms?: string[] // allowed handle platforms — from x-oma3-handle-platforms
+  // Additional x-oma3-* annotations are passed through automatically (camelCased, prefix stripped)
+  [key: string]: any
 }
 
 export interface AttestationSchema {
@@ -712,8 +715,7 @@ export interface AttestationSchema {
   deployedBlocks?: Record<number, number> // chainId -> deployment block number
   revocable?: boolean // Whether attestations using this schema can be revoked (default: false)
   easSchemaString?: string // Solidity-typed schema string for EAS SchemaEncoder
-  witness?: { subjectField: string; controllerField: string } // Controller Witness API config from x-oma3-witness
-  priorUIDs?: Record<number, string[]> // Previously-deployed schema UIDs per chain (preserved across redeployments for witness compatibility)
+  priorUIDs?: Record<number, string[]> // Previously-deployed schema UIDs per chain (preserved across redeployments)
 }
 
 // Field definitions

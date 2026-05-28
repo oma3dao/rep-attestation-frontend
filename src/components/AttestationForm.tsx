@@ -2,21 +2,17 @@
 
 import React from 'react'
 import { useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useActiveAccount } from 'thirdweb/react'
 import { AttestationSchema } from '@/config/schemas'
 import { FieldRenderer } from './FieldRenderer'
-import { EvidencePointerProofInput } from './EvidencePointerProofInput'
 import { SubjectConfirmationDialog } from '@/components/subject-confirmation-dialog'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Send } from 'lucide-react'
 import Link from 'next/link'
 import { useAttestation } from '@/lib/service'
 import { getActiveChain } from '@/lib/blockchain'
-import { CONTROLLER_WITNESS_CONFIG } from '@/config/attestation-services'
-import { createEvidencePointerProof } from '@oma3/omatrust/reputation'
 import { useBackendSession } from '@/components/backend-session-provider'
 import {
   BackendApiError,
@@ -95,6 +91,7 @@ export function validateField(field: any, value: any): string | undefined {
 
 export function AttestationForm({ schema, validateForm }: AttestationFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [formData, setFormData] = useState<FormData>({})
   const [errors, setErrors] = useState<FormErrors>({})
   const [generalError, setGeneralErrorRaw] = useState<string | null>(null)
@@ -125,8 +122,38 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         : 'Check your wallet to sign the attestation request, then return here. OMATrust will sponsor the on-chain write.'
       : 'Please check your wallet and approve the transaction.'
 
-  const requiredFields = schema.fields.filter(field => field.required)
-  const optionalFields = schema.fields.filter(field => !field.required)
+  // Pre-fill form fields from URL query parameters (e.g., ?subject=did:web:example.com)
+  React.useEffect(() => {
+    setFormData(prev => {
+      const next = { ...prev }
+      let changed = false
+
+      for (const field of schema.fields) {
+        const existingValue = next[field.name]
+        const hasExistingValue = Array.isArray(existingValue)
+          ? existingValue.length > 0
+          : typeof existingValue === 'string' && existingValue.length > 0
+        if (hasExistingValue) continue
+
+        if (field.type === 'array') {
+          const values = searchParams.getAll(field.name).filter(Boolean)
+          if (values.length > 0) {
+            next[field.name] = values
+            changed = true
+          }
+          continue
+        }
+
+        const value = searchParams.get(field.name)
+        if (value !== null) {
+          next[field.name] = value
+          changed = true
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [schema.fields, searchParams])
 
   const handleFieldChange = (fieldName: string, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [fieldName]: value }))
@@ -189,10 +216,6 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       }
     }
 
-    if (isWitnessSchema && typeof completeData['proofs'] === 'string' && completeData['proofs']) {
-      completeData['proofs'] = [createEvidencePointerProof(completeData['proofs'])]
-    }
-
     if (schema.easSchemaString) {
       const arrayFieldNames = schema.easSchemaString
         .split(',')
@@ -211,13 +234,6 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         completeData[name] = arr.map((item: unknown) =>
           typeof item === 'string' ? item : JSON.stringify(item)
         )
-      }
-    }
-
-    if (CONTROLLER_WITNESS_CONFIG.graceSchemaIds.includes(schema.id)) {
-      const userExplicitlySetEffectiveAt = formData['effectiveAt'] !== undefined && formData['effectiveAt'] !== ''
-      if (!userExplicitlySetEffectiveAt) {
-        completeData['effectiveAt'] = Math.floor(Date.now() / 1000) + CONTROLLER_WITNESS_CONFIG.graceSeconds
       }
     }
 
@@ -268,7 +284,19 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
 
     logger.log('Attestation created successfully:', result)
     setFormData({})
-    router.push('/dashboard')
+
+    // Route to dashboard with the appropriate context based on schema type
+    const contextMap: Record<string, string> = {
+      'user-review': 'review',
+      'user-review-response': 'review',
+      'key-binding': 'service-management',
+      'controller-witness': 'service-management',
+      'linked-identifier': 'service-management',
+      'security-assessment': 'issuer',
+      'certification': 'issuer',
+    }
+    const ctx = contextMap[schema.id]
+    router.push(ctx ? `/dashboard?context=${ctx}` : '/dashboard')
   }
 
   /**
@@ -365,34 +393,11 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
   }
 
-  const isWitnessSchema = !!schema.witness
-  const controllerFieldName = schema.witness?.controllerField
-
   const renderField = (field: typeof schema.fields[0]) => {
-    if (isWitnessSchema && field.name === 'proofs') {
-      const subjectDid = (formData['subject'] as string) || ''
-      const controllerDid = controllerFieldName ? (formData[controllerFieldName] as string) || '' : ''
-      const proofUrl = (formData['proofs'] as string) || ''
-
-      return (
-        <div key={field.name} className="space-y-2">
-          <Label htmlFor={field.name} className="text-sm font-medium">
-            {field.label}
-            {field.required && <span className="ml-1 text-destructive">*</span>}
-          </Label>
-          {field.description && (
-            <p className="text-sm text-muted-foreground">{field.description}</p>
-          )}
-          <EvidencePointerProofInput
-            subjectDid={subjectDid}
-            controllerDid={controllerDid}
-            value={proofUrl}
-            onChange={(url) => handleFieldChange('proofs', url)}
-            error={errors[field.name]}
-          />
-          {errors[field.name] && <p className="text-sm text-destructive" data-testid="field-error">{errors[field.name]}</p>}
-        </div>
-      )
+    // Conditional visibility: hide proofs field unless method is 'proof'
+    // Only applies to schemas that have a 'method' field (e.g., linked-identifier)
+    if (field.name === 'proofs' && schema.fields.some(f => f.name === 'method') && formData['method'] !== 'proof') {
+      return null
     }
 
     return (
@@ -431,14 +436,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         </div>
 
         <Card>
-          <CardHeader>
-            <CardDescription>Fields marked with * are required.</CardDescription>
-          </CardHeader>
-
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {requiredFields.map((field) => renderField(field))}
-              {optionalFields.length > 0 && optionalFields.map((field) => renderField(field))}
+              {schema.fields.map((field) => renderField(field))}
 
               <div className="flex flex-wrap gap-4 pt-6">
                 <Button

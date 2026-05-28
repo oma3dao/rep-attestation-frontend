@@ -102,32 +102,6 @@ export function useAttestation() {
       }
       
       setLastResult(result)
-      
-      // Fire controller witness call if schema declares x-oma3-witness (non-blocking)
-      const schema = getSchema(data.schemaId)
-      if (schema?.witness && result.attestationId) {
-        const schemaUid = schema.deployedUIDs?.[targetChainId]
-        const easContract = getContractAddress('eas', targetChainId)
-        const subject = data.data[schema.witness.subjectField]
-        const controller = data.data[schema.witness.controllerField]
-
-        if (schemaUid && easContract && subject && controller) {
-          callControllerWitness({
-            attestationUid: result.attestationId,
-            chainId: targetChainId,
-            easContract,
-            schemaUid,
-            subject,
-            controller,
-          }).then((witnessResult) => {
-            if (witnessResult) {
-              logger.log('[service] Controller witness succeeded:', witnessResult.uid)
-            } else {
-              logger.log('[service] Controller witness skipped or failed')
-            }
-          })
-        }
-      }
 
       return result
       

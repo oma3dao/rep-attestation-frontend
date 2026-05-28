@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
-import { Shield, Award, FileCheck, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
+import { Shield, Award, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
 import { getActiveChain } from "@/lib/blockchain"
 
 interface AttestationDetailModalProps {
@@ -19,7 +19,6 @@ interface AttestationDetailModalProps {
 
 const schemaIcons: Record<string, any> = {
   'certification': Award,
-  'endorsement': FileCheck,
   'linked-identifier': LinkIcon,
   'security-assessment': Shield,
   'user-review': Star,
@@ -47,6 +46,32 @@ function formatValue(value: any): string {
   return String(value)
 }
 
+// Map decoded data field keys to user-friendly labels
+const FIELD_LABEL_MAP: Record<string, string> = {
+  subject: 'Service ID',
+  controller: 'Key ID',
+  method: 'Proof Mechanism',
+  observedAt: 'Observed at',
+}
+
+function getFieldLabel(key: string): string {
+  if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key]
+  return key.replace(/([A-Z])/g, ' $1').trim()
+}
+
+// Format observedAt timestamps to human-readable dates
+function formatFieldValue(key: string, value: any): string {
+  if (key === 'observedAt' || key === 'observed_at') {
+    const numValue = typeof value === 'bigint' ? Number(value) : typeof value === 'string' ? Number(value) : value
+    if (typeof numValue === 'number' && !isNaN(numValue) && numValue > 0) {
+      // Handle both seconds and milliseconds timestamps
+      const ms = numValue > 1e12 ? numValue : numValue * 1000
+      return new Date(ms).toLocaleString()
+    }
+  }
+  return formatValue(value)
+}
+
 export function AttestationDetailModal({ isOpen, onClose, attestation }: AttestationDetailModalProps) {
   if (!attestation) return null
 
@@ -59,7 +84,7 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
       ? `${explorerBase}/tx/${attestation.txHash}`
       : `${explorerBase}/address/${attestation.attester}`
     : null
-  const explorerLabel = attestation.txHash ? 'View Transaction' : 'View Attester on Block Explorer'
+  const explorerLabel = attestation.txHash ? 'View transaction onchain' : 'View Attester on Block Explorer'
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -91,7 +116,7 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
             
             <div className="rounded-lg border border-border/70 bg-muted/50 p-4 space-y-2 text-sm">
               <div className="min-w-0">
-                <span className="font-medium text-foreground">UID:</span>
+                <span className="font-medium text-foreground">Attestation UID:</span>
                 <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{attestation.uid}</p>
               </div>
               
@@ -130,10 +155,10 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
                 {Object.entries(attestation.decodedData).map(([key, value]) => (
                   <div key={key} className="min-w-0">
                     <span className="font-medium text-foreground capitalize">
-                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                      {getFieldLabel(key)}:
                     </span>
                     <p className="mt-1 whitespace-pre-wrap break-all text-muted-foreground">
-                      {formatValue(value)}
+                      {formatFieldValue(key, value)}
                     </p>
                   </div>
                 ))}

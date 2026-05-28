@@ -29,6 +29,7 @@ import {
   deriveSubjectUrlHint,
   listSubjects,
   patchAccountMe,
+  registerWalletSession,
   verifySubjectOwnership,
   type WalletExecutionMode,
   verifyWalletSession,
@@ -89,11 +90,22 @@ function getFriendlyError(error: unknown) {
         return "Your sign-in request expired or became invalid. Please try again."
       case "CHALLENGE_EXPIRED":
         return "Your sign-in request expired. Please try again."
+      case "ACCOUNT_NOT_FOUND":
+        return "No account found for this wallet. Please create an account first."
+      case "ACCOUNT_ALREADY_EXISTS":
+        return "This wallet already has an account. Please sign in instead."
       default:
         return error.message
     }
   }
-  if (error instanceof Error) return error.message
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    // User declined the signature in their wallet
+    if (msg.includes("rejected") || msg.includes("denied") || msg.includes("cancelled") || msg.includes("canceled") || msg.includes("user refused") || msg.includes("4001")) {
+      return "You declined the signature request. Please try again when you're ready."
+    }
+    return error.message
+  }
   return "Something went wrong. Please try again."
 }
 
@@ -205,13 +217,14 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       return
     }
 
-    // Non-submission — navigate immediately
-    if (intent?.kind === "signin" || request.mode === "signin") {
-      router.push("/dashboard")
-      return
-    }
-    router.push("/account")
-  }, [isSubmissionFlow, request, router])
+    // Non-submission — close the dialog explicitly, then navigate.
+    const defaultDestination =
+      intent?.kind === "signin" || request.mode === "signin"
+        ? "/dashboard"
+        : "/account"
+    onOpenChange(false)
+    router.push(request.redirectTo ?? defaultDestination)
+  }, [isSubmissionFlow, onOpenChange, request, router])
 
   const hydrateSessionAfterVerify = async () => {
     const response = await refreshSession()
@@ -323,20 +336,30 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       setIsBootstrappingChallenge(false)
       setIsAuthenticating(true)
 
-      // Step 5: Verify with backend (creates account + session)
+      // Step 5: Call the right backend endpoint based on intent
       const executionMode = intent.kind === "signup" ? intent.executionMode : null
-      await verifyWalletSession({
-        challengeId: challenge.challengeId,
-        walletDid: connectedWalletDid,
-        signature,
-        siweMessage: challenge.siweMessage,
-        walletProviderId: connectedWalletProviderId,
-        executionMode,
-      })
+      if (intent.kind === "signup") {
+        await registerWalletSession({
+          challengeId: challenge.challengeId,
+          walletDid: connectedWalletDid,
+          signature,
+          siweMessage: challenge.siweMessage,
+          walletProviderId: connectedWalletProviderId,
+          executionMode,
+        })
 
-      // Step 6: Update display name if provided
-      if (accountName.trim()) {
-        await patchAccountMe({ displayName: accountName.trim() })
+        // Only set display name for newly created accounts
+        if (accountName.trim()) {
+          await patchAccountMe({ displayName: accountName.trim() })
+        }
+      } else {
+        await verifyWalletSession({
+          challengeId: challenge.challengeId,
+          walletDid: connectedWalletDid,
+          signature,
+          siweMessage: challenge.siweMessage,
+          walletProviderId: connectedWalletProviderId,
+        })
       }
 
       // Step 7: Hydrate session
@@ -347,12 +370,33 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       advanceAfterAuthenticatedFlow(currentSession, intent)
       return currentSession
     } catch (error) {
+      // If the user tried to create an account but one already exists,
+      // redirect with a full page reload to clear wallet state, then
+      // re-open the sign-in dialog with an info message.
+      if (error instanceof BackendApiError && error.code === "ACCOUNT_ALREADY_EXISTS") {
+        if (activeWallet) disconnect(activeWallet)
+        clearWalletBrowserState()
+        window.location.href = "/?action=signin&hint=account-exists"
+        return
+      }
+
+      // If the user tried to sign in but no account exists,
+      // redirect with a full page reload to clear wallet state, then
+      // re-open the create account dialog with an info message.
+      if (error instanceof BackendApiError && error.code === "ACCOUNT_NOT_FOUND") {
+        if (activeWallet) disconnect(activeWallet)
+        clearWalletBrowserState()
+        window.location.href = "/?action=signup&hint=no-account"
+        return
+      }
+
       setErrorMessage(getFriendlyError(error))
       // Disconnect the wallet on failure so the UI doesn't show a
       // connected wallet with no session (confusing state)
       if (activeWallet) {
         disconnect(activeWallet)
       }
+      clearWalletBrowserState()
     } finally {
       challengeFlowActiveRef.current = false
       setIsBootstrappingChallenge(false)
@@ -512,9 +556,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
           Check your wallet to continue
         </div>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {isSigningIn
-            ? "Sign a message in your wallet app to verify ownership and sign in to your account. This is free — no gas required."
-            : "Sign a message in your wallet app to verify ownership and create your account. This is free — no gas required."}
+          Sign a message to verify wallert ownership. This is free — no gas required.
         </p>
       </div>
     )
@@ -602,14 +644,20 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
             >
               Create Account
             </Button>
-            <button
-              type="button"
-              className="text-sm font-semibold text-primary transition hover:text-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!hasName || isBusy}
-              onClick={() => void performChallengeSignVerify({ kind: "signup", executionMode: "native" })}
-            >
-              Pay transactions with OMA tokens instead →
-            </button>
+            <span className="group relative inline-block">
+              <button
+                type="button"
+                className="text-sm font-semibold text-muted-foreground cursor-not-allowed opacity-50"
+                disabled
+                aria-disabled="true"
+                aria-label="Pay transactions with OMA tokens — coming soon"
+              >
+                Pay transactions with OMA tokens instead →
+              </button>
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-popover px-3 py-1.5 text-xs font-medium text-popover-foreground shadow-md border border-border opacity-0 transition-opacity group-hover:opacity-100">
+                Coming soon — OMA token is not yet available to the public
+              </span>
+            </span>
           </div>
         </div>
 
@@ -751,6 +799,12 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
             Connect a wallet, create an account, or continue with OMATrust.
           </DialogDescription>
         </DialogHeader>
+
+        {request.hintMessage ? (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground">
+            {request.hintMessage}
+          </div>
+        ) : null}
 
         {errorMessage ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

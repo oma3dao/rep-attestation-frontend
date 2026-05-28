@@ -67,10 +67,8 @@ export function TimestampInput({
   const datetimeValue = timestampToDatetimeLocal(value)
   const checkboxLabel = hasAutoDefault ? 'Override current time' : 'Enter custom date'
 
-  // Show picker when:
-  // - Checkbox is checked (user wants to enter a custom value), OR
-  // - Field has autoDefault (always show for auto-default fields)
-  const showPicker = enterCustomDate || hasAutoDefault
+  // Show picker only when checkbox is checked (user wants to enter a custom value)
+  const showPicker = enterCustomDate
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -94,8 +92,7 @@ export function TimestampInput({
             setEnterCustomDate(true)
             onChange(datetimeLocalToTimestamp(e.target.value))
           }}
-          disabled={!enterCustomDate && hasAutoDefault}
-          className={`${error ? 'field-error' : ''} ${!enterCustomDate && hasAutoDefault ? 'cursor-not-allowed opacity-50' : ''}`}
+          className={error ? 'field-error' : ''}
         />
       )}
     </div>

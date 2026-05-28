@@ -39,7 +39,7 @@ describe('GET /api/eas/nonce', () => {
       const { getNonce } = await import('@/lib/server/eas-routes');
       (getNonce as any).mockResolvedValue({
         nonce: '42',
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
         chainId: 66238,
         easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
       });
@@ -51,7 +51,7 @@ describe('GET /api/eas/nonce', () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.nonce).toBe('42');
-      expect(json.chain).toBe('OMAchain Testnet');
+      expect(json.chain).toBe('OMAChain Testnet');
       expect(json.chainId).toBe(66238);
       expect(json.easAddress).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
       expect(json.elapsed).toBeDefined();
@@ -61,7 +61,7 @@ describe('GET /api/eas/nonce', () => {
       const { getNonce } = await import('@/lib/server/eas-routes');
       (getNonce as any).mockResolvedValue({
         nonce: '0',
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
         chainId: 66238,
         easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
       });
@@ -168,7 +168,7 @@ describe('GET /api/eas/nonce', () => {
       const { getNonce } = await import('@/lib/server/eas-routes');
       (getNonce as any).mockResolvedValue({
         nonce: '0',
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
         chainId: 66238,
         easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
       });
@@ -185,7 +185,7 @@ describe('GET /api/eas/nonce', () => {
       const { getNonce } = await import('@/lib/server/eas-routes');
       (getNonce as any).mockResolvedValue({
         nonce: '0',
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
         chainId: 66238,
         easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
       });

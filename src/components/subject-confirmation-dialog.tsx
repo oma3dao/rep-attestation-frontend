@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/select"
 import { DidWebInput } from "@/components/did-web-input"
 import { Caip10Input } from "@/components/caip10-input"
-import { DidHandleInput } from "@/components/did-handle-input"
-import { DidKeyInput } from "@/components/did-key-input"
 import {
   BackendApiError,
   createSubject,
@@ -29,7 +27,7 @@ import {
   verifySubjectOwnership,
 } from "@/lib/omatrust-backend"
 
-type SupportedDidMethod = "did:web" | "did:pkh" | "did:handle" | "did:key"
+type SupportedDidMethod = "did:web" | "did:pkh"
 type DidWebProofMethod = "dns" | "didDocument"
 
 interface SubjectConfirmationDialogProps {
@@ -39,13 +37,12 @@ interface SubjectConfirmationDialogProps {
   existingSubjectDids: string[]
   onSubjectCreated: (subject: BackendSubject) => void
   initialMessage?: string | null
+  initialSubjectDid?: string | null
 }
 
 function getDidMethod(value: string): SupportedDidMethod | "" {
   if (value.startsWith("did:web:")) return "did:web"
   if (value.startsWith("did:pkh:")) return "did:pkh"
-  if (value.startsWith("did:handle:")) return "did:handle"
-  if (value.startsWith("did:key:")) return "did:key"
   return ""
 }
 
@@ -79,6 +76,7 @@ export function SubjectConfirmationDialog({
   existingSubjectDids,
   onSubjectCreated,
   initialMessage,
+  initialSubjectDid,
 }: SubjectConfirmationDialogProps) {
   const [subjectDid, setSubjectDid] = useState("")
   const [selectedMethod, setSelectedMethod] = useState<SupportedDidMethod>("did:web")
@@ -99,10 +97,17 @@ export function SubjectConfirmationDialog({
       setErrorMessage(null)
       setIsVerifying(false)
       setIsSubmitting(false)
-    } else if (initialMessage) {
-      setErrorMessage(initialMessage)
+    } else {
+      if (initialSubjectDid) {
+        setSubjectDid(initialSubjectDid)
+        const method = getDidMethod(initialSubjectDid)
+        if (method) setSelectedMethod(method)
+      }
+      if (initialMessage) {
+        setErrorMessage(initialMessage)
+      }
     }
-  }, [open, initialMessage])
+  }, [open, initialMessage, initialSubjectDid])
 
   const currentMethod = useMemo(() => {
     const inferred = getDidMethod(subjectDid)
@@ -115,13 +120,6 @@ export function SubjectConfirmationDialog({
     () => new Set(existingSubjectDids.map((did) => did.toLowerCase())),
     [existingSubjectDids]
   )
-
-  const unsupportedMethodMessage =
-    currentMethod === "did:handle"
-      ? "Social-handle confirmation is not available in the portal yet. Use a web domain or blockchain subject for now."
-      : currentMethod === "did:key"
-        ? "did:key confirmation is not available in the portal yet. Use a web domain or blockchain subject for now."
-        : null
 
   function handleDidMethodChange(method: SupportedDidMethod) {
     setSelectedMethod(method)
@@ -146,11 +144,6 @@ export function SubjectConfirmationDialog({
 
     if (!subjectDid) {
       setErrorMessage("Enter a subject identifier before verifying.")
-      return
-    }
-
-    if (unsupportedMethodMessage) {
-      setErrorMessage(unsupportedMethodMessage)
       return
     }
 
@@ -256,20 +249,12 @@ export function SubjectConfirmationDialog({
       return <DidWebInput value={subjectDid} onChange={setDidValue} />
     }
 
-    if (currentMethod === "did:pkh") {
-      return (
-        <Caip10Input
-          value={caip10Value}
-          onChange={(caip10) => setDidValue(caip10 ? `did:pkh:${caip10}` : null)}
-        />
-      )
-    }
-
-    if (currentMethod === "did:handle") {
-      return <DidHandleInput value={subjectDid} onChange={setDidValue} />
-    }
-
-    return <DidKeyInput value={subjectDid} onChange={setDidValue} />
+    return (
+      <Caip10Input
+        value={caip10Value}
+        onChange={(caip10) => setDidValue(caip10 ? `did:pkh:${caip10}` : null)}
+      />
+    )
   }
 
   function renderInstructions() {
@@ -323,20 +308,12 @@ export function SubjectConfirmationDialog({
       )
     }
 
-    if (currentMethod === "did:pkh") {
-      return (
-        <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">How verification works</p>
-          <p>
-            The wallet you are signed in with must either match this subject DID directly or control the contract through a standard ownership pattern such as <span className="font-mono text-xs">owner()</span>, <span className="font-mono text-xs">admin()</span>, or <span className="font-mono text-xs">getOwner()</span>.
-          </p>
-        </div>
-      )
-    }
-
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        {unsupportedMethodMessage}
+      <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">How verification works</p>
+        <p>
+          The wallet you are signed in with must either match this subject DID directly or control the contract through a standard ownership pattern such as <span className="font-mono text-xs">owner()</span>, <span className="font-mono text-xs">admin()</span>, or <span className="font-mono text-xs">getOwner()</span>.
+        </p>
       </div>
     )
   }
@@ -361,8 +338,6 @@ export function SubjectConfirmationDialog({
               <SelectContent>
                 <SelectItem value="did:web">did:web</SelectItem>
                 <SelectItem value="did:pkh">did:pkh</SelectItem>
-                <SelectItem value="did:handle">did:handle</SelectItem>
-                <SelectItem value="did:key">did:key</SelectItem>
               </SelectContent>
             </Select>
           </div>

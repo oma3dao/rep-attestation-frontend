@@ -10,13 +10,13 @@ describe('subsidized-schemas', () => {
     const EXPECTED_LINKED_ID_UID = '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453';
     const EXPECTED_CERT_UID = '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805';
 
-    it('returns true for user-review schema UID on OMAchain Testnet', () => {
+    it('returns true for user-review schema UID on OMAChain Testnet', () => {
       const uid = getSchema('user-review')?.deployedUIDs?.[OMACHAIN_TESTNET];
       expect(uid).toBe(EXPECTED_USER_REVIEW_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!)).toBe(true);
     });
 
-    it('returns true for linked-identifier schema UID on OMAchain Testnet', () => {
+    it('returns true for linked-identifier schema UID on OMAChain Testnet', () => {
       const uid = getSchema('linked-identifier')?.deployedUIDs?.[OMACHAIN_TESTNET];
       expect(uid).toBe(EXPECTED_LINKED_ID_UID);
       expect(isSubsidizedSchema(OMACHAIN_TESTNET, uid!)).toBe(true);
@@ -40,7 +40,7 @@ describe('subsidized-schemas', () => {
   });
 
   describe('getSubsidizedSchemaUIDs', () => {
-    it('returns the exact subsidized UIDs for OMAchain Testnet', () => {
+    it('returns the exact subsidized UIDs for OMAChain Testnet', () => {
       const uids = getSubsidizedSchemaUIDs(OMACHAIN_TESTNET);
       expect(uids).toHaveLength(2);
       expect(uids).toContain(

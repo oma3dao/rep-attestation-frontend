@@ -3,16 +3,13 @@
 import React from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { SubjectConfirmationDialog } from "@/components/subject-confirmation-dialog"
 import { useBackendSession } from "@/components/backend-session-provider"
 import {
   createSubscriptionCheckoutSession,
   getAccountMe,
   getCurrentSubscription,
-  listSubjects,
   patchAccountMe,
   type BackendAccountMeResponse,
-  type BackendSubject,
   type BackendSubscriptionCurrentResponse,
 } from "@/lib/omatrust-backend"
 
@@ -42,10 +39,8 @@ export default function AccountPage() {
   const { session, isSessionLoading, refreshSession, logout } = useBackendSession()
   const [account, setAccount] = React.useState<BackendAccountMeResponse | null>(null)
   const [subscription, setSubscription] = React.useState<BackendSubscriptionCurrentResponse["subscription"] | null>(null)
-  const [subjects, setSubjects] = React.useState<BackendSubject[]>([])
   const [isPageLoading, setIsPageLoading] = React.useState(false)
   const [pageError, setPageError] = React.useState<string | null>(null)
-  const [isSubjectDialogOpen, setIsSubjectDialogOpen] = React.useState(false)
   const [isUpgradeLoading, setIsUpgradeLoading] = React.useState(false)
   const [isLogoutLoading, setIsLogoutLoading] = React.useState(false)
   const [isEditingName, setIsEditingName] = React.useState(false)
@@ -67,15 +62,13 @@ export default function AccountPage() {
     setPageError(null)
 
     try {
-      const [accountResponse, subscriptionResponse, subjectsResponse] = await Promise.all([
+      const [accountResponse, subscriptionResponse] = await Promise.all([
         getAccountMe(),
         getCurrentSubscription(),
-        listSubjects(),
       ])
 
       setAccount(accountResponse)
       setSubscription(subscriptionResponse.subscription)
-      setSubjects(subjectsResponse.subjects)
     } catch (error) {
       setPageError(error instanceof Error ? error.message : "Failed to load account details.")
     } finally {
@@ -88,31 +81,6 @@ export default function AccountPage() {
   }, [loadAccountData])
 
   const walletDid = session?.wallet?.did ?? null
-  const visibleSubject = React.useMemo(() => {
-    const normalizedWalletDid = walletDid?.toLowerCase()
-    const nonWalletSubjects = subjects.filter(
-      (subject) => subject.canonicalDid.toLowerCase() !== normalizedWalletDid
-    )
-
-    if (nonWalletSubjects.length > 0) {
-      return nonWalletSubjects.find((subject) => subject.isDefault) ?? nonWalletSubjects[0]
-    }
-
-    if (
-      account?.primarySubject &&
-      account.primarySubject.canonicalDid.toLowerCase() !== normalizedWalletDid
-    ) {
-      return {
-        id: account.primarySubject.id,
-        canonicalDid: account.primarySubject.canonicalDid,
-        subjectDidHash: account.primarySubject.subjectDidHash,
-        displayName: account.primarySubject.displayName,
-        isDefault: true,
-      } satisfies BackendSubject
-    }
-
-    return null
-  }, [account?.primarySubject, subjects, walletDid])
 
   const readsLeft = subscription
     ? Math.max(0, subscription.annualPremiumReadLimit - subscription.premiumReadsUsedCurrentYear)
@@ -173,16 +141,6 @@ export default function AccountPage() {
       setPageError(error instanceof Error ? error.message : "Failed to start upgrade flow.")
       setIsUpgradeLoading(false)
     }
-  }
-
-  async function handleSubjectCreated(subject: BackendSubject) {
-    setSubjects((current) => {
-      const next = current.filter((item) => item.id !== subject.id)
-      next.unshift(subject)
-      return next
-    })
-
-    await Promise.all([loadAccountData(), refreshSession().catch(() => null)])
   }
 
   async function handleLogout() {
@@ -277,43 +235,16 @@ export default function AccountPage() {
           </div>
 
           <div className="rounded-xl border border-border/80 bg-card p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">Subject Identifier</h2>
-            {isPageLoading ? (
-              <div className="mt-3 text-sm text-muted-foreground">Loading…</div>
-            ) : visibleSubject ? (
-              <div className="mt-3 space-y-2">
-                <p className="break-all font-mono text-xs tracking-wide text-foreground">
-                  {visibleSubject.canonicalDid}
-                </p>
-                {visibleSubject.displayName ? (
-                  <p className="text-sm text-muted-foreground">{visibleSubject.displayName}</p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-3 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Add a URL that you own to represent you or your organization.
-                </p>
-                <div className="flex justify-end">
-                  <Button type="button" onClick={() => setIsSubjectDialogOpen(true)}>
-                    Add your Subject Identifier.
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-border/80 bg-card p-5">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-3">
                 <div>
-                  <h2 className="text-sm font-medium text-muted-foreground">Wallet</h2>
+                  <h2 className="text-sm font-medium text-muted-foreground">User ID</h2>
                   <p className="mt-1 break-all font-mono text-xs tracking-wide text-foreground">
                     {walletDid ?? "—"}
                   </p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Wallet Type</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">Type</h3>
                   <p className="mt-1 text-foreground">
                     {getWalletTypeLabel(session.wallet?.isManagedWallet)}
                   </p>
@@ -399,15 +330,6 @@ export default function AccountPage() {
         </div>
       </div>
 
-      <SubjectConfirmationDialog
-        open={isSubjectDialogOpen}
-        onOpenChange={setIsSubjectDialogOpen}
-        walletDid={walletDid}
-        existingSubjectDids={subjects.map((subject) => subject.canonicalDid)}
-        onSubjectCreated={(subject) => {
-          void handleSubjectCreated(subject)
-        }}
-      />
     </>
   )
 }

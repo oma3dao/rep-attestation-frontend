@@ -69,7 +69,7 @@ describe('POST /api/eas/delegated-attest', () => {
       txHash: '0x' + 'ab'.repeat(32),
       uid: '0x' + 'cd'.repeat(32),
       blockNumber: 12345,
-      chain: 'OMAchain Testnet',
+      chain: 'OMAChain Testnet',
     })
   })
 
@@ -87,7 +87,7 @@ describe('POST /api/eas/delegated-attest', () => {
         txHash: expectedTxHash,
         uid: expectedUID,
         blockNumber: 99999,
-        chain: 'OMAchain Testnet',
+        chain: 'OMAChain Testnet',
       })
 
       const { POST } = await import('@/app/api/eas/delegated-attest/route')
