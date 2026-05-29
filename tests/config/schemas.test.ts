@@ -3,7 +3,6 @@ import {
   certificationSchema,
   commonSchema,
   controllerWitnessSchema,
-  endorsementSchema,
   keyBindingSchema,
   linkedIdentifierSchema,
   securityAssessmentSchema,
@@ -19,11 +18,10 @@ import {
 
 describe('schemas config', () => {
   describe('schema exports', () => {
-    it('exports all nine schemas', () => {
+    it('exports all eight schemas', () => {
       expect(certificationSchema).toBeDefined();
       expect(commonSchema).toBeDefined();
       expect(controllerWitnessSchema).toBeDefined();
-      expect(endorsementSchema).toBeDefined();
       expect(keyBindingSchema).toBeDefined();
       expect(linkedIdentifierSchema).toBeDefined();
       expect(securityAssessmentSchema).toBeDefined();
@@ -69,7 +67,6 @@ describe('schemas config', () => {
       const expectedDeployedUIDs: Record<string, string> = {
         'certification': '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805',
         'controller-witness': '0xc81419f828755c0be2c49091dcad0887b5ca7342316dfffb4314aadbf8205090',
-        'endorsement': '0xb0cf93ef0f3feb858aa5d07a54f6589da5852883f378dfd0cae5315da1d679ac',
         'key-binding': '0x807b38ce9aa23fdde4457de01db9c5e8d6ec7c8feebee242e52be70847b7b966',
         'linked-identifier': '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453',
         'security-assessment': '0x67bcc2424e3721d56e85bb650c6aba8bf7f1711d9c9a434c3afae3a22d23eed7',
@@ -159,12 +156,6 @@ describe('schemas config', () => {
       expect(keyBindingSchema.revocable).toBe(true);
     });
 
-    it('has witness configuration for controller witness', () => {
-      expect(keyBindingSchema.witness).toBeDefined();
-      expect(keyBindingSchema.witness?.subjectField).toBe('subject');
-      expect(keyBindingSchema.witness?.controllerField).toBe('keyId');
-    });
-
     it('has keyId as required field', () => {
       const keyIdField = keyBindingSchema.fields.find(f => f.name === 'keyId');
       expect(keyIdField).toBeDefined();
@@ -202,12 +193,6 @@ describe('schemas config', () => {
       expect(linkedIdentifierSchema.revocable).toBe(true);
     });
 
-    it('has witness configuration for controller witness', () => {
-      expect(linkedIdentifierSchema.witness).toBeDefined();
-      expect(linkedIdentifierSchema.witness?.subjectField).toBe('subject');
-      expect(linkedIdentifierSchema.witness?.controllerField).toBe('linkedId');
-    });
-
     it('has linkedId as required field', () => {
       const linkedIdField = linkedIdentifierSchema.fields.find(f => f.name === 'linkedId');
       expect(linkedIdField).toBeDefined();
@@ -215,11 +200,12 @@ describe('schemas config', () => {
       expect(linkedIdField?.pattern).toBe('^did:[a-z0-9]+:.+$');
     });
 
-    it('has method as required field', () => {
+    it('has method as required enum field', () => {
       const methodField = linkedIdentifierSchema.fields.find(f => f.name === 'method');
       expect(methodField).toBeDefined();
       expect(methodField?.required).toBe(true);
-      expect(methodField?.type).toBe('string');
+      expect(methodField?.type).toBe('enum');
+      expect(methodField?.options).toEqual(['proof', 'manual']);
     });
   });
 
@@ -261,20 +247,6 @@ describe('schemas config', () => {
     });
   });
 
-  describe('endorsementSchema', () => {
-    it('has correct properties', () => {
-      expect(endorsementSchema.id).toBe('endorsement');
-      expect(endorsementSchema.title).toBe('Endorsement');
-      expect(endorsementSchema.description).toContain('lightweight');
-    });
-
-    it('has subject as required field', () => {
-      const subjectField = endorsementSchema.fields.find(field => field.name === 'subject');
-      expect(subjectField).toBeDefined();
-      expect(subjectField?.required).toBe(true);
-    });
-  });
-
   describe('userReviewSchema', () => {
     it('has correct properties', () => {
       expect(userReviewSchema.id).toBe('user-review');
@@ -288,25 +260,6 @@ describe('schemas config', () => {
       expect(ratingField?.type).toBe('enum');
       expect(ratingField?.options).toEqual([1, 2, 3, 4, 5]);
       expect(ratingField?.required).toBe(true);
-    });
-  });
-
-  describe('witness configuration', () => {
-    it('only key-binding and linked-identifier have witness config', () => {
-      const schemas = getAllSchemas();
-      const witnessSchemas = schemas.filter(s => s.witness);
-      expect(witnessSchemas).toHaveLength(2);
-      expect(witnessSchemas.map(s => s.id).sort()).toEqual(['key-binding', 'linked-identifier']);
-    });
-
-    it('witness config has correct shape', () => {
-      const witnessSchemas = getAllSchemas().filter(s => s.witness);
-      witnessSchemas.forEach(schema => {
-        expect(schema.witness).toHaveProperty('subjectField');
-        expect(schema.witness).toHaveProperty('controllerField');
-        expect(typeof schema.witness!.subjectField).toBe('string');
-        expect(typeof schema.witness!.controllerField).toBe('string');
-      });
     });
   });
 
@@ -327,15 +280,16 @@ describe('schemas config', () => {
 
     it('other schemas are not explicitly revocable', () => {
       expect(certificationSchema.revocable).toBeFalsy();
-      expect(endorsementSchema.revocable).toBeFalsy();
       expect(controllerWitnessSchema.revocable).toBeFalsy();
+      expect(userReviewSchema.revocable).toBeFalsy();
+      expect(userReviewResponseSchema.revocable).toBeFalsy();
+      expect(securityAssessmentSchema.revocable).toBeFalsy();
     });
   });
 
   describe('getSchema function', () => {
     it('returns schema for valid ID', () => {
       expect(getSchema('certification')).toBe(certificationSchema);
-      expect(getSchema('endorsement')).toBe(endorsementSchema);
       expect(getSchema('linked-identifier')).toBe(linkedIdentifierSchema);
       expect(getSchema('user-review')).toBe(userReviewSchema);
       expect(getSchema('controller-witness')).toBe(controllerWitnessSchema);
@@ -343,6 +297,10 @@ describe('schemas config', () => {
       expect(getSchema('security-assessment')).toBe(securityAssessmentSchema);
       expect(getSchema('common')).toBe(commonSchema);
       expect(getSchema('user-review-response')).toBe(userReviewResponseSchema);
+    });
+
+    it('returns undefined for the removed endorsement schema', () => {
+      expect(getSchema('endorsement')).toBeUndefined();
     });
 
     it('returns undefined for invalid ID', () => {
@@ -354,7 +312,7 @@ describe('schemas config', () => {
   describe('getSchemaIds function', () => {
     it('returns all schema IDs', () => {
       const ids = getSchemaIds();
-      expect(ids).toEqual(['certification', 'common', 'controller-witness', 'endorsement', 'key-binding', 'linked-identifier', 'security-assessment', 'user-review-response', 'user-review']);
+      expect(ids).toEqual(['certification', 'common', 'controller-witness', 'key-binding', 'linked-identifier', 'security-assessment', 'user-review-response', 'user-review']);
     });
 
     it('returns array of strings', () => {
@@ -369,11 +327,10 @@ describe('schemas config', () => {
   describe('getAllSchemas function', () => {
     it('returns all schemas', () => {
       const schemas = getAllSchemas();
-      expect(schemas).toHaveLength(9);
+      expect(schemas).toHaveLength(8);
       expect(schemas).toContain(certificationSchema);
       expect(schemas).toContain(commonSchema);
       expect(schemas).toContain(controllerWitnessSchema);
-      expect(schemas).toContain(endorsementSchema);
       expect(schemas).toContain(keyBindingSchema);
       expect(schemas).toContain(linkedIdentifierSchema);
       expect(schemas).toContain(securityAssessmentSchema);

@@ -30,6 +30,17 @@ vi.mock('@/components/ProofInput', () => ({
 vi.mock('@/components/ObjectFieldRenderer', () => ({
   ObjectFieldRenderer: () => <div data-testid="object-field-renderer">Object</div>,
 }));
+// Render Radix-style tooltips inline so description text is queryable in jsdom.
+vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => (
+    <button type="button" data-testid="tooltip-trigger">{children}</button>
+  ),
+  TooltipContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="tooltip-content">{children}</div>
+  ),
+}));
 
 describe('FieldRenderer', () => {
   const baseField = {
@@ -92,24 +103,43 @@ describe('FieldRenderer', () => {
     expect(input).toHaveValue('https://example.com');
   });
 
-  it('renders enum as radio buttons when ≤7 options', () => {
+  it('renders enum as radio buttons when ≤7 rich options (with descriptions)', () => {
     const handleChange = vi.fn();
+    const richOptions = [
+      { value: 'A', label: 'Option A', description: 'first option' },
+      { value: 'B', label: 'Option B', description: 'second option' },
+      { value: 'C', label: 'Option C', description: 'third option' },
+    ];
     render(
-      <FieldRenderer field={{ ...baseField, type: 'enum', options: ['A', 'B', 'C'] }} value="B" onChange={handleChange} />
+      <FieldRenderer
+        field={{ ...baseField, type: 'enum', options: richOptions } as any}
+        value="B"
+        onChange={handleChange}
+      />
     );
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(3);
-    // B should be checked
     expect(radios[1]).toBeChecked();
     expect(radios[0]).not.toBeChecked();
     expect(radios[2]).not.toBeChecked();
-    // Labels rendered
-    expect(screen.getByText('A')).toBeInTheDocument();
-    expect(screen.getByText('B')).toBeInTheDocument();
-    expect(screen.getByText('C')).toBeInTheDocument();
-    // Clicking a radio triggers onChange
+    expect(screen.getByText('Option A')).toBeInTheDocument();
+    expect(screen.getByText('Option B')).toBeInTheDocument();
+    expect(screen.getByText('Option C')).toBeInTheDocument();
     fireEvent.click(radios[2]);
     expect(handleChange).toHaveBeenCalledWith('C');
+  });
+
+  it('renders plain string enum options as a select dropdown (≤7)', () => {
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'enum', options: ['A', 'B', 'C'] }}
+        value="B"
+        onChange={() => {}}
+      />
+    );
+    const select = screen.getByLabelText(/Test Field/i);
+    expect(select.tagName).toBe('SELECT');
+    expect(select).toHaveValue('B');
   });
 
   it('renders enum as select dropdown when >7 options', () => {
@@ -240,10 +270,10 @@ describe('FieldRenderer', () => {
     expect(handleChange).not.toHaveBeenCalledWith(['A', '']);
   });
 
-  it('renders SubjectIdInput when field name is subject', () => {
+  it('renders SubjectIdInput when field format is did', () => {
     render(
       <FieldRenderer
-        field={{ ...baseField, name: 'subject', label: 'Subject', type: 'string' }}
+        field={{ ...baseField, name: 'subject', label: 'Subject', type: 'string', format: 'did' } as any}
         value=""
         onChange={() => {}}
       />

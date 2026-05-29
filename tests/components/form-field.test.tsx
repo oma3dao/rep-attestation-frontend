@@ -77,19 +77,19 @@ describe('FormField', () => {
     expect(handleChange).toHaveBeenCalledWith('about me');
   });
 
-  it('applies error border class to textarea when error is provided', () => {
+  it('applies error class to textarea when error is provided', () => {
     render(
       <FormField label="Bio" name="bio" type="textarea" value="" onChange={() => {}} error="Required" />
     );
     const textarea = screen.getByLabelText(/^Bio/);
-    expect(textarea).toHaveClass('border-red-500');
+    expect(textarea).toHaveClass('field-error');
   });
 
-  it('applies error border class to array input when error is provided', () => {
+  it('applies error class to array input when error is provided', () => {
     render(
       <FormField label="Tags" name="tags" type="array" value={[]} onChange={() => {}} error="Invalid" />
     );
     const input = screen.getByLabelText(/^Tags/);
-    expect(input).toHaveClass('border-red-500');
+    expect(input).toHaveClass('field-error');
   });
 }); 

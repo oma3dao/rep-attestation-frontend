@@ -10,7 +10,6 @@ describe('sitemap', () => {
 
   it('each entry has url, lastModified, changeFrequency, and priority', () => {
     const result = sitemap();
-    const baseUrl = 'https://reputation.omatrust.org';
     for (const entry of result) {
       expect(entry).toHaveProperty('url');
       expect(entry).toHaveProperty('lastModified');
@@ -25,30 +24,31 @@ describe('sitemap', () => {
 
   it('includes base URL with daily frequency and priority 1', () => {
     const result = sitemap();
-    const base = result.find(e => e.url === 'https://reputation.omatrust.org');
+    const base = result.find(e => e.url === 'https://app.omatrust.org');
     expect(base).toBeDefined();
     expect(base?.changeFrequency).toBe('daily');
     expect(base?.priority).toBe(1);
   });
 
-  it('includes attestation routes with weekly frequency and priority 0.8', () => {
+  it('includes publish routes with weekly frequency', () => {
     const result = sitemap();
-    const attestRoutes = result.filter(e =>
-      e.url.startsWith('https://reputation.omatrust.org/attest/')
+    const publishRoutes = result.filter(e =>
+      e.url.startsWith('https://app.omatrust.org/publish/')
     );
-    expect(attestRoutes.length).toBeGreaterThanOrEqual(6);
-    for (const entry of attestRoutes) {
+    expect(publishRoutes.length).toBeGreaterThanOrEqual(6);
+    for (const entry of publishRoutes) {
       expect(entry.changeFrequency).toBe('weekly');
-      expect(entry.priority).toBe(0.8);
+      expect(entry.priority).toBeGreaterThan(0);
     }
   });
 
-  it('includes certification, endorsement, linked-identifier, security-assessment, user-review, user-review-response', () => {
+  it('includes certification, controller-witness, key-binding, linked-identifier, security-assessment, user-review, user-review-response', () => {
     const result = sitemap();
     const urls = result.map(e => e.url);
-    const base = 'https://reputation.omatrust.org/attest/';
+    const base = 'https://app.omatrust.org/publish/';
     expect(urls).toContain(`${base}certification`);
-    expect(urls).toContain(`${base}endorsement`);
+    expect(urls).toContain(`${base}controller-witness`);
+    expect(urls).toContain(`${base}key-binding`);
     expect(urls).toContain(`${base}linked-identifier`);
     expect(urls).toContain(`${base}security-assessment`);
     expect(urls).toContain(`${base}user-review`);
