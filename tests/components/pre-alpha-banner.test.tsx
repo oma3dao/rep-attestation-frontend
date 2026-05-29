@@ -75,16 +75,30 @@ describe('PreAlphaBanner', () => {
 
   it('has correct styling classes', () => {
     render(<PreAlphaBanner />);
-    
+
     const banner = screen.getByText(/Pre-Alpha Preview/i).closest('div')?.parentElement;
-    expect(banner).toHaveClass('bg-yellow-100', 'text-black', 'px-4', 'py-3', 'shadow-sm', 'border-b');
+    expect(banner).toHaveClass(
+      'border-b',
+      'border-warning/30',
+      'bg-warning/12',
+      'text-warning-foreground',
+      'px-4',
+      'py-3',
+      'shadow-sm',
+    );
   });
 
   it('dismiss button has correct styling', () => {
     render(<PreAlphaBanner />);
-    
+
     const dismissButton = screen.getByRole('button', { name: /dismiss banner/i });
-    expect(dismissButton).toHaveClass('ml-4', 'p-1', 'hover:bg-yellow-200', 'rounded-full', 'transition-colors');
+    expect(dismissButton).toHaveClass(
+      'ml-4',
+      'p-1',
+      'rounded-full',
+      'transition-colors',
+      'hover:bg-warning/15',
+    );
   });
 
   it('handles multiple dismissals gracefully', () => {

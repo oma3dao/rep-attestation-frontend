@@ -5,6 +5,8 @@ import { vi } from 'vitest';
 
 // Mock scrollIntoView which doesn't exist in jsdom
 Element.prototype.scrollIntoView = vi.fn();
+// Mock scrollTo which doesn't exist in jsdom
+window.scrollTo = vi.fn();
 
 // Silence act() warnings in test output
 const originalError = console.error;

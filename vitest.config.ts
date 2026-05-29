@@ -59,6 +59,10 @@ export default defineConfig({
         __dirname,
         './node_modules/@oma3/omatrust/dist/reputation/index.cjs'
       ),
+      '@oma3/omatrust/widgets': path.resolve(
+        __dirname,
+        './tests/mocks/omatrust-widgets.ts'
+      ),
     },
   },
 }) 

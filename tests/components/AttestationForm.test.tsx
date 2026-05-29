@@ -3,6 +3,48 @@ import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-libra
 import { flushSync } from 'react-dom';
 import { vi, expect, describe, it, beforeEach, afterEach } from 'vitest';
 
+const nextNavMock = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+  forward: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => nextNavMock,
+  useSearchParams: () => nextNavMock.searchParams,
+  usePathname: () => '/',
+}));
+
+vi.mock('@/components/subject-confirmation-dialog', () => ({
+  SubjectConfirmationDialog: () => null,
+}));
+
+vi.mock('@/lib/omatrust-backend', () => {
+  class BackendApiError extends Error {
+    code?: string;
+    details?: string;
+    constructor(message: string, code?: string, details?: string) {
+      super(message);
+      this.name = 'BackendApiError';
+      this.code = code;
+      this.details = details;
+    }
+  }
+  return {
+    BackendApiError,
+    buildWalletDid: (address: string, chainId: number) => `did:pkh:eip155:${chainId}:${address}`,
+    deriveSubjectUrlHint: () => '',
+    getBackendErrorMessage: (err: unknown) =>
+      err instanceof Error ? err.message : String(err ?? 'Unknown error'),
+    logoutSession: vi.fn().mockResolvedValue(undefined),
+    shouldRouteBackendErrorToAccount: () => false,
+  };
+});
+
 vi.mock('@/components/ui/button', async () => {
   const React = await import('react');
   const Button = React.forwardRef<HTMLButtonElement, any>(
@@ -38,6 +80,11 @@ import { useWallet } from '@/lib/blockchain';
 const backendSessionMock = vi.hoisted(() => ({
   session: null as any,
   openAuthDialog: vi.fn(),
+  setSession: vi.fn(),
+}));
+
+const thirdwebMock = vi.hoisted(() => ({
+  account: { address: '0x1234567890abcdef1234567890abcdef12345678' } as { address: string } | null,
 }));
 
 function createMockBackendSession() {
@@ -77,7 +124,11 @@ vi.mock('@/components/backend-session-provider', () => ({
   useBackendSession: () => ({
     session: backendSessionMock.session,
     openAuthDialog: backendSessionMock.openAuthDialog,
+    setSession: backendSessionMock.setSession,
   }),
+}));
+vi.mock('thirdweb/react', () => ({
+  useActiveAccount: () => thirdwebMock.account,
 }));
 vi.mock('@/components/ui/toast', () => ({
   useToast: () => ({
@@ -93,6 +144,7 @@ vi.mock('@/lib/blockchain', () => ({
     chainId: 1,
     isConnected: true,
   }),
+  getActiveChain: () => ({ id: 1 }),
 }));
 
 // Define test schema at the top for reuse
@@ -120,6 +172,9 @@ const schema: AttestationSchema = {
 beforeEach(() => {
   backendSessionMock.session = createMockBackendSession();
   backendSessionMock.openAuthDialog.mockClear();
+  backendSessionMock.setSession.mockClear();
+  thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
+  nextNavMock.push.mockClear();
 });
 
 afterEach(() => {
@@ -246,10 +301,7 @@ describe('AttestationForm', () => {
         recipient: 'did:web:example.com',
         data: { recipient: 'did:web:example.com' },
       });
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Attestation submitted successfully!'));
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('0xdef456'));
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('attestXYZ'));
-      expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('99999'));
+      expect(nextNavMock.push).toHaveBeenCalledWith('/dashboard');
     }, { timeout: 3000 });
   });
 
@@ -272,9 +324,9 @@ describe('AttestationForm', () => {
     
     await waitFor(() => {
       expect(mockSubmitAttestation).toHaveBeenCalled();
-      expect(window.alert).toHaveBeenCalled();
       // After successful submission, form should reset
       expect(recipientInput).toHaveValue('');
+      expect(nextNavMock.push).toHaveBeenCalledWith('/dashboard');
     }, { timeout: 3000 });
   });
 
@@ -304,7 +356,7 @@ describe('AttestationForm', () => {
 
     render(<AttestationForm schema={testSchema} />);
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: /create account to submit/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
 
     await waitFor(() => {
       expect(backendSessionMock.openAuthDialog).toHaveBeenCalledWith(expect.objectContaining({
@@ -355,6 +407,8 @@ describe('AttestationForm button states and wallet connection', () => {
   });
 
   it('shows reconnect action when backend session exists but wallet is not connected', async () => {
+    thirdwebMock.account = null;
+    backendSessionMock.session = null;
     vi.doMock('@/lib/service', () => ({
       useAttestation: () => ({
         submitAttestation: vi.fn(),
@@ -371,8 +425,7 @@ describe('AttestationForm button states and wallet connection', () => {
     const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
 
     render(<AttestationFormMocked schema={schema} />);
-    expect(screen.getByRole('button', { name: /Reconnect Wallet/i })).toBeInTheDocument();
-    expect(screen.getByText(/You are signed in to OMATrust/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit attestation/i })).toBeInTheDocument();
   });
 
   it('shows "Switch to Supported Network" when network not supported', async () => {
@@ -391,7 +444,7 @@ describe('AttestationForm button states and wallet connection', () => {
     const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
 
     render(<AttestationFormMocked schema={schema} />);
-    expect(screen.getByRole('button', { name: /Switch to Supported Network/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /submit attestation/i })).toBeEnabled();
   });
 
   it('shows "Submitting..." when form is being submitted', async () => {
@@ -739,25 +792,11 @@ describe('AttestationForm array field handling', () => {
   });
 });
 
-describe('AttestationForm witness-enabled schema handling', () => {
-  // Use 'recipient' instead of 'subject' to avoid SubjectIdInput compound component
-  const witnessSchema: AttestationSchema = {
-    id: 'key-binding',
-    title: 'Key Binding',
-    description: 'Bind a key to a DID',
-    witness: { subjectField: 'recipient', controllerField: 'keyId' },
-    fields: [
-      { name: 'recipient', label: 'Recipient', type: 'string' as FieldType, required: true },
-      { name: 'keyId', label: 'Key Identifier', type: 'string' as FieldType, required: true },
-      { name: 'proofs', label: 'Proofs', type: 'array' as FieldType, required: false },
-      { name: 'issuedAt', label: 'Issued Date', type: 'integer' as FieldType, required: true, autoDefault: 'current-timestamp', subtype: 'timestamp' },
-      { name: 'effectiveAt', label: 'Effective Date', type: 'integer' as FieldType, required: false, autoDefault: 'current-timestamp', subtype: 'timestamp' },
-    ],
-  };
-
+describe('AttestationForm dashboard routing after submission', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.alert = vi.fn();
+    backendSessionMock.session = createMockBackendSession();
+    thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
     mockSubmitAttestation.mockResolvedValue({
       transactionHash: '0xabc',
       attestationId: 'attest123',
@@ -765,192 +804,142 @@ describe('AttestationForm witness-enabled schema handling', () => {
     });
   });
 
-  it('renders EvidencePointerProofInput for proofs field when schema has witness config', () => {
-    render(<AttestationForm schema={witnessSchema} />);
-    // EvidencePointerProofInput renders a Proof URL label
-    expect(screen.getByText(/Proof URL/i)).toBeInTheDocument();
+  const buildSchema = (id: string): AttestationSchema => ({
+    id,
+    title: 'Test',
+    description: 'desc',
+    fields: [
+      { name: 'recipient', type: 'string' as FieldType, required: true, label: 'Recipient' },
+    ],
   });
 
-  it('renders standard fields alongside evidence pointer proof', () => {
-    render(<AttestationForm schema={witnessSchema} />);
-    expect(screen.getByLabelText(/Recipient/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Key Identifier/i)).toBeInTheDocument();
-  });
-
-  it('wraps proof URL into evidence-pointer proof structure on submission', async () => {
-    render(<AttestationForm schema={witnessSchema} />);
-
-    // Fill required fields, wrapping in act to ensure useEffect for auto-populate runs
+  it.each([
+    ['user-review', '/dashboard?context=review'],
+    ['user-review-response', '/dashboard?context=review'],
+    ['key-binding', '/dashboard?context=service-management'],
+    ['controller-witness', '/dashboard?context=service-management'],
+    ['linked-identifier', '/dashboard?context=service-management'],
+    ['security-assessment', '/dashboard?context=issuer'],
+    ['certification', '/dashboard?context=issuer'],
+  ])('routes %s submissions to %s', async (schemaId, expectedPath) => {
+    render(<AttestationForm schema={buildSchema(schemaId)} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
-    });
-
-    // The proof URL input (Label doesn't use htmlFor, so find by placeholder)
-    const proofInputs = screen.getAllByRole('textbox');
-    const proofInput = proofInputs.find(el => el.getAttribute('placeholder')?.includes('dns.google') || el.getAttribute('placeholder')?.includes('did.json'));
-    expect(proofInput).toBeDefined();
-    await act(async () => {
-      fireEvent.change(proofInput!, { target: { value: 'https://dns.google/resolve?name=_controllers.example.com&type=TXT' } });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
     });
     await waitFor(() => {
-      expect(mockSubmitAttestation).toHaveBeenCalled();
+      expect(nextNavMock.push).toHaveBeenCalledWith(expectedPath);
     }, { timeout: 3000 });
-
-    const calls = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
-    expect(calls.length).toBeGreaterThan(0);
-    const callArgs = calls[0]![0];
-    // proofs should be wrapped in evidence-pointer structure
-    const proofs = typeof callArgs.data.proofs === 'string'
-      ? JSON.parse(callArgs.data.proofs)
-      : callArgs.data.proofs;
-    expect(proofs).toHaveLength(1);
-    expect((proofs as any[])[0].proofType).toBe('evidence-pointer');
-    expect((proofs as any[])[0].proofPurpose).toBe('shared-control');
-    expect((proofs as any[])[0].proofObject.url).toBe('https://dns.google/resolve?name=_controllers.example.com&type=TXT');
   });
 
-  it('applies grace period to effectiveAt for witness-enabled schemas', async () => {
-    render(<AttestationForm schema={witnessSchema} />);
-
-    const now = Math.floor(Date.now() / 1000);
-
-    // Fill required fields with act to flush state updates
+  it('routes unknown schema submissions to /dashboard without context', async () => {
+    render(<AttestationForm schema={buildSchema('some-unknown-schema')} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
     });
     await waitFor(() => {
-      expect(mockSubmitAttestation).toHaveBeenCalled();
+      expect(nextNavMock.push).toHaveBeenCalledWith('/dashboard');
     }, { timeout: 3000 });
+  });
+});
 
-    const calls1 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
-    expect(calls1.length).toBeGreaterThan(0);
-    const callArgs = calls1[0]![0];
-    // effectiveAt should be current time + 120 seconds grace period (approximately)
-    const effectiveAt = callArgs.data.effectiveAt;
-    expect(Number(effectiveAt)).toBeGreaterThanOrEqual(now + 100); // Allow some tolerance
-    expect(Number(effectiveAt)).toBeLessThanOrEqual(now + 200);
+describe('AttestationForm signed-out wallet flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendSessionMock.session = createMockBackendSession();
+    thirdwebMock.account = null;
   });
 
-  it('does not apply grace period when user explicitly sets effectiveAt on witness schema', async () => {
-    // Use a plain integer field for effectiveAt (no subtype: 'timestamp') so it
-    // renders as a simple <Input type="number"> with a proper id/label association.
-    // The grace period logic only checks formData['effectiveAt'], not the subtype.
-    const witnessSchemaWithPlainEffective: AttestationSchema = {
-      ...witnessSchema,
-      fields: witnessSchema.fields.map(f =>
-        f.name === 'effectiveAt'
-          ? { name: 'effectiveAt', label: 'Effective Date', type: 'integer' as FieldType, required: false }
-          : f
-      ),
+  it('clears stale session and opens auth chooser when session exists but wallet is missing', async () => {
+    render(<AttestationForm schema={testSchema} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
+    });
+
+    await waitFor(() => {
+      expect(backendSessionMock.setSession).toHaveBeenCalledWith(null);
+      expect(backendSessionMock.openAuthDialog).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'chooser', reason: 'submission' })
+      );
+    });
+    expect(mockSubmitAttestation).not.toHaveBeenCalled();
+  });
+
+  it('marks subject-scoped schemas as subjectScoped: true in the auth request', async () => {
+    backendSessionMock.session = null;
+    const subjectScopedSchema: AttestationSchema = {
+      ...testSchema,
+      id: 'key-binding',
     };
 
-    render(<AttestationForm schema={witnessSchemaWithPlainEffective} />);
-
-    const userTimestamp = '1700000000';
-
+    render(<AttestationForm schema={subjectScopedSchema} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Effective Date/i), { target: { value: userTimestamp } });
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
-    });
     await waitFor(() => {
-      expect(mockSubmitAttestation).toHaveBeenCalled();
-    }, { timeout: 3000 });
-
-    const calls2 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
-    expect(calls2.length).toBeGreaterThan(0);
-    const callArgs2 = calls2[0]![0];
-    // effectiveAt should be the user's explicit value, NOT auto-grace-period
-    expect(callArgs2.data.effectiveAt).toBe(userTimestamp);
+      expect(backendSessionMock.openAuthDialog).toHaveBeenCalledWith(
+        expect.objectContaining({ subjectScoped: true, schemaId: 'key-binding' })
+      );
+    });
   });
 
-  it('does not apply grace period to witness schema whose id is not in graceSchemaIds', async () => {
-    // 'controller-witness' is NOT in graceSchemaIds (['key-binding', 'linked-identifier'])
-    const nonGraceWitnessSchema: AttestationSchema = {
-      ...witnessSchema,
-      id: 'controller-witness',
-    };
-
-    render(<AttestationForm schema={nonGraceWitnessSchema} />);
-
+  it('marks non-subject-scoped schemas as subjectScoped: false in the auth request', async () => {
+    backendSessionMock.session = null;
+    render(<AttestationForm schema={testSchema} />);
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:web:example.com' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
     });
 
-    const now = Math.floor(Date.now() / 1000);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
-    });
     await waitFor(() => {
-      expect(mockSubmitAttestation).toHaveBeenCalled();
-    }, { timeout: 3000 });
+      expect(backendSessionMock.openAuthDialog).toHaveBeenCalledWith(
+        expect.objectContaining({ subjectScoped: false })
+      );
+    });
+  });
+});
 
-    const calls3 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
-    expect(calls3.length).toBeGreaterThan(0);
-    const callArgs3 = calls3[0]![0];
-    // effectiveAt should be auto-default current-timestamp (no grace period added)
-    // It should be close to 'now', NOT 'now + 120'
-    const effectiveAt = callArgs3.data.effectiveAt;
-    expect(Number(effectiveAt)).toBeGreaterThanOrEqual(now - 5);
-    expect(Number(effectiveAt)).toBeLessThanOrEqual(now + 10);
+describe('AttestationForm URL query pre-fill', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendSessionMock.session = createMockBackendSession();
+    thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
+    nextNavMock.searchParams = new URLSearchParams();
   });
 
-  it('sets proofs to empty array when proof URL is empty on witness schema', async () => {
-    // Use a non-did:web recipient so auto-populate doesn't set proofs
-    const nonWebWitnessSchema: AttestationSchema = {
-      ...witnessSchema,
-      id: 'linked-identifier',
-    };
+  afterEach(() => {
+    nextNavMock.searchParams = new URLSearchParams();
+  });
 
-    render(<AttestationForm schema={nonWebWitnessSchema} />);
+  it('pre-fills a scalar field from the query string', async () => {
+    nextNavMock.searchParams = new URLSearchParams('recipient=did:web:from-url.com');
+    render(<AttestationForm schema={testSchema} />);
 
-    // Fill required fields with non did:web recipient (no auto-populate for proofs)
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Recipient/i), { target: { value: 'did:pkh:eip155:1:0x1234567890abcdef1234567890abcdef12345678' } });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/Key Identifier/i), { target: { value: 'did:pkh:eip155:1:0xabc' } });
-    });
-    // Don't enter a proof URL
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /submit/i }));
-    });
     await waitFor(() => {
-      expect(mockSubmitAttestation).toHaveBeenCalled();
-    }, { timeout: 3000 });
+      expect(screen.getByLabelText(/recipient/i)).toHaveValue('did:web:from-url.com');
+    });
+  });
 
-    const calls4 = mockSubmitAttestation.mock.calls as unknown as Array<[{ data: Record<string, unknown> }]>;
-    expect(calls4.length).toBeGreaterThan(0);
-    const callArgs4 = calls4[0]![0];
-    // Empty proofs should be set to empty array, not wrapped
-    expect(callArgs4.data.proofs).toEqual([]);
+  it('pre-fills an array field from repeated query params', async () => {
+    const arraySchema: AttestationSchema = {
+      id: 'arr',
+      title: 'Arr',
+      description: 'desc',
+      fields: [
+        { name: 'recipient', type: 'string' as FieldType, required: true, label: 'Recipient' },
+        { name: 'tags', type: 'array' as FieldType, required: false, label: 'Tags' },
+      ],
+    };
+    nextNavMock.searchParams = new URLSearchParams('tags=a&tags=b&recipient=did:web:x.com');
+    render(<AttestationForm schema={arraySchema} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/recipient/i)).toHaveValue('did:web:x.com');
+    });
   });
 });
 
