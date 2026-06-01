@@ -37,8 +37,11 @@ describe('TimestampInput', () => {
     expect(input).toBeInTheDocument();
   });
 
-  it('calls onChange with timestamp when datetime-local value changes', () => {
+  it('calls onChange with timestamp when datetime-local value changes', async () => {
+    const user = userEvent.setup();
     render(<TimestampInput {...defaultProps} value="" hasAutoDefault />);
+    // Picker is hidden when checkbox is unchecked - tick the checkbox first.
+    await user.click(screen.getByRole('checkbox'));
     const picker = document.querySelector('input[type="datetime-local"]');
     expect(picker).toBeInTheDocument();
     fireEvent.change(picker!, { target: { value: '2009-02-14T00:31' } });
@@ -54,8 +57,17 @@ describe('TimestampInput', () => {
     expect(container).toBeInTheDocument();
   });
 
-  it('shows empty datetime-local when value is 0 or empty', () => {
+  it('hides datetime-local picker when value is 0 (checkbox unchecked)', () => {
     render(<TimestampInput {...defaultProps} value="0" hasAutoDefault />);
+    const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+  });
+
+  it('shows empty datetime-local once the user opts into custom date', async () => {
+    const user = userEvent.setup();
+    render(<TimestampInput {...defaultProps} value="0" hasAutoDefault />);
+    await user.click(screen.getByRole('checkbox'));
     const picker = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
     expect(picker).toBeInTheDocument();
     expect(picker.value).toBe('');
@@ -69,12 +81,19 @@ describe('TimestampInput', () => {
     expect(defaultProps.onChange).toHaveBeenCalledWith('0');
   });
 
-  it('shows disabled picker when hasAutoDefault and checkbox unchecked', () => {
+  it('hides datetime picker when hasAutoDefault and checkbox unchecked', () => {
     render(<TimestampInput {...defaultProps} hasAutoDefault />);
-    const picker = document.querySelector('input[type="datetime-local"]');
-    expect(picker).toBeInTheDocument();
-    expect(picker).toBeDisabled();
-    expect(picker?.className).toMatch(/opacity-50|cursor-not-allowed/);
+    const checkbox = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+  });
+
+  it('shows picker once the override checkbox is toggled on', async () => {
+    const user = userEvent.setup();
+    render(<TimestampInput {...defaultProps} hasAutoDefault />);
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    await user.click(screen.getByRole('checkbox'));
+    expect(document.querySelector('input[type="datetime-local"]')).toBeInTheDocument();
   });
 
   it('timestampToDatetimeLocal: value as string number shows formatted date', () => {

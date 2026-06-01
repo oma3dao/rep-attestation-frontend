@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 
 vi.mock('next/font/google', () => ({
-  Inter: () => ({ className: 'inter-class' }),
+  Inter: () => ({ className: 'inter-class', variable: '--font-inter' }),
+  JetBrains_Mono: () => ({ className: 'jetbrains-mono-class', variable: '--font-jetbrains-mono' }),
 }));
 
 vi.mock('next/script', () => ({

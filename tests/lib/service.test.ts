@@ -21,6 +21,12 @@ vi.mock('thirdweb/react', () => ({
   useActiveWalletChain: vi.fn(),
 }));
 
+// The EAS client now reads the backend session; provide a benign default so the
+// hook can mount outside of a BackendSessionProvider.
+vi.mock('@/components/backend-session-provider', () => ({
+  useBackendSession: () => ({ session: null }),
+}));
+
 // Minimal valid AttestationData for tests
 const validAttestationData = { schemaId: 'schema', recipient: 'did:web:example.com', data: {} };
 function mockWallet(overrides = {}): ReturnType<typeof walletModule.useWallet> {
@@ -266,7 +272,9 @@ describe('controller witness integration in useAttestation', () => {
     vi.restoreAllMocks();
   });
 
-  it('fires controller witness call when schema has witness config and attestation succeeds', async () => {
+  it('does not fire a controller witness call from useAttestation even for witness-configured schemas', async () => {
+    // The controller-witness flow was moved out of useAttestation; submitting an
+    // attestation should no longer trigger callControllerWitness directly.
     const fakeResult = { transactionHash: '0xabc', attestationId: '0xattest123' };
     const easCreateAttestation = vi.fn().mockResolvedValue(fakeResult);
 
@@ -281,7 +289,6 @@ describe('controller witness integration in useAttestation', () => {
     );
     vi.spyOn(attestationServices, 'getContractAddress').mockReturnValue('0xeascontract');
 
-    // Mock getSchema to return a schema with witness config
     const schemasModule = await import('@/config/schemas');
     vi.spyOn(schemasModule, 'getSchema').mockReturnValue({
       id: 'key-binding',
@@ -290,11 +297,10 @@ describe('controller witness integration in useAttestation', () => {
       fields: [],
       witness: { subjectField: 'subject', controllerField: 'keyId' },
       deployedUIDs: { 66238: '0xschemauid' },
-    });
+    } as any);
 
-    // Mock callControllerWitness
     const cwModule = await import('@/lib/controller-witness-client');
-    vi.spyOn(cwModule, 'callControllerWitness').mockResolvedValue({ uid: '0xwitness', txHash: '0xwittx' });
+    vi.spyOn(cwModule, 'callControllerWitness').mockResolvedValue(undefined);
 
     const attestationData = {
       schemaId: 'key-binding',
@@ -316,17 +322,10 @@ describe('controller witness integration in useAttestation', () => {
     expect(easCreateAttestation).toHaveBeenCalledWith(attestationData);
     expect(result!.result.current.lastResult).toEqual(fakeResult);
 
-    // Give time for the non-blocking witness call
+    // Give time for any (now-removed) non-blocking call to have fired.
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    expect(cwModule.callControllerWitness).toHaveBeenCalledWith({
-      attestationUid: '0xattest123',
-      chainId: 66238,
-      easContract: '0xeascontract',
-      schemaUid: '0xschemauid',
-      subject: 'did:web:example.com',
-      controller: 'did:pkh:eip155:1:0xabc',
-    });
+    expect(cwModule.callControllerWitness).not.toHaveBeenCalled();
   });
 
   it('does not fire controller witness when schema has no witness config', async () => {
@@ -573,14 +572,7 @@ describe('controller witness integration in useAttestation', () => {
     expect(cwModule.callControllerWitness).not.toHaveBeenCalled();
   });
 
-  it('does not affect attestation result when callControllerWitness rejects', async () => {
-    // The source code uses .then() without .catch() on the fire-and-forget witness call.
-    // This causes an unhandled promise rejection when the mock rejects. We capture it
-    // to prevent Vitest from reporting it as a test failure.
-    const rejections: Error[] = [];
-    const handler = (reason: unknown) => { rejections.push(reason as Error); };
-    process.on('unhandledRejection', handler);
-
+  it('returns the attestation result and leaves the witness client untouched', async () => {
     const fakeResult = { transactionHash: '0xabc', attestationId: '0xattest_reject' };
     const easCreateAttestation = vi.fn().mockResolvedValue(fakeResult);
 
@@ -603,11 +595,10 @@ describe('controller witness integration in useAttestation', () => {
       fields: [],
       witness: { subjectField: 'subject', controllerField: 'keyId' },
       deployedUIDs: { 66238: '0xschemauid' },
-    });
+    } as any);
 
-    // Mock callControllerWitness to REJECT
     const cwModule = await import('@/lib/controller-witness-client');
-    vi.spyOn(cwModule, 'callControllerWitness').mockRejectedValue(new Error('witness API down'));
+    const witnessSpy = vi.spyOn(cwModule, 'callControllerWitness').mockResolvedValue(undefined);
 
     const attestationData = {
       schemaId: 'key-binding',
@@ -626,15 +617,10 @@ describe('controller witness integration in useAttestation', () => {
       await result!.result.current.submitAttestation(attestationData, 66238);
     });
 
-    // The attestation itself should still succeed despite witness rejection
     expect(result!.result.current.lastResult).toEqual(fakeResult);
     expect(result!.result.current.lastError).toBeNull();
 
-    // Give time for the fire-and-forget promise to settle
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(cwModule.callControllerWitness).toHaveBeenCalled();
-
-    // Clean up rejection handler
-    process.removeListener('unhandledRejection', handler);
+    expect(witnessSpy).not.toHaveBeenCalled();
   });
 }); 

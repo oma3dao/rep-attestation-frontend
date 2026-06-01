@@ -5,7 +5,6 @@ import {
   EAS_CONFIG,
   ATTESTATION_SERVICES,
   ATTESTATION_QUERY_CONFIG,
-  CONTROLLER_WITNESS_CONFIG,
   getAttestationService,
   getServicesForChain,
   getContractAddress,
@@ -112,23 +111,6 @@ describe('attestation-services config', () => {
         expect(typeof service.contracts).toBe('object');
         expect(Array.isArray(service.features)).toBe(true);
       });
-    });
-  });
-
-  describe('CONTROLLER_WITNESS_CONFIG', () => {
-    it('has grace period for key-binding and linked-identifier schemas', () => {
-      expect(CONTROLLER_WITNESS_CONFIG.graceSchemaIds).toContain('key-binding');
-      expect(CONTROLLER_WITNESS_CONFIG.graceSchemaIds).toContain('linked-identifier');
-      expect(CONTROLLER_WITNESS_CONFIG.graceSchemaIds).toHaveLength(2);
-    });
-
-    it('has a positive grace period in seconds', () => {
-      expect(CONTROLLER_WITNESS_CONFIG.graceSeconds).toBeGreaterThan(0);
-      expect(typeof CONTROLLER_WITNESS_CONFIG.graceSeconds).toBe('number');
-    });
-
-    it('grace period is 120 seconds (2 minutes)', () => {
-      expect(CONTROLLER_WITNESS_CONFIG.graceSeconds).toBe(120);
     });
   });
 

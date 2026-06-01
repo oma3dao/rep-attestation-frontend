@@ -1,20 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  callControllerWitness,
-} from '@/lib/controller-witness-client'
+import { callControllerWitness } from '@/lib/controller-witness-client'
 import * as loggerModule from '@/lib/logger'
 
-// Mock the logger
 vi.mock('@/lib/logger', () => ({
   default: { log: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('@/lib/service-urls', () => ({
+  getBackendOrigin: () => 'https://backend.test',
+}))
+
+const WITNESS_URL = 'https://backend.test/api/private/controller-witness'
+
 describe('controller-witness-client', () => {
   const baseParams = {
-    attestationUid: '0xabc123',
-    chainId: 66238,
-    easContract: '0xeascontract',
-    schemaUid: '0xschemauid',
     subject: 'did:web:example.com',
     controller: 'did:pkh:eip155:1:0xwallet',
   }
@@ -28,303 +27,104 @@ describe('controller-witness-client', () => {
     vi.restoreAllMocks()
   })
 
-  it('tries dns-txt first and returns result on success', async () => {
-    const successResponse = {
-      uid: '0xwitness',
-      txHash: '0xtx',
-      observedAt: 1700000000,
-    }
-
+  function mockFetchResponse(body: unknown, status = 200) {
     ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify(successResponse), {
-        status: 200,
+      new Response(JSON.stringify(body), {
+        status,
         headers: { 'Content-Type': 'application/json' },
       })
     )
+  }
 
-    const result = await callControllerWitness(baseParams)
-
-    expect(result).toEqual(successResponse)
-    expect(global.fetch).toHaveBeenCalledTimes(1)
-
-    // Verify dns-txt was the method used
-    const body = JSON.parse(
-      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body
-    )
-    expect(body.method).toBe('dns-txt')
-  })
-
-  it('falls back to did-json when dns-txt fails (non-ok response)', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    // dns-txt returns 404
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'EVIDENCE_NOT_FOUND' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    // did-json returns success
-    const successResponse = { uid: '0xwitness2', txHash: '0xtx2' }
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(successResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    const result = await callControllerWitness(baseParams)
-
-    expect(result).toEqual(successResponse)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-
-    // Verify methods
-    const call1Body = JSON.parse(fetchMock.mock.calls[0][1].body)
-    const call2Body = JSON.parse(fetchMock.mock.calls[1][1].body)
-    expect(call1Body.method).toBe('dns-txt')
-    expect(call2Body.method).toBe('did-json')
-  })
-
-  it('falls back to did-json when dns-txt throws an exception', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    // dns-txt throws
-    fetchMock.mockRejectedValueOnce(new Error('Network error'))
-
-    // did-json returns success
-    const successResponse = { uid: '0xwitness3' }
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(successResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    const result = await callControllerWitness(baseParams)
-
-    expect(result).toEqual(successResponse)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('returns undefined when all methods fail', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    // Both methods return errors
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'EVIDENCE_NOT_FOUND' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'EVIDENCE_NOT_FOUND' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    const result = await callControllerWitness(baseParams)
-
-    expect(result).toBeUndefined()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('returns undefined when all methods throw exceptions', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    fetchMock.mockRejectedValueOnce(new Error('dns-txt error'))
-    fetchMock.mockRejectedValueOnce(new Error('did-json error'))
-
-    const result = await callControllerWitness(baseParams)
-
-    expect(result).toBeUndefined()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('sends correct request payload including all fields', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ uid: '0x1' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
+  it('posts to the private controller-witness endpoint with the mapped payload', async () => {
+    mockFetchResponse({ success: true, uid: '0x1', method: 'dns-txt', txHash: '0xtx' })
 
     await callControllerWitness(baseParams)
 
+    expect(global.fetch).toHaveBeenCalledTimes(1)
     const [url, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
-    const body = JSON.parse(options.body)
+    expect(url).toBe(WITNESS_URL)
+    expect(options.method).toBe('POST')
+    expect(options.credentials).toBe('include')
+    expect(options.headers['Content-Type']).toBe('application/json')
+    expect(JSON.parse(options.body)).toEqual({
+      subjectDid: baseParams.subject,
+      controllerDid: baseParams.controller,
+    })
+  })
 
-    expect(body).toEqual({
-      ...baseParams,
+  it('returns the parsed witness result on success', async () => {
+    const successResponse = {
+      success: true,
+      uid: '0xwitness',
+      txHash: '0xtx',
+      blockNumber: 123,
+      observedAt: 1700000000,
+      method: 'dns-txt',
+    }
+    mockFetchResponse(successResponse)
+
+    const result = await callControllerWitness(baseParams)
+
+    expect(result).toEqual(successResponse)
+  })
+
+  it('returns undefined and logs an API error on a non-ok response', async () => {
+    mockFetchResponse({ error: 'EVIDENCE_NOT_FOUND' }, 404)
+
+    const result = await callControllerWitness(baseParams)
+
+    expect(result).toBeUndefined()
+    expect(loggerModule.default.log).toHaveBeenCalledWith(
+      '[controller-witness] API error:',
+      404,
+      expect.objectContaining({ error: 'EVIDENCE_NOT_FOUND' })
+    )
+  })
+
+  it('returns undefined and logs an error when fetch throws', async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'))
+
+    const result = await callControllerWitness(baseParams)
+
+    expect(result).toBeUndefined()
+    expect(loggerModule.default.log).toHaveBeenCalledWith(
+      '[controller-witness] Error:',
+      expect.any(Error)
+    )
+  })
+
+  it('logs the start of the witness call with subject and controller', async () => {
+    mockFetchResponse({ success: true, uid: '0x1' })
+
+    await callControllerWitness(baseParams)
+
+    expect(loggerModule.default.log).toHaveBeenCalledWith(
+      '[controller-witness] Starting witness call:',
+      expect.objectContaining({
+        subject: baseParams.subject,
+        controller: baseParams.controller,
+      })
+    )
+  })
+
+  it('logs success with the witness details', async () => {
+    mockFetchResponse({
+      success: true,
+      uid: '0xwitness',
+      txHash: '0xtx',
       method: 'dns-txt',
     })
-    expect(options.headers['Content-Type']).toBe('application/json')
-    expect(options.method).toBe('POST')
-  })
-
-  it('uses NEXT_PUBLIC_CONTROLLER_WITNESS_URL env when set', async () => {
-    // The URL is read at module init time, so we need to reset modules
-    vi.resetModules()
-
-    // Set the env before importing
-    process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL = 'https://custom-gateway.com/v1/cw'
-
-    const mod = await import('@/lib/controller-witness-client')
-
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ uid: '0x1' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await mod.callControllerWitness(baseParams)
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      'https://custom-gateway.com/v1/cw',
-      expect.any(Object)
-    )
-
-    // Cleanup
-    delete process.env.NEXT_PUBLIC_CONTROLLER_WITNESS_URL
-  })
-
-  it('logs the start of witness call', async () => {
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ uid: '0x1' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await callControllerWitness(baseParams)
-
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] Starting witness call:',
-      expect.objectContaining({
-        attestationUid: baseParams.attestationUid,
-        subject: baseParams.subject,
-        controller: baseParams.controller,
-      })
-    )
-  })
-
-  it('logs success with witness details', async () => {
-    const successResponse = {
-      uid: '0xwitness',
-      txHash: '0xtx',
-      observedAt: 1700000000,
-      existing: false,
-    }
-
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify(successResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
 
     await callControllerWitness(baseParams)
 
     expect(loggerModule.default.log).toHaveBeenCalledWith(
       '[controller-witness] Witness attestation created:',
       expect.objectContaining({
-        method: 'dns-txt',
         uid: '0xwitness',
+        method: 'dns-txt',
         txHash: '0xtx',
       })
-    )
-  })
-
-  it('logs all-methods-failed summary when API returns non-ok for all methods', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    // dns-txt returns 404 with specific error code
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'EVIDENCE_NOT_FOUND' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    // did-json returns 500 with server error code
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'INTERNAL_ERROR' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await callControllerWitness(baseParams)
-
-    // Current implementation logs start + all-methods-failed summary.
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] Starting witness call:',
-      expect.objectContaining({
-        attestationUid: baseParams.attestationUid,
-        subject: baseParams.subject,
-        controller: baseParams.controller,
-      })
-    )
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] All methods failed (non-blocking)'
-    )
-  })
-
-  it('logs fallback success when first method throws and second succeeds', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    // dns-txt throws a network error
-    fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'))
-
-    // did-json succeeds, so client should log final witness creation.
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ uid: '0xrecovered' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await callControllerWitness(baseParams)
-
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] Starting witness call:',
-      expect.objectContaining({
-        attestationUid: baseParams.attestationUid,
-        subject: baseParams.subject,
-        controller: baseParams.controller,
-      })
-    )
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] Witness attestation created:',
-      expect.objectContaining({
-        method: 'did-json',
-        uid: '0xrecovered',
-      })
-    )
-  })
-
-  it('logs when all methods fail', async () => {
-    const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'err' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ code: 'err' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await callControllerWitness(baseParams)
-
-    expect(loggerModule.default.log).toHaveBeenCalledWith(
-      '[controller-witness] All methods failed (non-blocking)'
     )
   })
 })

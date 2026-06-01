@@ -4,9 +4,13 @@ import * as config from '@/config/index';
 describe('config index', () => {
   it('exports schemas', () => {
     expect(config.certificationSchema).toBeDefined();
-    expect(config.endorsementSchema).toBeDefined();
     expect(config.linkedIdentifierSchema).toBeDefined();
     expect(config.userReviewSchema).toBeDefined();
+    expect(config.keyBindingSchema).toBeDefined();
+    expect(config.controllerWitnessSchema).toBeDefined();
+    expect(config.userReviewResponseSchema).toBeDefined();
+    expect(config.securityAssessmentSchema).toBeDefined();
+    expect(config.commonSchema).toBeDefined();
     expect(config.getSchema).toBeDefined();
     expect(config.getSchemaIds).toBeDefined();
     expect(config.getAllSchemas).toBeDefined();
@@ -22,26 +26,34 @@ describe('config index', () => {
   });
 
   it('exports all expected functions and objects', () => {
-    // Verify that all expected exports are available
     const expectedExports = [
       'certificationSchema',
-      'endorsementSchema', 
+      'commonSchema',
+      'controllerWitnessSchema',
+      'keyBindingSchema',
       'linkedIdentifierSchema',
+      'securityAssessmentSchema',
+      'userReviewResponseSchema',
       'userReviewSchema',
       'getSchema',
       'getSchemaIds',
       'getAllSchemas',
       'BAS_CONFIG',
+      'EAS_CONFIG',
       'ATTESTATION_SERVICES',
       'getAttestationService',
       'getServicesForChain',
       'getContractAddress',
       'getAllServiceIds'
     ];
-    
+
     expectedExports.forEach(exportName => {
       expect(config).toHaveProperty(exportName);
     });
+  });
+
+  it('does not export the removed endorsement schema', () => {
+    expect((config as Record<string, unknown>).endorsementSchema).toBeUndefined();
   });
 
   it('exports functions are callable', () => {

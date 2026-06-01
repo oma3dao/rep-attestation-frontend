@@ -69,11 +69,14 @@ vi.mock('@/components/did-key-input', () => ({
 }));
 
 describe('SubjectIdInput', () => {
-  it('renders method selector and info banner', () => {
+  it('renders method selector with its label and a help-icon tooltip trigger', () => {
     const onChange = vi.fn();
     render(<SubjectIdInput onChange={onChange} />);
     expect(screen.getByTestId('subject-method-select')).toBeInTheDocument();
-    expect(screen.getByText(/What is a Subject ID/i)).toBeInTheDocument();
+    expect(screen.getByText(/^ID Type$/)).toBeInTheDocument();
+    // The info banner was replaced with a HelpCircle tooltip trigger
+    // (the actual tooltip text only appears on hover via radix portal).
+    expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
   });
 
   it('shows did:web input when did:web is selected', () => {
