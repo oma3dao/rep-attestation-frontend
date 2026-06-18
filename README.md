@@ -103,10 +103,9 @@ src/
 │   └── providers.tsx     # ThirdWeb provider setup
 ├── config/                # Configuration files
 │   ├── schemas.ts        # Attestation schema definitions
-│   └── attestation-services.ts # BAS and other service configs
+│   └── attestation-services.ts # EAS attestation service config
 ├── lib/                   # Utility functions and configurations
 │   ├── blockchain.ts     # Wallet hooks and chain management
-│   ├── bas.ts           # Binance Attestation Service client
 │   ├── service.ts       # High-level attestation service layer
 │   └── schemas.ts       # Schema processing and utilities
 └── styles/               # Global styles

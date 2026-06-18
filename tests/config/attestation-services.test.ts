@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bsc, bscTestnet } from 'thirdweb/chains';
 import {
-  BAS_CONFIG,
   EAS_CONFIG,
   ATTESTATION_SERVICES,
   ATTESTATION_QUERY_CONFIG,
@@ -9,49 +7,10 @@ import {
   getServicesForChain,
   getContractAddress,
   getAllServiceIds,
-  type AttestationServiceConfig
 } from '@/config/attestation-services';
-import { CHAIN_IDS } from '@/config/chains';
+import { omachainTestnet, omachainMainnet } from '@/config/chains';
 
 describe('attestation-services config', () => {
-  describe('BAS_CONFIG', () => {
-    it('has correct basic properties', () => {
-      expect(BAS_CONFIG.id).toBe('bas');
-      expect(BAS_CONFIG.name).toBe('Binance Attestation Service');
-      expect(BAS_CONFIG.description).toContain('Decentralized attestation service');
-      expect(BAS_CONFIG.website).toBe('https://docs.bnbchain.org/bas/');
-      expect(BAS_CONFIG.docs).toBe('https://docs.bnbchain.org/bas/developer-guide/');
-    });
-
-    it('has supported chains', () => {
-      expect(Array.isArray(BAS_CONFIG.supportedChains)).toBe(true);
-      expect(BAS_CONFIG.supportedChains).toContain(bscTestnet.id);
-      expect(BAS_CONFIG.supportedChains).toContain(bsc.id);
-    });
-
-    it('has contract addresses for supported chains', () => {
-      expect(BAS_CONFIG.contracts).toBeDefined();
-      expect(typeof BAS_CONFIG.contracts).toBe('object');
-      expect(BAS_CONFIG.contracts[bscTestnet.id]).toBe('0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD');
-      expect(BAS_CONFIG.contracts[bsc.id]).toBe('0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC');
-    });
-
-    it('has features array', () => {
-      expect(Array.isArray(BAS_CONFIG.features)).toBe(true);
-      expect(BAS_CONFIG.features.length).toBeGreaterThan(0);
-      expect(BAS_CONFIG.features).toContain('On-chain attestations');
-      expect(BAS_CONFIG.features).toContain('Schema registry');
-      expect(BAS_CONFIG.features).toContain('Revocation support');
-    });
-
-    it('has estimated gas costs', () => {
-      expect(BAS_CONFIG.estimatedGasCost).toBeDefined();
-      expect(typeof BAS_CONFIG.estimatedGasCost).toBe('object');
-      expect(BAS_CONFIG.estimatedGasCost?.[bscTestnet.id]).toBe(BigInt('100000'));
-      expect(BAS_CONFIG.estimatedGasCost?.[bsc.id]).toBe(BigInt('100000'));
-    });
-  });
-
   describe('EAS_CONFIG', () => {
     it('has correct basic properties', () => {
       expect(EAS_CONFIG.id).toBe('eas');
@@ -62,12 +21,12 @@ describe('attestation-services config', () => {
     });
 
     it('supports OMAChain Testnet and Mainnet', () => {
-      expect(EAS_CONFIG.supportedChains).toContain(CHAIN_IDS.OMACHAIN_TESTNET);
-      expect(EAS_CONFIG.supportedChains).toContain(CHAIN_IDS.OMACHAIN_MAINNET);
+      expect(EAS_CONFIG.supportedChains).toContain(omachainTestnet.id);
+      expect(EAS_CONFIG.supportedChains).toContain(omachainMainnet.id);
     });
 
     it('has contract addresses for OMAChain', () => {
-      expect(EAS_CONFIG.contracts[CHAIN_IDS.OMACHAIN_TESTNET]).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
+      expect(EAS_CONFIG.contracts[omachainTestnet.id]).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
     });
 
     it('has OMAChain native feature', () => {
@@ -75,21 +34,20 @@ describe('attestation-services config', () => {
     });
 
     it('has estimated gas costs for OMAChain', () => {
-      expect(EAS_CONFIG.estimatedGasCost?.[CHAIN_IDS.OMACHAIN_TESTNET]).toBe(BigInt('100000'));
-      expect(EAS_CONFIG.estimatedGasCost?.[CHAIN_IDS.OMACHAIN_MAINNET]).toBe(BigInt('100000'));
+      expect(EAS_CONFIG.estimatedGasCost?.[omachainTestnet.id]).toBe(BigInt('100000'));
+      expect(EAS_CONFIG.estimatedGasCost?.[omachainMainnet.id]).toBe(BigInt('100000'));
     });
   });
 
   describe('ATTESTATION_SERVICES', () => {
-    it('exports services object with BAS_CONFIG and EAS_CONFIG', () => {
+    it('exports EAS-only services object', () => {
       expect(ATTESTATION_SERVICES).toBeDefined();
       expect(typeof ATTESTATION_SERVICES).toBe('object');
-      expect(ATTESTATION_SERVICES.bas).toBe(BAS_CONFIG);
       expect(ATTESTATION_SERVICES.eas).toBe(EAS_CONFIG);
     });
 
-    it('has exactly two services', () => {
-      expect(Object.keys(ATTESTATION_SERVICES)).toHaveLength(2);
+    it('has exactly one service', () => {
+      expect(Object.keys(ATTESTATION_SERVICES)).toHaveLength(1);
     });
 
     it('has correct structure for each service', () => {
@@ -140,32 +98,23 @@ describe('attestation-services config', () => {
 
   describe('getAttestationService function', () => {
     it('returns service for valid ID', () => {
-      expect(getAttestationService('bas')).toBe(BAS_CONFIG);
       expect(getAttestationService('eas')).toBe(EAS_CONFIG);
     });
 
     it('returns undefined for invalid ID', () => {
       expect(getAttestationService('non-existent')).toBeUndefined();
       expect(getAttestationService('')).toBeUndefined();
+      expect(getAttestationService('bas')).toBeUndefined();
     });
   });
 
   describe('getServicesForChain function', () => {
-    it('returns BAS for BSC chains', () => {
-      const bscTestnetServices = getServicesForChain(bscTestnet.id);
-      expect(Array.isArray(bscTestnetServices)).toBe(true);
-      expect(bscTestnetServices.length).toBeGreaterThan(0);
-      expect(bscTestnetServices).toContain(BAS_CONFIG);
-
-      const bscServices = getServicesForChain(bsc.id);
-      expect(Array.isArray(bscServices)).toBe(true);
-      expect(bscServices.length).toBeGreaterThan(0);
-      expect(bscServices).toContain(BAS_CONFIG);
-    });
-
     it('returns EAS for OMAChain', () => {
-      const omachainTestnetServices = getServicesForChain(CHAIN_IDS.OMACHAIN_TESTNET);
+      const omachainTestnetServices = getServicesForChain(omachainTestnet.id);
       expect(omachainTestnetServices).toContain(EAS_CONFIG);
+
+      const omachainMainnetServices = getServicesForChain(omachainMainnet.id);
+      expect(omachainMainnetServices).toContain(EAS_CONFIG);
     });
 
     it('returns empty array for unsupported chain', () => {
@@ -176,27 +125,22 @@ describe('attestation-services config', () => {
   });
 
   describe('getContractAddress function', () => {
-    it('returns contract address for valid service and chain', () => {
-      expect(getContractAddress('bas', bscTestnet.id)).toBe('0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD');
-      expect(getContractAddress('bas', bsc.id)).toBe('0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC');
-    });
-
     it('returns contract address for EAS on OMAChain', () => {
-      expect(getContractAddress('eas', CHAIN_IDS.OMACHAIN_TESTNET)).toBe(
+      expect(getContractAddress('eas', omachainTestnet.id)).toBe(
         '0x8835AF90f1537777F52E482C8630cE4e947eCa32'
       );
     });
 
     it('returns undefined for invalid service', () => {
-      expect(getContractAddress('non-existent', bscTestnet.id)).toBeUndefined();
+      expect(getContractAddress('non-existent', omachainTestnet.id)).toBeUndefined();
     });
 
     it('returns undefined for unsupported chain', () => {
-      expect(getContractAddress('bas', 999999)).toBeUndefined();
+      expect(getContractAddress('eas', 999999)).toBeUndefined();
     });
 
     it('returns undefined for empty service ID', () => {
-      expect(getContractAddress('', bscTestnet.id)).toBeUndefined();
+      expect(getContractAddress('', omachainTestnet.id)).toBeUndefined();
     });
   });
 
@@ -204,8 +148,8 @@ describe('attestation-services config', () => {
     it('returns all service IDs', () => {
       const ids = getAllServiceIds();
       expect(Array.isArray(ids)).toBe(true);
-      expect(ids).toContain('bas');
       expect(ids).toContain('eas');
+      expect(ids).not.toContain('bas');
     });
 
     it('returns array of strings', () => {
@@ -217,22 +161,8 @@ describe('attestation-services config', () => {
   });
 
   describe('service validation', () => {
-    it('all services have correct contract addresses for supported chains', () => {
-      const expectedContracts: Record<string, Record<number, string>> = {
-        bas: {
-          97: '0x6c2270298b1e6046898a322acB3Cbad6F99f7CBD',
-          56: '0x247Fe62d887bc9410c3848DF2f322e52DA9a51bC',
-        },
-        eas: {
-          [CHAIN_IDS.OMACHAIN_TESTNET]: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
-        },
-      };
-      for (const [serviceId, chains] of Object.entries(expectedContracts)) {
-        const service = getAttestationService(serviceId);
-        for (const [chainId, expectedAddr] of Object.entries(chains)) {
-          expect(service!.contracts[Number(chainId)]).toBe(expectedAddr);
-        }
-      }
+    it('EAS has correct contract addresses for supported chains', () => {
+      expect(EAS_CONFIG.contracts[omachainTestnet.id]).toBe('0x8835AF90f1537777F52E482C8630cE4e947eCa32');
     });
 
     it('all services have estimated gas costs for supported chains', () => {
@@ -259,4 +189,4 @@ describe('attestation-services config', () => {
       });
     });
   });
-}); 
+});
