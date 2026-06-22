@@ -26,7 +26,6 @@ export default defineConfig({
     },
     exclude: [
       'node_modules/**',
-      'tests/lib/bas.test.ts', // BAS is deprecated, no longer supported
     ],
     coverage: {
       provider: 'v8',

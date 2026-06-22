@@ -17,7 +17,7 @@ describe('config index', () => {
   });
 
   it('exports attestation services', () => {
-    expect(config.BAS_CONFIG).toBeDefined();
+    expect(config.EAS_CONFIG).toBeDefined();
     expect(config.ATTESTATION_SERVICES).toBeDefined();
     expect(config.getAttestationService).toBeDefined();
     expect(config.getServicesForChain).toBeDefined();
@@ -38,7 +38,6 @@ describe('config index', () => {
       'getSchema',
       'getSchemaIds',
       'getAllSchemas',
-      'BAS_CONFIG',
       'EAS_CONFIG',
       'ATTESTATION_SERVICES',
       'getAttestationService',

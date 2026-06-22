@@ -59,8 +59,8 @@ describe('useWallet', () => {
     expect(result.current.isConnected).toBe(true)
     expect(result.current.address).toBe('0x123')
     expect(result.current.chainId).toBe(97)
-    expect(result.current.isChainSupported).toBe(true)
-    expect(result.current.isAttestationSupported).toBe(true)
+    expect(result.current.isChainSupported).toBe(false)
+    expect(result.current.isAttestationSupported).toBe(false)
     expect(result.current.account).toEqual(mockAccount)
     expect(result.current.chain.id).toBe(97) // Active chain from environment
     expect(result.current.supportedChainIds).toEqual([66238, 6623, 97, 56, 11155111, 1, 84532, 8453])
@@ -78,8 +78,8 @@ describe('useWallet', () => {
     mockedUseActiveWalletChain.mockImplementation(() => undefined)
     const { result } = renderHook(() => useWallet())
     expect(result.current.chainId).toBe(97)
-    expect(result.current.isChainSupported).toBe(true)
-    expect(result.current.isAttestationSupported).toBe(true)
+    expect(result.current.isChainSupported).toBe(false)
+    expect(result.current.isAttestationSupported).toBe(false)
   })
 
   it('returns isChainSupported and isAttestationSupported false for unsupported chain', () => {

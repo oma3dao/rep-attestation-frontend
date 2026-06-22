@@ -1,4 +1,4 @@
-import { CHAIN_IDS, omachainTestnet, omachainMainnet, bscTestnet, bscMainnet } from './chains'
+import { omachainTestnet, omachainMainnet } from './chains'
 
 // Attestation service configuration
 export interface AttestationServiceConfig {
@@ -13,53 +13,6 @@ export interface AttestationServiceConfig {
   estimatedGasCost?: Record<number, bigint> // chainId -> gas cost in wei
 }
 
-// BAS (Binance Attestation Service) Configuration
-export const BAS_CONFIG: AttestationServiceConfig = {
-  id: 'bas',
-  name: 'Binance Attestation Service',
-  description: 'Decentralized attestation service built on BNB Smart Chain',
-  website: 'https://docs.bnbchain.org/bas/',
-  docs: 'https://docs.bnbchain.org/bas/developer-guide/',
-  supportedChains: [CHAIN_IDS.BSC_TESTNET, CHAIN_IDS.BSC_MAINNET],
-  contracts: {
-    [CHAIN_IDS.BSC_TESTNET]: bscTestnet.contracts.basContract!,
-    [CHAIN_IDS.BSC_MAINNET]: bscMainnet.contracts.basContract!,
-  },
-  features: [
-    'On-chain attestations',
-    'Schema registry',
-    'Revocation support',
-    'Low gas costs',
-    'BNB Smart Chain native'
-  ],
-  estimatedGasCost: {
-    [CHAIN_IDS.BSC_TESTNET]: BigInt('100000'), // ~0.0002 BNB at 2 gwei
-    [CHAIN_IDS.BSC_MAINNET]: BigInt('100000')
-  }
-}
-
-// Custom Chain Attestation Service (commented out - uncomment when needed)
-// export const CUSTOM_ATTESTATION_CONFIG: AttestationServiceConfig = {
-//   id: 'custom-attest',
-//   name: 'Custom Chain Attestation Service',
-//   description: 'Attestation service for custom blockchain network',
-//   website: 'https://custom-chain.com/attestation',
-//   docs: 'https://docs.custom-chain.com/attestation',
-//   supportedChains: [customChain.id],
-//   contracts: {
-//     [customChain.id]: '0x0000000000000000000000000000000000000000' // TODO: Deploy contract
-//   },
-//   features: [
-//     'On-chain attestations',
-//     'Custom schema support',
-//     'Low latency',
-//     'Custom features'
-//   ],
-//   estimatedGasCost: {
-//     [customChain.id]: BigInt('30000') // Adjust based on actual costs
-//   }
-// }
-
 // EAS (Ethereum Attestation Service) Configuration for OMAChain
 export const EAS_CONFIG: AttestationServiceConfig = {
   id: 'eas',
@@ -67,10 +20,10 @@ export const EAS_CONFIG: AttestationServiceConfig = {
   description: 'Decentralized attestation service on OMAChain',
   website: 'https://attest.org/',
   docs: 'https://docs.attest.org/',
-  supportedChains: [CHAIN_IDS.OMACHAIN_TESTNET, CHAIN_IDS.OMACHAIN_MAINNET],
+  supportedChains: [omachainTestnet.id, omachainMainnet.id],
   contracts: {
-    [CHAIN_IDS.OMACHAIN_TESTNET]: omachainTestnet.contracts.easContract!,
-    [CHAIN_IDS.OMACHAIN_MAINNET]: omachainMainnet.contracts.easContract!,
+    [omachainTestnet.id]: omachainTestnet.contracts.easContract!,
+    [omachainMainnet.id]: omachainMainnet.contracts.easContract!,
   },
   features: [
     'On-chain attestations',
@@ -80,15 +33,14 @@ export const EAS_CONFIG: AttestationServiceConfig = {
     'OMAChain native'
   ],
   estimatedGasCost: {
-    [CHAIN_IDS.OMACHAIN_TESTNET]: BigInt('100000'), // Adjust based on actual costs
-    [CHAIN_IDS.OMACHAIN_MAINNET]: BigInt('100000')
+    [omachainTestnet.id]: BigInt('100000'),
+    [omachainMainnet.id]: BigInt('100000')
   }
 }
 
 // All available attestation services
 export const ATTESTATION_SERVICES: Record<string, AttestationServiceConfig> = {
   [EAS_CONFIG.id]: EAS_CONFIG,
-  [BAS_CONFIG.id]: BAS_CONFIG
 }
 
 // Helper functions
