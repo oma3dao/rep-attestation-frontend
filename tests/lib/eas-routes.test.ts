@@ -629,13 +629,16 @@ describe('submitDelegatedAttestation', () => {
   });
 
   describe('UID parsing from event logs (Issue #32)', () => {
+    let uidParseSubmissionCounter = 0;
+
     function setupSuccessfulSubmission() {
       return async (logs: Array<{ topics: string[]; data: string }>) => {
         const { loadEasDelegatePrivateKey } = await import('@/lib/server/eas-delegate-key');
         (loadEasDelegatePrivateKey as any).mockReturnValue('0x' + 'f'.repeat(64));
 
         const { Wallet, Contract, keccak256 } = await import('ethers');
-        (keccak256 as any).mockReturnValue('0xuidparsetest_' + Date.now());
+        uidParseSubmissionCounter += 1;
+        (keccak256 as any).mockReturnValue(`0xuidparsetest_${uidParseSubmissionCounter}`);
         (Wallet as any).mockReturnValue({ address: '0xdelegateaddress' });
 
         const expectedTxHash = '0x' + 'e'.repeat(64);
