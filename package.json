@@ -17,7 +17,8 @@
     "update-schemas": "esno scripts/update-schemas.ts"
   },
   "overrides": {
-    "lodash.set": "npm:fast-path-set@^1.0.0"
+    "lodash.set": "npm:fast-path-set@^1.0.0",
+    "ws": "^8.21.0"
   },
   "repository": {
     "type": "git",
