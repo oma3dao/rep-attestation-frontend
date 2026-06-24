@@ -417,6 +417,9 @@ export type TrustAnchorApprovedIssuer = {
   address: string
   label: string
   schemas: string[]
+  status: "active" | "revoked"
+  validFrom: string
+  revokedAt?: string
 }
 
 export type TrustAnchorsResponse = {

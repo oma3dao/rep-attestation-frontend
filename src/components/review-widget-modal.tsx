@@ -13,8 +13,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 
-const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://reputation.omatrust.org"
-const WIDGET_SRC = `${WIDGET_BASE}/widgets/reviews/embed?url=reputation.omatrust.org&contract=0x8835AF90f1537777F52E482C8630cE4e947eCa32&chainId=66238&name=OMATrust+Reputation+Portal&explorer=https%3A%2F%2Fexplorer.testnet.chain.oma3.org%2Fapi`
+const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://app.omatrust.org"
+const WIDGET_SRC = `${WIDGET_BASE}/widgets/reviews/embed?url=app.omatrust.org&contract=0x8835AF90f1537777F52E482C8630cE4e947eCa32&chainId=66238&name=OMATrust+Reputation+Portal&explorer=https%3A%2F%2Fexplorer.testnet.chain.oma3.org%2Fapi`
 
 const DEV_ORIGIN_OVERRIDE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || undefined
 
@@ -96,7 +96,7 @@ export function ReviewWidgetModal({ open, onOpenChange }: ReviewWidgetModalProps
       <DialogContent className="w-[440px] max-w-[95vw] p-0 gap-0 overflow-visible rounded-2xl border-0 bg-transparent shadow-none outline-none focus:outline-none [&>button:last-child]:hidden">
         <DialogTitle className="sr-only">Review OMATrust Reputation</DialogTitle>
         <DialogDescription className="sr-only">
-          Write a review for reputation.omatrust.org
+          Write a review for app.omatrust.org
         </DialogDescription>
         <iframe
           id={WIDGET_IFRAME_ID}
