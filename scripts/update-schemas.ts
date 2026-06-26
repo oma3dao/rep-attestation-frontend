@@ -277,6 +277,19 @@ async function transformFields(properties, required = [], schemaId = '') {
         field.format = prop.format
       }
 
+      // Extract x-oma3-enum from the field itself as options (string fields with suggested values)
+      if (prop['x-oma3-enum'] && prop.type === 'string') {
+        const enumValues = prop['x-oma3-enum']
+        if (Array.isArray(enumValues) && enumValues.length > 0) {
+          field.type = 'enum'
+          field.options = enumValues.map(item =>
+            typeof item === 'object' && item.value
+              ? { value: item.value, label: item.label || item.value, ...(item.description ? { description: item.description } : {}) }
+              : item
+          )
+        }
+      }
+
       // Extract x-oma3-enum from array items as options (supports both flat strings and rich objects)
       if (prop.type === 'array' && prop.items && prop.items['x-oma3-enum']) {
         const enumValues = prop.items['x-oma3-enum']
@@ -643,7 +656,7 @@ async function generateSchemasFile(schemas, deployments = {}, easSchemaStrings: 
       for (const [chainId, uids] of Object.entries(priorByChain)) {
         const chainName = getChainName(parseInt(chainId, 10))
         const uidsStr = uids.map(u => `'${u}'`).join(', ')
-        priorLines.push(`    ${chainId}: [${uidsStr}]${chainName ? ` // ${chainName}` : ''}`)
+        priorLines.push(`    ${chainId}: [${uidsStr}]`)
       }
       exportLines.push(
         `  priorUIDs: {`,

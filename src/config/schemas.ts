@@ -580,12 +580,18 @@ const securityAssessmentFields: FormField[] = [
     "subFields": [
       {
         "name": "assessmentKind",
-        "type": "string",
+        "type": "enum",
         "label": "Assessment Kind",
         "description": "High-level category of the assessment. Registered kinds are defined in the OMA3 Assessment Kind Registry.",
         "required": true,
         "placeholder": "Enter assessment kind",
-        "maxLength": 64
+        "maxLength": 64,
+        "options": [
+          "pentest",
+          "security-audit",
+          "code-review",
+          "vulnerability-scan"
+        ]
       },
       {
         "name": "methodURI",
@@ -812,13 +818,16 @@ export const certificationSchema: AttestationSchema = {
   fields: certificationFields,
   easSchemaString: 'string subject, string organization, string version, string versionHW, string subjectURI, string programID, string programURI, string assessor, string assessorURI, string certificationLevel, string outcome, string reportURI, string reportDigest, string payload, string payloadVersion, string payloadSpecURI, string payloadSpecDigest, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
   deployedUIDs: {
-    97: '0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7', // BSC Testnet
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
     66238: '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805', // OMAChain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
   },
+  priorUIDs: {
+    97: ['0xbb9e58a64550b7956561e9c9266e0a0747fc80c40bd57bb2637be7f8f2817bf7']
+  },
   deployedBlocks: {
-    97: 52415269, // BSC Testnet
+    97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
     66238: 289, // OMAChain Testnet
     6623: 0  // OMAChain Mainnet
@@ -878,7 +887,7 @@ export const keyBindingSchema: AttestationSchema = {
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
   },
   priorUIDs: {
-    66238: ['0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d'] // OMAChain Testnet
+    66238: ['0x290ce7f909a98f74d2356cf24102ac813555fa0bcd456f1bab17da2d92632e1d']
   },
   deployedBlocks: {
     97: 0, // BSC Testnet
@@ -896,16 +905,17 @@ export const linkedIdentifierSchema: AttestationSchema = {
   revocable: true,
   easSchemaString: 'string subject, string linkedId, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
   deployedUIDs: {
-    97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
     66238: '0x56d1e74383cbcfb89e23b25f444a081951a5d2fa7876b159da082b8cbd967af8', // OMAChain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
   },
   priorUIDs: {
-    66238: ['0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453', '0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac'] // OMAChain Testnet
+    97: ['0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6'],
+    66238: ['0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453', '0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac']
   },
   deployedBlocks: {
-    97: 52415311, // BSC Testnet
+    97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
     66238: 502, // OMAChain Testnet
     6623: 0  // OMAChain Mainnet
@@ -959,13 +969,16 @@ export const userReviewSchema: AttestationSchema = {
   fields: userReviewFields,
   easSchemaString: 'string subject, string version, uint256 ratingValue, string reviewBody, string[] screenshotUrls, string[] proofs',
   deployedUIDs: {
-    97: '0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6', // BSC Testnet
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
     66238: '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47', // OMAChain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
   },
+  priorUIDs: {
+    97: ['0x21deb2c39c4899b39d3f4af965d455be97862c6be18ffd2c15dbd74aaf50a5f6']
+  },
   deployedBlocks: {
-    97: 52291400, // BSC Testnet
+    97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
     66238: 295, // OMAChain Testnet
     6623: 0  // OMAChain Mainnet

@@ -148,6 +148,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         if (value !== null) {
           next[field.name] = value
           changed = true
+        } else if ((field as any).default !== undefined) {
+          next[field.name] = String((field as any).default)
+          changed = true
         }
       }
 
