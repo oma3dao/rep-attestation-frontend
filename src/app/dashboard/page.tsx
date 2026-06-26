@@ -8,11 +8,16 @@ import * as reputation from "@oma3/omatrust/reputation"
 import type { Hex } from "@oma3/omatrust/reputation"
 import { useActiveAccount } from "thirdweb/react"
 import { ethers6Adapter } from "thirdweb/adapters/ethers6"
-import { ExternalLink, RefreshCw } from "lucide-react"
+import { ExternalLink, Info, RefreshCw } from "lucide-react"
 import { client } from "@/app/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AttestationCard } from "@/components/attestation-card"
 import { AttestationDetailModal } from "@/components/attestation-detail-modal"
 import { RevokeConfirmationDialog } from "@/components/revoke-confirmation-dialog"
@@ -25,11 +30,15 @@ import {
   resolvePublicIdentities,
   getPublicTrustAnchors,
   listSubjects,
+  listSigningKeys,
+  upsertSigningKey,
   type BackendSessionMeResponse,
   type BackendSubject,
   type IdentityResolution,
   type ControllerConfirmResponse,
   type TrustAnchorApprovedIssuer,
+  type KeyMetadataRecord,
+  type KeyMetadataTag,
 } from "@/lib/omatrust-backend"
 import {
   getAttestationsByAttesterWithMetadata,
@@ -40,6 +49,8 @@ import { getActiveThirdwebChain, useWallet } from "@/lib/blockchain"
 import { getContractAddress } from "@/config/attestation-services"
 import { getChainById } from "@/config/chains"
 import { callControllerWitness } from "@/lib/controller-witness-client"
+import { PublicKeyInput } from "@/components/public-key-input"
+import { Caip10Input } from "@/components/caip10-input"
 
 const activeThirdwebChain = getActiveThirdwebChain()
 
@@ -125,7 +136,7 @@ function serviceMatchesAttestation(attestation: EnrichedAttestationResult, servi
 
 function canonicalIdentifier(value: string): string {
   try {
-    return normalizeDid(value).toLowerCase()
+    return normalizeDid(value)
   } catch {
     return value.trim().toLowerCase()
   }
@@ -566,36 +577,67 @@ function ServiceKeyCard({
     }
   }
 
-  const Signal = ({ active, label }: { active: boolean; label: string }) => (
-    <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-      active
-        ? "border-primary/25 bg-primary/10 text-primary"
-        : "border-border bg-background text-muted-foreground"
-    }`}>
-      {label}: {active ? "Yes" : "No"}
-    </span>
-  )
+  const Signal = ({ active, label, tooltip }: { active: boolean; label: string; tooltip?: string }) => {
+    const badge = (
+      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+        active
+          ? "border-primary/25 bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground"
+      }`}>
+        {label}: {active ? "Yes" : "No"}
+      </span>
+    )
+    if (!tooltip) return badge
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{badge}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {tooltip}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
 
   return (
     <div className="rounded-xl border border-border/70 bg-background p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm text-foreground">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-foreground break-all">
             <span className="font-bold">Service ID:</span>{' '}
-            <span className="font-mono">{keyInfo.subjectDid}</span>
+            <span className="font-mono text-xs">{keyInfo.subjectDid}</span>
           </p>
-          <p className="mt-1 text-sm text-foreground">
+          <p className="mt-1 text-sm text-foreground break-all">
             <span className="font-bold">Key ID:</span>{' '}
-            <span className="font-mono">{keyInfo.keyDid}</span>
+            <span className="font-mono text-xs">{keyInfo.keyDid}</span>
           </p>
           <p className="mt-2 text-sm font-medium text-foreground/70">
             Sources: {keyInfo.sources.join(", ")}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Signal active={keyInfo.basic} label="Basic" />
-          <Signal active={keyInfo.intermediate} label="Intermediate" />
-          <Signal active={keyInfo.advanced} label="Advanced" />
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Signal
+            active={keyInfo.basic}
+            label="Basic"
+            tooltip={keyInfo.basic
+              ? `Ownership verified via ${keyInfo.sources.find(s => s === "DNS TXT" || s === "DID document") ?? keyInfo.sources[0] ?? "endpoint evidence"}`
+              : "Publish this key in DNS TXT or did.json to prove ownership"}
+          />
+          <Signal
+            active={keyInfo.intermediate}
+            label="Intermediate"
+            tooltip={keyInfo.intermediate
+              ? "Controller witness attested on-chain"
+              : "Submit a controller witness after proving ownership"}
+          />
+          <Signal
+            active={keyInfo.advanced}
+            label="Advanced"
+            tooltip={keyInfo.advanced
+              ? "Key binding published on-chain"
+              : "Publish a key binding after controller witness"}
+          />
         </div>
       </div>
 
@@ -669,6 +711,535 @@ function ServiceKeyCard({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Service Signing Keys
+// ---------------------------------------------------------------------------
+
+const TAG_OPTIONS: { value: KeyMetadataTag; label: string }[] = [
+  { value: "x402", label: "x402 Offers & Receipts" },
+  { value: "mcp", label: "MCP Server Artifacts" },
+  { value: "software-release", label: "Software Release Proofs" },
+  { value: "generic-signing", label: "Generic Service Signing" },
+  { value: "other", label: "Other" },
+]
+
+function getTagLabel(tag: string): string {
+  return TAG_OPTIONS.find((t) => t.value === tag)?.label ?? tag
+}
+
+const SIGNING_KEYS_DESCRIPTION_FULL =
+  "Manage keys that your service uses to sign artifacts such as x402 offers and receipts. Store your private key wherever you choose \u2014 CDP, Thirdweb, Turnkey, AWS KMS, or your own server. Register your public keys with OMATrust to tell agents and verifiers which keys are authorized for your service. To follow good security hygene, use OMATrust to rotate your keys- the security of your key storage dictates your rotation frequency (less secure -> more frequent rotations)."
+
+const PRIVATE_KEY_DID_PREFIXES_SIGNING = ["did:pkh:", "did:jwk:"]
+
+function isValidSigningKeyDid(did: string): boolean {
+  if (!PRIVATE_KEY_DID_PREFIXES_SIGNING.some((prefix) => did.startsWith(prefix))) return false
+  const parts = did.split(":")
+  if (did.startsWith("did:pkh:") && parts.length < 5) return false
+  if (did.startsWith("did:jwk:") && parts.length < 3) return false
+  return true
+}
+
+function AddSigningKeyDialog({
+  open,
+  onOpenChange,
+  editingKey,
+  existingKeyDids,
+  onSuccess,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  editingKey: KeyMetadataRecord | null
+  existingKeyDids: Set<string>
+  onSuccess: () => void
+}) {
+  const [displayName, setDisplayName] = useState("")
+  const [keyDid, setKeyDid] = useState("")
+  const [keyMethod, setKeyMethod] = useState<"pkh" | "jwk">("jwk")
+  const [tags, setTags] = useState<KeyMetadataTag[]>([])
+  const [notes, setNotes] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const isEdit = editingKey !== null
+
+  useEffect(() => {
+    if (open) {
+      if (editingKey) {
+        setDisplayName(editingKey.displayName)
+        setKeyDid(editingKey.keyDid)
+        setKeyMethod(editingKey.keyDid.startsWith("did:pkh:") ? "pkh" : "jwk")
+        setTags(editingKey.tags)
+        setNotes(editingKey.notes ?? "")
+      } else {
+        setDisplayName("")
+        setKeyDid("")
+        setKeyMethod("jwk")
+        setTags([])
+        setNotes("")
+      }
+      setError(null)
+    }
+  }, [open, editingKey])
+
+  const keyDidTrimmed = keyDid.trim()
+  const isExistingKey = !isEdit && keyDidTrimmed.length > 0 && existingKeyDids.has(canonicalIdentifier(keyDidTrimmed))
+  const isKeyDidValid = keyDidTrimmed.length === 0 || isValidSigningKeyDid(keyDidTrimmed)
+  const canSubmit = displayName.trim().length > 0 && keyDidTrimmed.length > 0 && isKeyDidValid && !isSubmitting
+
+  const toggleTag = (tag: KeyMetadataTag) => {
+    setTags((current) =>
+      current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]
+    )
+  }
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!canSubmit) return
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      await upsertSigningKey({
+        keyDid: keyDidTrimmed,
+        keyType: "service-signing",
+        displayName: displayName.trim(),
+        tags,
+        notes: notes.trim() || null,
+      })
+      onOpenChange(false)
+      onSuccess()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save signing key.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Signing Key" : "Register a Service Signing Key"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update the metadata for this signing key."
+              : "Register an external key that your service uses to sign artifacts. OMATrust will not ask for your private key."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="signing-key-tags">Tags</Label>
+            <p className="text-xs text-muted-foreground">
+              What will this key sign? You can select multiple tags.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {TAG_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => toggleTag(option.value)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    tags.includes(option.value)
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="signing-key-display-name">Display name</Label>
+            <Input
+              id="signing-key-display-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Production x402 receipt signer"
+              maxLength={200}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Key type</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { if (!isEdit) { setKeyMethod("pkh"); setKeyDid("") } }}
+                disabled={isEdit}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  keyMethod === "pkh"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                } ${isEdit ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                Blockchain wallet (did:pkh)
+              </button>
+              <button
+                type="button"
+                onClick={() => { if (!isEdit) { setKeyMethod("jwk"); setKeyDid("") } }}
+                disabled={isEdit}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  keyMethod === "jwk"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/50"
+                } ${isEdit ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                Public key (did:jwk)
+              </button>
+            </div>
+
+            {keyMethod === "pkh" && !isEdit ? (
+              <Caip10Input
+                value={keyDid.startsWith("did:pkh:") ? keyDid.replace("did:pkh:", "") : ""}
+                onChange={(caip10) => setKeyDid(caip10 ? `did:pkh:${caip10}` : "")}
+              />
+            ) : null}
+
+            {keyMethod === "jwk" && !isEdit ? (
+              <PublicKeyInput
+                value={keyDid}
+                onChange={(did) => setKeyDid(did ?? "")}
+                label="Public key"
+              />
+            ) : null}
+
+            {isEdit ? (
+              <div className="rounded-md border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Key identifier (immutable):</p>
+                <code className="mt-1 block break-all text-xs font-mono text-foreground">{keyDid}</code>
+              </div>
+            ) : null}
+
+            {isExistingKey ? (
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                This key is already registered on your account. Submitting will update its metadata.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="signing-key-notes">Notes (optional)</Label>
+            <Textarea
+              id="signing-key-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Stored in AWS KMS"
+              maxLength={1000}
+              rows={3}
+            />
+          </div>
+
+          {error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : null}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {isSubmitting ? "Saving..." : isEdit ? "Save changes" : "Register key"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SigningKeyCard({
+  keyMetadata,
+  serviceKeys,
+  serviceDids,
+  chainId,
+  onEdit,
+  onControllerWitnessSubmitted,
+}: {
+  keyMetadata: KeyMetadataRecord
+  serviceKeys: ServiceKey[]
+  serviceDids: string[]
+  chainId: number
+  onEdit: () => void
+  onControllerWitnessSubmitted?: () => Promise<void> | void
+}) {
+  const [isSubmittingWitness, setIsSubmittingWitness] = useState(false)
+  const [witnessMessage, setWitnessMessage] = useState<string | null>(null)
+  const [witnessError, setWitnessError] = useState<string | null>(null)
+  const [showWitnessConfirm, setShowWitnessConfirm] = useState<string | null>(null) // subjectDid or null
+
+  // Find matching ServiceKey entries for this key (across all subjects)
+  const boundSubjects = useMemo(() => {
+    const canonical = canonicalIdentifier(keyMetadata.keyDid)
+    // Show all service DIDs as potential subjects, enriched with trust data if available
+    const matchedKeys = serviceKeys.filter((sk) => sk.canonicalKeyDid === canonical)
+    if (matchedKeys.length > 0) return matchedKeys
+
+    // If no service keys match yet (key not discovered via DNS/attestations),
+    // return stub entries for all service DIDs so the user can see their subjects
+    // and follow the trust-building flow
+    return serviceDids.map((subjectDid): ServiceKey => ({
+      keyDid: keyMetadata.keyDid,
+      canonicalKeyDid: canonical,
+      subjectDid,
+      label: keyMetadata.displayName,
+      sources: [],
+      basic: false,
+      intermediate: false,
+      advanced: false,
+    }))
+  }, [keyMetadata.keyDid, keyMetadata.displayName, serviceKeys, serviceDids])
+
+  const submitControllerWitness = async (subjectDid: string) => {
+    setShowWitnessConfirm(null)
+    setIsSubmittingWitness(true)
+    setWitnessMessage(null)
+    setWitnessError(null)
+
+    try {
+      const result = await callControllerWitness({
+        subject: subjectDid,
+        controller: keyMetadata.keyDid,
+      })
+      if (!result) {
+        setWitnessError("The controller witness API could not confirm endpoint evidence for this key.")
+        return
+      }
+      setWitnessMessage("Controller witness submitted.")
+      await onControllerWitnessSubmitted?.()
+    } catch (error) {
+      setWitnessError(error instanceof Error ? error.message : "Failed to submit controller witness.")
+    } finally {
+      setIsSubmittingWitness(false)
+    }
+  }
+
+  const Signal = ({ active, label, tooltip }: { active: boolean; label: string; tooltip?: string }) => {
+    const badge = (
+      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+        active
+          ? "border-primary/25 bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground"
+      }`}>
+        {label}: {active ? "Yes" : "No"}
+      </span>
+    )
+    if (!tooltip) return badge
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{badge}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {tooltip}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  const StatusBadge = ({ keyInfo }: { keyInfo: ServiceKey }) => {
+    if (keyInfo.keyBindingUid) {
+      return <Badge variant="success">Active</Badge>
+    }
+    return <Badge variant="secondary">Registered</Badge>
+  }
+
+  return (
+    <div className="rounded-xl border border-border/70 bg-background p-4">
+      {/* Header: name + edit + signals */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground">{keyMetadata.displayName}</p>
+            <Button variant="outline" size="sm" type="button" onClick={onEdit} className="h-6 px-2 text-xs">
+              Edit
+            </Button>
+          </div>
+          <p className="mt-1 text-sm text-foreground break-all">
+            <span className="font-medium">Service ID:</span>{" "}
+            {boundSubjects.length > 0 && boundSubjects[0].subjectDid ? (
+              <span className="font-mono text-xs">{boundSubjects.map((s) => s.subjectDid).join(", ")}</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">None (see below)</span>
+            )}
+          </p>
+          <p className="mt-1 text-sm text-foreground break-all">
+            <span className="font-medium">Key ID:</span>{" "}
+            <span className="font-mono text-xs">{keyMetadata.keyDid}</span>
+          </p>
+          {keyMetadata.tags.length > 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              <span className="font-medium">Uses:</span>{" "}
+              {keyMetadata.tags.map((tag) => getTagLabel(tag)).join(", ")}
+            </p>
+          ) : null}
+          {keyMetadata.notes ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              <span className="font-medium">Notes:</span>{" "}
+              {keyMetadata.notes}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {(() => {
+            const best = boundSubjects.reduce(
+              (acc, sk) => ({
+                basic: acc.basic || sk.basic,
+                intermediate: acc.intermediate || sk.intermediate,
+                advanced: acc.advanced || sk.advanced,
+                basicSource: acc.basicSource || (sk.basic ? sk.sources.find(s => s === "DNS TXT" || s === "DID document") ?? sk.sources[0] : undefined),
+              }),
+              { basic: false, intermediate: false, advanced: false, basicSource: undefined as string | undefined }
+            )
+            return (
+              <>
+                <Signal
+                  active={best.basic}
+                  label="Basic"
+                  tooltip={best.basic
+                    ? `Ownership verified via ${best.basicSource ?? "endpoint evidence"}`
+                    : "Publish this key in DNS TXT or did.json to prove ownership"}
+                />
+                <Signal
+                  active={best.intermediate}
+                  label="Intermediate"
+                  tooltip={best.intermediate
+                    ? "Controller witness attested on-chain"
+                    : "Submit a controller witness after proving ownership"}
+                />
+                <Signal
+                  active={best.advanced}
+                  label="Advanced"
+                  tooltip={best.advanced
+                    ? "Key binding published on-chain"
+                    : "Publish a key binding after controller witness"}
+                />
+              </>
+            )
+          })()}
+        </div>
+      </div>
+
+      {/* Trust status + actions */}
+      <div className="mt-4">
+        {(() => {
+          // Use the best trust level across all subjects
+          const best = boundSubjects.reduce(
+            (acc, sk) => ({
+              basic: acc.basic || sk.basic,
+              intermediate: acc.intermediate || sk.intermediate,
+              advanced: acc.advanced || sk.advanced,
+              keyBindingUid: acc.keyBindingUid || sk.keyBindingUid,
+              // Pick first subject with intermediate for witness/binding actions
+              witnessSubject: acc.witnessSubject || (sk.basic && !sk.intermediate ? sk.subjectDid : null),
+              bindingSubject: acc.bindingSubject || (sk.intermediate && !sk.keyBindingUid ? sk.subjectDid : null),
+            }),
+            { basic: false, intermediate: false, advanced: false, keyBindingUid: undefined as string | undefined, witnessSubject: null as string | null, bindingSubject: null as string | null }
+          )
+          const publishParams = best.bindingSubject
+            ? `subject=${encodeURIComponent(best.bindingSubject)}&keyId=${encodeURIComponent(keyMetadata.keyDid)}`
+            : boundSubjects[0]?.subjectDid
+              ? `subject=${encodeURIComponent(boundSubjects[0].subjectDid)}&keyId=${encodeURIComponent(keyMetadata.keyDid)}`
+              : `keyId=${encodeURIComponent(keyMetadata.keyDid)}`
+
+          return (
+            <>
+              {/* Ownership proof guidance (only when basic is missing) */}
+              {!best.basic ? (
+                <div className="mt-3 space-y-2 rounded-lg border border-border/80 bg-muted/30 p-3 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Authorize this key</p>
+                  <p className="text-xs">
+                    Tell the world who this key belongs to by binding it to your web domain. Add a DNS TXT record or host a did.json.
+                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">Option 1: DNS TXT</p>
+                    <p className="text-xs">
+                      Add a TXT record at <span className="font-mono">_controllers.example.com</span> (replace with your domain). DNS TXT "name" should be "_controllers" and "value" should be:
+                    </p>
+                    <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground break-all select-all">
+                      v=1;controller={keyMetadata.keyDid}
+                    </code>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">Option 2: did.json</p>
+                    <p className="text-xs">
+                      Host a DID document at <span className="font-mono">https://example.com/.well-known/did.json</span> with this key listed as a controller.{" "}
+                      <a href="https://docs.omatrust.org/api/controller-witness#setting-up-didjson-evidence" target="_blank" rel="noopener noreferrer" className="underline">See format →</a>
+                    </p>
+                  </div>
+                  <p className="text-xs">
+                    After publishing, wait a few minutes for propagation then refresh the dashboard.
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Action buttons (matching Key Authorizations) */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {best.basic && !best.intermediate ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => setShowWitnessConfirm(best.witnessSubject ?? boundSubjects[0]?.subjectDid ?? null)}
+                    disabled={isSubmittingWitness}
+                  >
+                    {isSubmittingWitness ? "Submitting witness..." : "Add controller witness"}
+                  </Button>
+                ) : null}
+                {best.intermediate && !best.keyBindingUid ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/publish/key-binding?${publishParams}`}>
+                      Publish key binding
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            </>
+          )
+        })()}
+      </div>
+
+      {/* Controller witness confirmation */}
+      {showWitnessConfirm ? (
+        <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <p className="text-sm font-medium text-foreground">Confirm controller witness</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This will submit a blockchain transaction using one of your sponsored writes.
+            A trusted third party will verify your endpoint evidence (DNS or DID document)
+            and anchor the controller relationship on-chain.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => { void submitControllerWitness(showWitnessConfirm) }}
+              disabled={isSubmittingWitness}
+            >
+              {isSubmittingWitness ? "Submitting..." : "Confirm"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setShowWitnessConfirm(null)}
+              disabled={isSubmittingWitness}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {witnessMessage ? <p className="mt-3 text-sm text-primary">{witnessMessage}</p> : null}
+      {witnessError ? <p className="mt-3 text-sm text-destructive">{witnessError}</p> : null}
+    </div>
+  )
+}
+
+
 function ServiceTrustWorkspace({
   session,
   address,
@@ -706,6 +1277,10 @@ function ServiceTrustWorkspace({
   const [approvedIssuers, setApprovedIssuers] = useState<TrustAnchorApprovedIssuer[]>([])
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false)
   const [subjectDialogDid, setSubjectDialogDid] = useState<string | null>(null)
+  const [keyMetadataRecords, setKeyMetadataRecords] = useState<KeyMetadataRecord[]>([])
+  const [isLoadingKeyMetadata, setIsLoadingKeyMetadata] = useState(false)
+  const [signingKeyDialogOpen, setSigningKeyDialogOpen] = useState(false)
+  const [editingSigningKey, setEditingSigningKey] = useState<KeyMetadataRecord | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -726,6 +1301,31 @@ function ServiceTrustWorkspace({
   }, [])
 
   const accountWalletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
+
+  // Load signing key metadata
+  useEffect(() => {
+    let cancelled = false
+    async function loadKeyMetadata() {
+      try {
+        setIsLoadingKeyMetadata(true)
+        const response = await listSigningKeys({ keyType: "service-signing" })
+        if (!cancelled) setKeyMetadataRecords(response.keys)
+      } catch {
+        if (!cancelled) setKeyMetadataRecords([])
+      } finally {
+        if (!cancelled) setIsLoadingKeyMetadata(false)
+      }
+    }
+    void loadKeyMetadata()
+    return () => { cancelled = true }
+  }, [])
+
+  const refreshKeyMetadata = useCallback(async () => {
+    try {
+      const response = await listSigningKeys({ keyType: "service-signing" })
+      setKeyMetadataRecords(response.keys)
+    } catch { /* non-critical */ }
+  }, [])
 
   // Load controller summaries for ALL service DIDs
   useEffect(() => {
@@ -812,6 +1412,26 @@ function ServiceTrustWorkspace({
     accountWalletDid,
     controllerSummaries,
   }), [accountWalletDid, attestations, serviceAttestations, controllerSummaries, serviceDids])
+
+  // Filter out keys that are managed in the Service Signing Keys section
+  const signingKeyDidSet = useMemo(
+    () => new Set(
+      keyMetadataRecords
+        .filter((km) => km.keyType === "service-signing")
+        .map((km) => canonicalIdentifier(km.keyDid))
+    ),
+    [keyMetadataRecords]
+  )
+
+  const filteredServiceKeys = useMemo(
+    () => serviceKeys.filter((sk) => !signingKeyDidSet.has(sk.canonicalKeyDid)),
+    [serviceKeys, signingKeyDidSet]
+  )
+
+  const existingSigningKeyDids = useMemo(
+    () => new Set(keyMetadataRecords.map((km) => canonicalIdentifier(km.keyDid))),
+    [keyMetadataRecords]
+  )
 
   // Determine which subjects are registered in the user's account
   const registeredSubjectSet = useMemo(
@@ -951,10 +1571,52 @@ function ServiceTrustWorkspace({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Signing Keys subsection */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold tracking-tight text-foreground">Signing Keys</h3>
+              <p className="text-sm text-muted-foreground">Register and manage external keys that sign artifacts for your services.</p>
+            </div>
+            <Button size="sm" onClick={() => { setEditingSigningKey(null); setSigningKeyDialogOpen(true) }}>
+              + Add Signing Key
+            </Button>
+          </div>
+
+          {isLoadingKeyMetadata ? (
+            <div className="flex items-center gap-3 py-2 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 shrink-0 animate-spin" />
+              Loading signing keys...
+            </div>
+          ) : keyMetadataRecords.length === 0 ? (
+            <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
+              No signing keys registered yet. Add a key to start building trust for your service&apos;s signatures.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {keyMetadataRecords.map((record) => (
+                <SigningKeyCard
+                  key={record.id}
+                  keyMetadata={record}
+                  serviceKeys={serviceKeys}
+                  serviceDids={serviceDids}
+                  chainId={chainId}
+                  onEdit={() => { setEditingSigningKey(record); setSigningKeyDialogOpen(true) }}
+                  onControllerWitnessSubmitted={async () => {
+                    setServiceAttestationsRefreshKey((k) => k + 1)
+                    await onControllerWitnessSubmitted?.()
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Attestation Keys subsection */}
         <section className="space-y-3">
           <div>
-            <h3 className="font-semibold tracking-tight text-foreground">Key Authorizations</h3>
-            <p className="text-sm text-muted-foreground">Authorize signing keys for each of your services.</p>
+            <h3 className="font-semibold tracking-tight text-foreground">Attestation Keys</h3>
+            <p className="text-sm text-muted-foreground">Keys used for signing into the portal and submitting delegated attestations.</p>
           </div>
 
           {isLoadingControllerSummaries ? (
@@ -971,7 +1633,7 @@ function ServiceTrustWorkspace({
           ))}
 
           <div className="space-y-3">
-            {serviceKeys.map((keyInfo) => (
+            {filteredServiceKeys.map((keyInfo) => (
               <ServiceKeyCard
                 key={`${keyInfo.canonicalKeyDid}::${keyInfo.subjectDid}`}
                 keyInfo={keyInfo}
@@ -984,7 +1646,7 @@ function ServiceTrustWorkspace({
                 }}
               />
             ))}
-            {serviceKeys.length === 0 ? (
+            {filteredServiceKeys.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
                 No key authorizations found yet. Add a service identity or publish a key binding to start building trust.
               </div>
@@ -1213,6 +1875,14 @@ function ServiceTrustWorkspace({
         setSubjectDialogOpen(false)
         onSubjectCreated?.(subject)
       }}
+    />
+
+    <AddSigningKeyDialog
+      open={signingKeyDialogOpen}
+      onOpenChange={setSigningKeyDialogOpen}
+      editingKey={editingSigningKey}
+      existingKeyDids={existingSigningKeyDids}
+      onSuccess={() => { void refreshKeyMetadata() }}
     />
     </>
   )

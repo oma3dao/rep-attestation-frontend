@@ -463,3 +463,51 @@ export async function createSubscriptionCheckoutSession(params: {
     body: JSON.stringify(params),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Service Signing Keys
+// ---------------------------------------------------------------------------
+
+export type KeyMetadataTag = "x402" | "mcp" | "software-release" | "generic-signing" | "other"
+
+export type KeyMetadataRecord = {
+  id: string
+  accountId: string
+  keyDid: string
+  keyType: "attestation" | "service-signing"
+  displayName: string
+  tags: KeyMetadataTag[]
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type KeyMetadataRecordWithCreated = KeyMetadataRecord & { created: boolean }
+
+export type UpsertSigningKeyParams = {
+  keyDid: string
+  keyType: "attestation" | "service-signing"
+  displayName: string
+  tags?: KeyMetadataTag[]
+  notes?: string | null
+}
+
+export async function listSigningKeys(params?: {
+  keyType?: string
+  tag?: string
+}): Promise<{ keys: KeyMetadataRecord[] }> {
+  const query = new URLSearchParams()
+  if (params?.keyType) query.set("keyType", params.keyType)
+  if (params?.tag) query.set("tag", params.tag)
+  const qs = query.toString()
+  return backendFetch<{ keys: KeyMetadataRecord[] }>(
+    `/api/private/signing-keys${qs ? `?${qs}` : ""}`
+  )
+}
+
+export async function upsertSigningKey(params: UpsertSigningKeyParams): Promise<KeyMetadataRecordWithCreated> {
+  return backendFetch<KeyMetadataRecordWithCreated>("/api/private/signing-keys", {
+    method: "POST",
+    body: JSON.stringify(params),
+  })
+}

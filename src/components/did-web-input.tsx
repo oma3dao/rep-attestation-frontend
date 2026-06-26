@@ -23,10 +23,15 @@ export function DidWebInput({
   className = "",
   error: externalError,
 }: DidWebInputProps) {
-  const [domain, setDomain] = useState("");
+  const [domain, setDomain] = useState(() => {
+    if (value && value.startsWith("did:web:")) {
+      return value.replace("did:web:", "");
+    }
+    return "";
+  });
   const [internalError, setInternalError] = useState<string | null>(null);
 
-  // Parse existing DID on mount
+  // Sync domain from external value changes (e.g. URL param pre-fill)
   useEffect(() => {
     if (value && value.startsWith("did:web:")) {
       setDomain(value.replace("did:web:", ""));

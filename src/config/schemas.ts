@@ -60,7 +60,8 @@ const certificationFields: FormField[] = [
     "didMethods": [
       "web",
       "pkh",
-      "jwk"
+      "jwk",
+      "artifact"
     ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
@@ -259,13 +260,12 @@ const controllerWitnessFields: FormField[] = [
     "name": "controller",
     "type": "string",
     "label": "Key ID",
-    "description": "ID of the key being authorized (e.g., did:pkh, did:jwk, or did:key). Most blockchain wallets use did:pkh.",
+    "description": "ID of the key being authorized (e.g., did:pkh or did:jwk). Most blockchain wallets use did:pkh.",
     "required": true,
     "placeholder": "Select an ID type above",
     "didMethods": [
       "pkh",
-      "jwk",
-      "key"
+      "jwk"
     ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
@@ -325,13 +325,12 @@ const keyBindingFields: FormField[] = [
     "name": "keyId",
     "type": "string",
     "label": "Key ID",
-    "description": "DID representing this key. If using did:key or did:pkh:eip155, publicKeyJwk is optional.",
+    "description": "DID representing this key. If using did:jwk or did:pkh:eip155, publicKeyJwk is optional.",
     "required": true,
     "placeholder": "Select an ID type above",
     "didMethods": [
-      "key",
-      "pkh",
-      "web"
+      "jwk",
+      "pkh"
     ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
@@ -341,7 +340,7 @@ const keyBindingFields: FormField[] = [
     "name": "publicKeyJwk",
     "type": "json",
     "label": "Public Key (JWK)",
-    "description": "JWK-formatted public key. Required if keyId is not a self-certifying did:key. Paste the full JWK JSON object.",
+    "description": "JWK-formatted public key. Required if keyId is not a self-certifying did:jwk. Paste the full JWK JSON object.",
     "required": false,
     "placeholder": "Paste JSON object..."
   },
@@ -424,15 +423,14 @@ const linkedIdentifierFields: FormField[] = [
     "name": "subject",
     "type": "string",
     "label": "Primary ID",
-    "description": "Your primary identity initiating the link (e.g., did:pkh for wallets, did:web for domains, did:handle for social accounts, did:key for keys).",
+    "description": "Your primary identity initiating the link (e.g., did:pkh for wallets, did:web for domains, did:handle for social accounts, did:jwk for keys).",
     "required": true,
     "placeholder": "Select an ID type above",
     "didMethods": [
       "handle",
       "web",
       "pkh",
-      "jwk",
-      "key"
+      "jwk"
     ],
     "handlePlatforms": [
       "twitter",
@@ -450,15 +448,14 @@ const linkedIdentifierFields: FormField[] = [
     "name": "linkedId",
     "type": "string",
     "label": "Linked ID",
-    "description": "The identity you want to link to your primary ID (e.g., did:handle for social accounts, did:web for domains, did:pkh for wallets, did:key for keys).",
+    "description": "The identity you want to link to your primary ID (e.g., did:handle for social accounts, did:web for domains, did:pkh for wallets, did:jwk for keys).",
     "required": true,
     "placeholder": "Select an ID type above",
     "didMethods": [
       "handle",
       "web",
       "pkh",
-      "jwk",
-      "key"
+      "jwk"
     ],
     "handlePlatforms": [
       "twitter",
@@ -471,19 +468,6 @@ const linkedIdentifierFields: FormField[] = [
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
     "format": "did"
-  },
-  {
-    "name": "method",
-    "type": "enum",
-    "label": "Verification Method",
-    "description": "How to verify the link. Use 'proof' if there is public ownership evidence like a DNS entry or social post. If you are an authorized attester and verified the link manually use 'manual'.",
-    "required": true,
-    "placeholder": "Enter verification method",
-    "options": [
-      "proof",
-      "manual"
-    ],
-    "maxLength": 64
   },
   {
     "name": "proofs",
@@ -545,7 +529,8 @@ const securityAssessmentFields: FormField[] = [
     "didMethods": [
       "web",
       "pkh",
-      "jwk"
+      "jwk",
+      "artifact"
     ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
@@ -752,7 +737,8 @@ const userReviewFields: FormField[] = [
     "didMethods": [
       "web",
       "pkh",
-      "jwk"
+      "jwk",
+      "artifact"
     ],
     "maxLength": 256,
     "pattern": "^did:[a-z0-9]+:.+$",
@@ -908,20 +894,20 @@ export const linkedIdentifierSchema: AttestationSchema = {
   description: 'An attestation where the attester (a trusted third party) asserts that the subject controls the linked identifier. Both subject and linkedId MUST be valid DIDs, creating a symmetric DID-to-DID link that attests two identities are owned by the same entity.',
   fields: linkedIdentifierFields,
   revocable: true,
-  easSchemaString: 'string subject, string linkedId, string method, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
+  easSchemaString: 'string subject, string linkedId, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
   deployedUIDs: {
     97: '0xd6ef74f4f2f8d79a8993132577713ada1ae9ba937d8bbd69a174cd6afe6beef6', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
-    66238: '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453', // OMAChain Testnet
+    66238: '0x56d1e74383cbcfb89e23b25f444a081951a5d2fa7876b159da082b8cbd967af8', // OMAChain Testnet
     6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
   },
   priorUIDs: {
-    66238: ['0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac'] // OMAChain Testnet
+    66238: ['0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453', '0xed79388b434965a35d50573b75f4bbd6e3bc7912103c4a6ac0aff6a510ccadac'] // OMAChain Testnet
   },
   deployedBlocks: {
     97: 52415311, // BSC Testnet
     56: 0, // BSC Mainnet
-    66238: 379, // OMAChain Testnet
+    66238: 502, // OMAChain Testnet
     6623: 0  // OMAChain Mainnet
   }
 };
