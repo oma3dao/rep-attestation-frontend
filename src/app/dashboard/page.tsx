@@ -1158,7 +1158,7 @@ function SigningKeyCard({
                   <div className="space-y-1">
                     <p className="text-xs font-medium">Option 1: DNS TXT</p>
                     <p className="text-xs">
-                      Add a TXT record at <span className="font-mono">_controllers.example.com</span> (replace with your domain). DNS TXT "name" should be "_controllers" and "value" should be:
+                      Add a TXT record at <span className="font-mono">_controllers.example.com</span> (replace with your domain). DNS TXT name should be &ldquo;_controllers&rdquo; and value should be:
                     </p>
                     <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground break-all select-all">
                       v=1;controller={keyMetadata.keyDid}
