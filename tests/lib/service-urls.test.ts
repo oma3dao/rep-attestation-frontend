@@ -38,7 +38,7 @@ describe('service-urls', () => {
     it('applies the preview. prefix for omachain-testnet', async () => {
       process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'omachain-testnet';
       const { buildServiceUrl } = await importFresh();
-      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://preview.backend.omatrust.org');
+      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://test.backend.omatrust.org');
     });
 
     it('applies the dev. prefix for omachain-devnet', async () => {
@@ -50,13 +50,13 @@ describe('service-urls', () => {
     it('defaults to the preview. prefix for unknown chains', async () => {
       process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'some-other-chain';
       const { buildServiceUrl } = await importFresh();
-      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://preview.backend.omatrust.org');
+      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://test.backend.omatrust.org');
     });
 
     it('defaults to omachain-testnet (preview.) when no active chain is set', async () => {
       delete process.env.NEXT_PUBLIC_ACTIVE_CHAIN;
       const { buildServiceUrl } = await importFresh();
-      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://preview.backend.omatrust.org');
+      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://test.backend.omatrust.org');
     });
   });
 
