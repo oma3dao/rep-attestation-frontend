@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID = 'test-client-id';
 
 import '@testing-library/jest-dom';
