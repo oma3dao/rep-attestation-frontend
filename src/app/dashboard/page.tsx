@@ -13,6 +13,7 @@ import { client } from "@/app/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { buildServiceUrl } from "@/lib/service-urls"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -1779,7 +1780,7 @@ function ServiceTrustWorkspace({
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="default" size="sm" asChild>
-                <a href="https://preview.app.omatrust.org/widgets/reviews/create" target="_blank" rel="noopener noreferrer">
+                <a href={`${buildServiceUrl("app.omatrust.org")}/widgets/reviews/create`} target="_blank" rel="noopener noreferrer">
                   Create review widget
                 </a>
               </Button>

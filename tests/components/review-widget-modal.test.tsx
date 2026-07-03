@@ -32,6 +32,14 @@ vi.mock("@/app/client", () => ({
 
 vi.mock("@/lib/blockchain", () => ({
   getActiveThirdwebChain: () => ({ id: 66238 }),
+  getActiveChain: () => ({
+    id: 66238,
+    blockExplorers: [{ apiUrl: "https://explorer.testnet.chain.oma3.org/api" }],
+  }),
+}))
+
+vi.mock("@/config/attestation-services", () => ({
+  getContractAddress: () => "0x8835AF90f1537777F52E482C8630cE4e947eCa32",
 }))
 
 vi.mock(

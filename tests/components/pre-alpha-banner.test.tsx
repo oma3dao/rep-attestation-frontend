@@ -22,14 +22,22 @@ describe('PreAlphaBanner', () => {
     // Reset sessionStorage mock
     mockSessionStorage.getItem.mockReturnValue(null);
     mockSessionStorage.setItem.mockImplementation(() => {});
+    // Set mainnet so banner renders
+    vi.stubEnv('NEXT_PUBLIC_ACTIVE_CHAIN', 'omachain-mainnet');
   });
 
-  it('renders banner by default', () => {
+  it('renders banner on mainnet', () => {
     render(<PreAlphaBanner />);
     
-    expect(screen.getByText(/Pre-Alpha Preview/i)).toBeInTheDocument();
-    expect(screen.getByText(/Smart contracts are deployed to testnets only/i)).toBeInTheDocument();
-    expect(screen.getByText(/Features are incomplete and may change/i)).toBeInTheDocument();
+    expect(screen.getByText(/Public Beta/i)).toBeInTheDocument();
+    expect(screen.getByText(/Running on mainnet/i)).toBeInTheDocument();
+  });
+
+  it('does not render on testnet', () => {
+    vi.stubEnv('NEXT_PUBLIC_ACTIVE_CHAIN', 'omachain-testnet');
+    render(<PreAlphaBanner />);
+    
+    expect(screen.queryByText(/Public Beta/i)).not.toBeInTheDocument();
   });
 
   it('shows dismiss button with correct aria-label', () => {
@@ -45,7 +53,7 @@ describe('PreAlphaBanner', () => {
     const dismissButton = screen.getByRole('button', { name: /dismiss banner/i });
     fireEvent.click(dismissButton);
     
-    expect(screen.queryByText(/Pre-Alpha Preview/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Public Beta/i)).not.toBeInTheDocument();
   });
 
   it('saves dismissal state to sessionStorage when dismissed', () => {
@@ -62,7 +70,7 @@ describe('PreAlphaBanner', () => {
     
     render(<PreAlphaBanner />);
     
-    expect(screen.queryByText(/Pre-Alpha Preview/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Public Beta/i)).not.toBeInTheDocument();
   });
 
   it('renders when not previously dismissed', () => {
@@ -70,18 +78,18 @@ describe('PreAlphaBanner', () => {
     
     render(<PreAlphaBanner />);
     
-    expect(screen.getByText(/Pre-Alpha Preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/Public Beta/i)).toBeInTheDocument();
   });
 
   it('has correct styling classes', () => {
     render(<PreAlphaBanner />);
 
-    const banner = screen.getByText(/Pre-Alpha Preview/i).closest('div')?.parentElement;
+    const banner = screen.getByText(/Public Beta/i).closest('div')?.parentElement;
     expect(banner).toHaveClass(
       'border-b',
-      'border-warning/30',
-      'bg-warning/12',
-      'text-warning-foreground',
+      'border-primary/30',
+      'bg-primary/10',
+      'text-foreground',
       'px-4',
       'py-3',
       'shadow-sm',
@@ -97,7 +105,7 @@ describe('PreAlphaBanner', () => {
       'p-1',
       'rounded-full',
       'transition-colors',
-      'hover:bg-warning/15',
+      'hover:bg-primary/15',
     );
   });
 
@@ -108,7 +116,7 @@ describe('PreAlphaBanner', () => {
     fireEvent.click(dismissButton);
     
     // Banner should be gone
-    expect(screen.queryByText(/Pre-Alpha Preview/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Public Beta/i)).not.toBeInTheDocument();
     
     // Clicking again should not cause errors
     expect(() => {
@@ -116,9 +124,17 @@ describe('PreAlphaBanner', () => {
     }).not.toThrow();
   });
 
+  it('includes a link to file issues on GitHub', () => {
+    render(<PreAlphaBanner />);
+    
+    const link = screen.getByRole('link', { name: /file it on GitHub/i });
+    expect(link).toHaveAttribute('href', 'https://github.com/oma3dao/rep-attestation-frontend/issues/new/choose');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
   it('checks sessionStorage on mount', () => {
     render(<PreAlphaBanner />);
     
     expect(mockSessionStorage.getItem).toHaveBeenCalledWith('preAlphaBannerDismissed');
   });
-}); 
+});

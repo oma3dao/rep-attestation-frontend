@@ -66,10 +66,10 @@ describe("Header", () => {
     expect(docsLink).toHaveAttribute("rel", "noopener noreferrer")
   })
 
-  it("renders Review button when signed in (alongside account link)", () => {
+  it("does not render Review button (widget hidden until ready)", () => {
     mocks.session = { account: { displayName: "Alice" } }
     render(<Header />)
-    expect(screen.getByRole("button", { name: /review/i })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /review/i })).not.toBeInTheDocument()
   })
 
   it("shows Sign In when no backend session is present", () => {

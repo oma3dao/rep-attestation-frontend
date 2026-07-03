@@ -47,10 +47,10 @@ describe('service-urls', () => {
       expect(buildServiceUrl('backend.omatrust.org')).toBe('https://dev.backend.omatrust.org');
     });
 
-    it('defaults to the preview. prefix for unknown chains', async () => {
+    it('defaults to the test. prefix for unknown chains', async () => {
       process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'some-other-chain';
       const { buildServiceUrl } = await importFresh();
-      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://preview.backend.omatrust.org');
+      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://test.backend.omatrust.org');
     });
 
     it('defaults to omachain-testnet (preview.) when no active chain is set', async () => {

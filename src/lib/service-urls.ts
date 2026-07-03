@@ -5,9 +5,9 @@
  * The active chain determines the environment prefix:
  *
  *   omachain-mainnet  → no prefix  (e.g., backend.omatrust.org)
- *   omachain-testnet  → preview.   (e.g., test.backend.omatrust.org)
+ *   omachain-testnet  → test.      (e.g., test.backend.omatrust.org)
  *   omachain-devnet   → dev.       (e.g., dev.backend.omatrust.org)
- *   anything else      → preview.   (safe default)
+ *   anything else      → test.      (safe default)
  *
  * If the base domain contains "localhost", "127.0.0.1", or a port,
  * it's treated as a local override and used as-is with http://.
@@ -45,7 +45,7 @@ export function buildServiceUrl(baseDomain: string): string {
   }
 
   const chain = getActiveChainKey()
-  const prefix = CHAIN_PREFIX_MAP[chain] ?? "preview."
+  const prefix = CHAIN_PREFIX_MAP[chain] ?? "test."
   return `https://${prefix}${baseDomain}`.replace(/\/+$/, "")
 }
 
