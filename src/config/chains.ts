@@ -43,7 +43,7 @@ export const omachainTestnet = {
 export const omachainMainnet = {
   id: 6623,
   chainId: 6623,
-  rpc: "https://rpc.chain.oma3.org/", // TODO: Update when mainnet is available
+  rpc: "https://rpc.omachain.org/",
   name: "OMAChain Mainnet",
   nativeCurrency: {
     name: "OMA",
