@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Mock the thirdweb client factory so client creation is instant and
+// deterministic (the real createThirdwebClient can exceed the 5s test
+// timeout when the full suite is under load).
+vi.mock('thirdweb', () => ({
+  createThirdwebClient: vi.fn((opts: { clientId?: string }) => ({ clientId: opts.clientId })),
+}));
+
 describe('client', () => {
   const originalEnv = { ...process.env };
 

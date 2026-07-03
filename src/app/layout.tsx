@@ -5,7 +5,6 @@ import "./globals.css"
 import { Header } from "@/components/header"
 import { Providers } from "@/components/providers"
 import { PreAlphaBanner } from "@/components/pre-alpha-banner"
-import Script from "next/script"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -37,12 +36,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <Script
-          src="https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=RY5MAa"
-          strategy="afterInteractive"
-        />
-      </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
         <Providers>
         <PreAlphaBanner />

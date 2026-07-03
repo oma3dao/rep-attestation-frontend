@@ -127,7 +127,7 @@ describe('Caip10Input', () => {
     const onChange = vi.fn();
     render(<Caip10Input onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: /CAIP-10 Builder/i }));
-    const chainInput = screen.getByPlaceholderText(/e\.g\., 66238/);
+    const chainInput = screen.getByPlaceholderText(/e\.g\., 6623/);
     fireEvent.change(chainInput, { target: { value: '1' } });
     const addressInput = screen.getByLabelText(/^Address$/i);
     fireEvent.change(addressInput, { target: { value: validEvmAddress } });

@@ -69,7 +69,7 @@ describe('update-schemas script', () => {
       await expect(transformToUISchema(badSchema, 'bad')).rejects.toThrow(/missing required 'title'/i)
     })
 
-    it('extracts x-oma3-witness configuration when present', async () => {
+    it('does not include witness configuration on the result (witness support removed)', async () => {
       const schema = {
         title: 'Key Binding',
         description: 'Bind a cryptographic key to a DID',
@@ -81,19 +81,6 @@ describe('update-schemas script', () => {
         required: ['subject', 'keyId'],
       }
       const result = await transformToUISchema(schema, 'key-binding')
-      expect(result.witness).toEqual({ subjectField: 'subject', controllerField: 'keyId' })
-    })
-
-    it('returns undefined witness when x-oma3-witness is not present', async () => {
-      const schema = {
-        title: 'Endorsement',
-        description: 'A simple endorsement',
-        properties: {
-          subject: { type: 'string', title: 'Subject' },
-        },
-        required: ['subject'],
-      }
-      const result = await transformToUISchema(schema, 'endorsement')
       expect(result.witness).toBeUndefined()
     })
 
@@ -230,9 +217,9 @@ describe('update-schemas script', () => {
       expect(result[0].default).toBe(10)
     })
 
-    it('handles x-oma3-default auto-default marker', async () => {
+    it('handles x-oma3-auto-default marker as autoDefault', async () => {
       const properties = {
-        timestamp: { type: 'string', title: 'Timestamp', 'x-oma3-default': 'current-timestamp' }
+        timestamp: { type: 'string', title: 'Timestamp', 'x-oma3-auto-default': 'current-timestamp' }
       }
       const result = await transformFields(properties, [], 'test')
       expect(result[0].autoDefault).toBe('current-timestamp')
@@ -286,12 +273,12 @@ describe('update-schemas script', () => {
       expect(result[0].placeholder).toBe('0')
     })
 
-    it('generates default placeholder for other fields', async () => {
+    it('generates default placeholder for other fields based on title', async () => {
       const properties = {
         userName: { type: 'string', title: 'User Name' }
       }
       const result = await transformFields(properties, [], 'test')
-      expect(result[0].placeholder).toBe('Enter username')
+      expect(result[0].placeholder).toBe('Enter user name')
     })
 
     it('handles object fields with expanded render mode (default)', async () => {
@@ -474,7 +461,7 @@ describe('update-schemas script', () => {
         timestamp: {
           type: 'integer',
           title: 'Timestamp',
-          'x-oma3-default': 'current-timestamp',
+          'x-oma3-auto-default': 'current-timestamp',
           'x-oma3-subtype': 'timestamp'
         }
       }
@@ -503,14 +490,14 @@ describe('update-schemas script', () => {
       const properties = {
         did: { type: 'string', title: 'DID' },
         subjectDID: { type: 'string', title: 'Subject DID' },
-        userDid: { type: 'string', title: 'User DID' }
+        plainName: { type: 'string', title: 'Plain Name' }
       }
       const result = await transformFields(properties, [], 'test')
       // The code checks for 'did' or 'DID' in the field name
       expect(result[0].placeholder).toBe('did:example:123...')
       expect(result[1].placeholder).toBe('did:example:123...')
-      // 'userDid' contains 'did' (lowercase) so it matches
-      expect(result[2].placeholder).toBe('Enter userdid')
+      // 'plainName' contains neither 'did' nor 'DID', falls through to title-based default
+      expect(result[2].placeholder).toBe('Enter plain name')
     })
 
     it('handles enum with integer options', async () => {

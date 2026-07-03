@@ -331,18 +331,22 @@ export function useEASClient() {
     schema: any,
     deployedUID: Hex
   ): Promise<AttestationResult> => {
-    // Fetch nonce from server (server is authoritative for nonce)
+    // Fetch nonce from server (server is authoritative for nonce, chainId, and EAS address)
     const nonceResponse = await fetch(`/api/eas/nonce?attester=${address}`)
     if (!nonceResponse.ok) {
       const errorData = await nonceResponse.json()
       throw new Error(errorData.error || 'Failed to fetch nonce')
     }
-    const { nonce: nonceStr } = await nonceResponse.json()
+    const { nonce: nonceStr, chainId: relayChainId, easAddress: relayEasAddress } = await nonceResponse.json()
+
+    // Use relay-returned config as authoritative source for typed data construction
+    const authoritativeChainId = relayChainId ?? currentChainId
+    const authoritativeEasAddress = (relayEasAddress ?? easContractAddress) as Hex
 
     // SDK builds typed data, encodes attestation data, resolves recipient
     const prepared = await reputation.prepareDelegatedAttestation({
-      chainId: currentChainId,
-      easContractAddress,
+      chainId: authoritativeChainId,
+      easContractAddress: authoritativeEasAddress,
       schemaUid: deployedUID,
       schema: schema.easSchemaString,
       data: data.data,
@@ -376,7 +380,7 @@ export function useEASClient() {
     return {
       transactionHash: result.txHash || 'unknown',
       attestationId: result.uid || 'unknown',
-      blockNumber: 0,
+      blockNumber: result.relay?.blockNumber ?? 0,
       gasUsed: BigInt(0),
     }
   }

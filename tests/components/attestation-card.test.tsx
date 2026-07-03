@@ -29,14 +29,14 @@ describe('AttestationCard', () => {
     expect(screen.getByText('Certification')).toBeInTheDocument();
   });
 
-  it('renders shortened attester address', () => {
+  it('renders full attester address (no shortening)', () => {
     render(<AttestationCard attestation={baseAttestation} onClick={() => {}} />);
-    expect(screen.getByText(/0x1234\.\.\.7890/)).toBeInTheDocument();
+    expect(screen.getByText(baseAttestation.attester)).toBeInTheDocument();
   });
 
-  it('renders subject from recipient when no decodedData', () => {
+  it('renders subject from recipient (full address) when no decodedData', () => {
     render(<AttestationCard attestation={baseAttestation} onClick={() => {}} />);
-    expect(screen.getByText(/abcdef\.\.\.abcd/)).toBeInTheDocument();
+    expect(screen.getByText(baseAttestation.recipient)).toBeInTheDocument();
   });
 
   it('renders subject from decodedData when available', () => {
@@ -48,7 +48,7 @@ describe('AttestationCard', () => {
     expect(screen.getByText('did:web:example.com:app')).toBeInTheDocument();
   });
 
-  it('renders rating when decodedData.ratingValue exists', () => {
+  it('renders StarRating with accessible label when decodedData.ratingValue exists', () => {
     const att = {
       ...baseAttestation,
       schemaId: 'user-review',
@@ -56,7 +56,12 @@ describe('AttestationCard', () => {
       decodedData: { ratingValue: 4 },
     };
     render(<AttestationCard attestation={att} onClick={() => {}} />);
-    expect(screen.getByText(/4\/5/)).toBeInTheDocument();
+    expect(screen.getByLabelText('4 out of 5 stars')).toBeInTheDocument();
+  });
+
+  it('does not render rating block when ratingValue is absent', () => {
+    render(<AttestationCard attestation={baseAttestation} onClick={() => {}} />);
+    expect(screen.queryByText(/^Rating:/)).not.toBeInTheDocument();
   });
 
   it('calls onClick when card is clicked', () => {

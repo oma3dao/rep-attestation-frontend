@@ -5,6 +5,8 @@ import { useActiveAccount } from "thirdweb/react"
 import { ethers6Adapter } from "thirdweb/adapters/ethers6"
 import { client } from "@/app/client"
 import { getActiveThirdwebChain } from "@/lib/blockchain"
+import { getActiveChain } from "@/lib/blockchain"
+import { getContractAddress } from "@/config/attestation-services"
 import { createSigningBridge } from "@oma3/omatrust/widgets"
 import {
   Dialog,
@@ -13,8 +15,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 
-const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://reputation.omatrust.org"
-const WIDGET_SRC = `${WIDGET_BASE}/widgets/reviews/embed?url=reputation.omatrust.org&contract=0x8835AF90f1537777F52E482C8630cE4e947eCa32&chainId=66238&name=OMATrust+Reputation+Portal&explorer=https%3A%2F%2Fexplorer.testnet.chain.oma3.org%2Fapi`
+const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://widgets.omatrust.org"
+
+function getWidgetSrc() {
+  const chain = getActiveChain()
+  const contract = getContractAddress('eas', chain.id)
+  const explorerApiUrl = chain.blockExplorers?.[0]?.apiUrl || ""
+  return `${WIDGET_BASE}/widgets/reviews/embed?url=app.omatrust.org&contract=${contract}&chainId=${chain.id}&name=OMATrust+Reputation+Portal&explorer=${encodeURIComponent(explorerApiUrl)}`
+}
 
 const DEV_ORIGIN_OVERRIDE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || undefined
 
@@ -31,7 +39,7 @@ export function ReviewWidgetModal({ open, onOpenChange }: ReviewWidgetModalProps
   const activeChain = getActiveThirdwebChain()
 
   const iframeSrc = React.useMemo(() => {
-    const url = new URL(WIDGET_SRC)
+    const url = new URL(getWidgetSrc())
     if (account?.address) {
       url.searchParams.set("wallet", account.address)
     }
@@ -96,7 +104,7 @@ export function ReviewWidgetModal({ open, onOpenChange }: ReviewWidgetModalProps
       <DialogContent className="w-[440px] max-w-[95vw] p-0 gap-0 overflow-visible rounded-2xl border-0 bg-transparent shadow-none outline-none focus:outline-none [&>button:last-child]:hidden">
         <DialogTitle className="sr-only">Review OMATrust Reputation</DialogTitle>
         <DialogDescription className="sr-only">
-          Write a review for reputation.omatrust.org
+          Write a review for app.omatrust.org
         </DialogDescription>
         <iframe
           id={WIDGET_IFRAME_ID}

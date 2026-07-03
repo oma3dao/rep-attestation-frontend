@@ -4,7 +4,7 @@ export interface AttestationData {
   recipient: string // CAIP-2 address (e.g., "eip155:1:0x742d35Cc6634C0532925a3b844Bc454e4438f44e")
   data: Record<string, any> // Form data, may include expiration fields like 'expireAt'
   expirationTime?: number // Deprecated - now extracted from data fields
-  revocable?: boolean // Deprecated - always false for BAS
+  revocable?: boolean // Deprecated - use schema revocable flag
 }
 
 export interface AttestationResult {

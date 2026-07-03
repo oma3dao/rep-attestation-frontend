@@ -59,8 +59,8 @@ export const omachainMainnet = {
   ],
   testnet: false,
   contracts: {
-    easSchemaRegistry: "0x0000000000000000000000000000000000000000", // TODO: Deploy when mainnet is available
-    easContract: "0x0000000000000000000000000000000000000000", // TODO: Deploy when mainnet is available
+    easSchemaRegistry: "0x11A3aFa959475397F38b729dA543bdDca7bc7cE1",
+    easContract: "0x00Bd6f0Ee99bD76273B57e6dDEc5B00850c6b76C",
   }
 };
 
@@ -220,7 +220,7 @@ export const base = {
   contracts: {}
 };
 
-export const SUPPORTED_CHAINS = [omachainTestnet, bscTestnet, bscMainnet, sepolia, mainnet, baseSepolia, base];
+export const SUPPORTED_CHAINS = [omachainTestnet, omachainMainnet];
 export const DEFAULT_CHAIN = omachainTestnet;
 
 /**
