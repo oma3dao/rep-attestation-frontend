@@ -42,7 +42,7 @@ vi.mock('@/config/chains', () => ({
   omachainMainnet: {
     id: 6623,
     name: 'OMAChain Mainnet',
-    rpc: 'https://rpc.chain.oma3.org/',
+    rpc: 'https://rpc.omachain.org/',
   },
 }));
 
