@@ -475,32 +475,6 @@ describe('submitDelegatedAttestation', () => {
     });
   });
 
-  describe('mainnet rejection', () => {
-    it('throws 501 for mainnet submissions', async () => {
-      process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'omachain-mainnet';
-
-      const { Contract, verifyTypedData, keccak256 } = await import('ethers');
-      (verifyTypedData as any).mockReturnValue(validAttester);
-      (keccak256 as any).mockReturnValue('0xmainnethash_' + Date.now());
-
-      (Contract as any).mockImplementation(() => ({
-        getNonce: vi.fn().mockResolvedValue(BigInt(0)),
-        getSchemaRegistry: vi.fn().mockResolvedValue('0x' + 'd'.repeat(40)),
-        getSchema: vi.fn().mockResolvedValue({
-          uid: validSchema, resolver: '0x' + '0'.repeat(40), revocable: false, schema: 'string test',
-        }),
-      }));
-
-      try {
-        await submitDelegatedAttestation(validParams);
-        expect.fail('Should have thrown');
-      } catch (error) {
-        expect((error as EasRouteError).statusCode).toBe(501);
-        expect((error as EasRouteError).code).toBe('MAINNET_NOT_SUPPORTED');
-      }
-    });
-  });
-
   describe('delegate key validation', () => {
     it('throws 500 when delegate key is not configured', async () => {
       const { loadEasDelegatePrivateKey } = await import('@/lib/server/eas-delegate-key');

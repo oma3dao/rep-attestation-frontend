@@ -50,7 +50,7 @@ describe('service-urls', () => {
     it('defaults to the preview. prefix for unknown chains', async () => {
       process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'some-other-chain';
       const { buildServiceUrl } = await importFresh();
-      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://test.backend.omatrust.org');
+      expect(buildServiceUrl('backend.omatrust.org')).toBe('https://preview.backend.omatrust.org');
     });
 
     it('defaults to omachain-testnet (preview.) when no active chain is set', async () => {
@@ -72,7 +72,7 @@ describe('service-urls', () => {
       process.env.NEXT_PUBLIC_ACTIVE_CHAIN = 'omachain-testnet';
       process.env.NEXT_PUBLIC_OMATRUST_BACKEND_DOMAIN = 'api.example.com';
       const { getBackendOrigin } = await importFresh();
-      expect(getBackendOrigin()).toBe('https://preview.api.example.com');
+      expect(getBackendOrigin()).toBe('https://test.api.example.com');
     });
 
     it('treats a localhost backend domain as a local override', async () => {

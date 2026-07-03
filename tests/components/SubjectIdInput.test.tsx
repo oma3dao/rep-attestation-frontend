@@ -14,7 +14,8 @@ vi.mock('@/components/ui/select', () => ({
       <option value="did:web">did:web</option>
       <option value="did:pkh">did:pkh</option>
       <option value="did:handle">did:handle</option>
-      <option value="did:key">did:key</option>
+      <option value="did:jwk">did:jwk</option>
+      <option value="did:artifact">did:artifact</option>
     </select>
   ),
   SelectTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -61,6 +62,39 @@ vi.mock('@/components/did-key-input', () => ({
     <div data-testid="did-key-input">
       <input
         aria-label="did:key"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </div>
+  ),
+}));
+vi.mock('@/components/public-key-input', () => ({
+  PublicKeyInput: ({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) => (
+    <div data-testid="public-key-input">
+      <input
+        aria-label="public-key"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </div>
+  ),
+}));
+vi.mock('@/components/did-jwk-input', () => ({
+  DidJwkInput: ({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) => (
+    <div data-testid="did-jwk-input">
+      <input
+        aria-label="did:jwk"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </div>
+  ),
+}));
+vi.mock('@/components/artifact-did-input', () => ({
+  ArtifactDidInput: ({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) => (
+    <div data-testid="artifact-did-input">
+      <input
+        aria-label="did:artifact"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
       />
@@ -126,11 +160,11 @@ describe('SubjectIdInput', () => {
     expect(screen.getByTestId('did-handle-input')).toBeInTheDocument();
   });
 
-  it('shows did:key input when did:key is selected', () => {
+  it('shows did:jwk input when did:jwk is selected', () => {
     const onChange = vi.fn();
     render(<SubjectIdInput onChange={onChange} />);
-    fireEvent.change(screen.getByTestId('subject-method-select'), { target: { value: 'did:key' } });
-    expect(screen.getByTestId('did-key-input')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('subject-method-select'), { target: { value: 'did:jwk' } });
+    expect(screen.getByTestId('public-key-input')).toBeInTheDocument();
   });
 
   it('updates method when value prop changes to different did type', () => {
