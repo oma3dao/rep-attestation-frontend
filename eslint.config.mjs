@@ -12,7 +12,7 @@ const compat = new FlatCompat({
 const config = [
   ...compat.extends("next/core-web-vitals"),
   {
-    ignores: ["temp/**"],
+    ignores: ["temp/**", ".next/**", "coverage/**"],
   },
 ];
 
