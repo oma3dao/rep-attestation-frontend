@@ -12,9 +12,9 @@ describe('chains config', () => {
   it('exports SUPPORTED_CHAINS as an array with known chains', () => {
     expect(Array.isArray(SUPPORTED_CHAINS)).toBe(true);
     expect(SUPPORTED_CHAINS.length).toBeGreaterThan(0);
-    // Check for known chain ids (OMAChain Testnet, BSC Testnet, BSC Mainnet, Sepolia, Mainnet)
+    // Check for known chain ids (OMAChain Testnet, OMAChain Mainnet)
     const chainIds = SUPPORTED_CHAINS.map(chain => chain.id);
-    expect(chainIds).toEqual(expect.arrayContaining([66238, 97, 56, 11155111, 1]));
+    expect(chainIds).toEqual(expect.arrayContaining([66238, 6623]));
   });
 
   it('exports DEFAULT_CHAIN as one of the supported chains', () => {

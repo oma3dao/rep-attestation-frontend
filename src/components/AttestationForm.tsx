@@ -148,6 +148,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         if (value !== null) {
           next[field.name] = value
           changed = true
+        } else if ((field as any).default !== undefined) {
+          next[field.name] = String((field as any).default)
+          changed = true
         }
       }
 
@@ -400,6 +403,14 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       return null
     }
 
+    // Hide publicKeyJwk when keyId is did:jwk (key material is already in the DID)
+    if (field.name === 'publicKeyJwk') {
+      const keyId = typeof formData['keyId'] === 'string' ? formData['keyId'] : ''
+      if (keyId.startsWith('did:jwk:')) {
+        return null
+      }
+    }
+
     return (
       <FieldRenderer
         key={field.name}
@@ -440,6 +451,12 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
             <form onSubmit={handleSubmit} className="space-y-6">
               {schema.fields.map((field) => renderField(field))}
 
+              {isSubmitting ? (
+                <div className="rounded-xl border border-yellow-500/30 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-500/20 dark:bg-yellow-950/30 dark:text-yellow-200">
+                  {submissionStatusMessage}
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-4 pt-6">
                 <Button
                   type="submit"
@@ -463,12 +480,6 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
                   <Link href="/publish">Cancel</Link>
                 </Button>
               </div>
-
-              {isSubmitting ? (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-                  {submissionStatusMessage}
-                </div>
-              ) : null}
             </form>
           </CardContent>
         </Card>

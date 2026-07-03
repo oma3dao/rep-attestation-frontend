@@ -56,19 +56,8 @@ export function useWallet() {
   // Always use environment-determined chain
   const activeChain = getActiveChain()
   
-  // Check if current chain is supported by EAS
-  const isEASChain = (chainId?: number): boolean => {
-    return chainId === omachainTestnet.id || chainId === omachainMainnet.id
-  }
-  
-  // Check if current chain is supported by BAS
-  const isBASChain = (chainId?: number): boolean => {
-    return chainId === bscTestnet.id || chainId === bscMainnet.id
-  }
-  
-  // Check if current chain supports any attestation service
   const isAttestationChain = (chainId?: number): boolean => {
-    return isEASChain(chainId) || isBASChain(chainId)
+    return chainId === omachainTestnet.id || chainId === omachainMainnet.id
   }
   
   // Use environment chain (not wallet chain)

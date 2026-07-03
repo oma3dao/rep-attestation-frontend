@@ -42,11 +42,22 @@ cd rep-attestation-frontend
 npm install
 ```
 
-3. Set up environment variables (see [Environment Setup Guide](#environment-setup-guide) below)
+3. Set up environment variables:
+```bash
+cp .env.example .env.local
+# Edit .env.local with your values (see Environment Variables below)
+```
+
+> **Deploying to Vercel?** For environment variable values, domain configuration, and Vercel project setup, see the [Deployment Guide](https://github.com/oma3dao/omatrust-docs/blob/main/operations/deployment-rep-attestation.md) (Section 5). This README covers local development workflow.
 
 4. Run the development server:
 ```bash
 npm run dev
+```
+
+5. Build for production:
+```bash
+npm run build
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
@@ -77,7 +88,6 @@ NEXT_PUBLIC_THIRDWEB_CLIENT_ID=your_thirdweb_client_id
 - **Email Login**: Direct email authentication with OTP
 - **Wallet Connect**: MetaMask, Coinbase Wallet, WalletConnect mobile wallets
 - **Built-in Chain Switching**: Automatic network switching for supported chains
-- **Multi-chain Support**: BSC, Ethereum, and ready for custom L2 integration
 
 ### Usage
 
@@ -92,24 +102,34 @@ The wallet integration provides:
 ```
 src/
 ├── app/                    # Next.js app router pages
+│   ├── api/               # Server-side API routes
+│   │   ├── controller-witness-proxy/  # CORS proxy for controller witness
+│   │   └── eas/           # EAS delegated attestation + nonce endpoints
 │   ├── attest/            # Attestation creation pages
-│   ├── dashboard/         # User dashboard
-│   └── client.ts         # ThirdWeb client configuration
+│   ├── dashboard/         # User dashboard (subjects, keys, attestations)
+│   ├── publish/           # Publish attestation pages (by type)
+│   ├── account/           # Account management
+│   └── client.ts          # ThirdWeb client configuration
 ├── components/            # Reusable React components
-│   ├── ui/               # shadcn/ui components
-│   ├── AttestationForm.tsx
-│   ├── FieldRenderer.tsx
-│   ├── header.tsx
-│   └── providers.tsx     # ThirdWeb provider setup
+│   ├── ui/               # shadcn/ui base components
+│   ├── dashboard/        # Dashboard-specific components
+│   ├── home/             # Landing page components
+│   └── ...               # Form inputs, DID inputs, auth, attestation views
 ├── config/                # Configuration files
-│   ├── schemas.ts        # Attestation schema definitions
-│   └── attestation-services.ts # BAS and other service configs
-├── lib/                   # Utility functions and configurations
+│   ├── chains.ts         # Chain definitions (OMAChain mainnet/testnet/devnet)
+│   ├── schemas.ts        # Attestation schema definitions (generated)
+│   ├── publish-categories.ts  # Publish workflow categories
+│   ├── subsidized-schemas.ts  # Schemas eligible for gas subsidy
+│   └── ...               # Wallets, social platforms, home workflows
+├── lib/                   # Utility functions and business logic
+│   ├── server/           # Server-only code (EAS routes, delegate key)
+│   ├── utils/caip10/     # CAIP-10 address parsing and validation
 │   ├── blockchain.ts     # Wallet hooks and chain management
-│   ├── bas.ts           # Binance Attestation Service client
-│   ├── service.ts       # High-level attestation service layer
-│   └── schemas.ts       # Schema processing and utilities
-└── styles/               # Global styles
+│   ├── eas.ts            # EAS attestation helpers
+│   ├── omatrust-backend.ts  # Backend API client
+│   ├── service-urls.ts   # Chain-prefixed service URL derivation
+│   └── service.ts        # High-level attestation service layer
+└── app/globals.css        # Global styles (Tailwind)
 ```
 
 ## Available Scripts
@@ -166,42 +186,33 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our code of cond
 ### Blockchain Networks
 
 The application targets:
-- **OMAChain Testnet** (chain ID 66238) - For development and testing
-- **OMAChain Mainnet** (chain ID 6623) - For production use (when available)
+- **OMAChain Mainnet** (chain ID 6623) — Production
+- **OMAChain Testnet** (chain ID 66238) — Development and testing
+- **OMAChain Devnet** (chain ID 66233) — Local development
 
-Legacy BSC and Ethereum chain configs remain in `chains.ts` but are not actively used for attestations.
+Network configuration is in [`src/config/chains.ts`](./src/config/chains.ts). The active chain is determined by the `NEXT_PUBLIC_ACTIVE_CHAIN` environment variable, not the user's wallet.
 
 ### Attestation Services
 
 Currently integrated:
-- **EAS (Ethereum Attestation Service)** - Deployed on OMAChain Testnet
-- **Delegated attestations** - Server pays gas for subsidized schemas
-- **Controller Witness** - Automatic post-attestation witness for key-binding and linked-identifier schemas
+- **EAS (Ethereum Attestation Service)** — Deployed on all OMAChain networks
+- **Delegated attestations** — Server pays gas for subsidized schemas via Thirdweb Server Wallet (prod/test) or raw key (dev/preview)
 
-### Delegated Attestations (Gas Subsidy)
+For delegate wallet addresses and signing configuration details, see the [Deployment Guide](https://github.com/oma3dao/omatrust-docs/blob/main/operations/deployment-rep-attestation.md) (Sections 3 and 9).
 
-For subsidized schemas, the server pays gas on behalf of users via EAS delegated attestations.
+### Local Development with Delegated Attestations
 
-#### EAS Delegate Wallet Addresses
-
-| Environment | Address | Chain |
-|-------------|---------|-------|
-| Testnet | `0xe9e676a6c1160f6df7b296da0d02677294ba9423` | OMAChain Testnet |
-| Mainnet | TBD (Thirdweb Server Wallet) | OMAChain Mainnet |
-
-**Funding:** The testnet delegate wallet needs OMA tokens to pay for gas. Fund it via the OMAChain testnet faucet or transfer from another wallet.
-
-#### Environment Variables (Server-side)
+For local dev, set a raw private key in `.env.local`:
 
 ```bash
-# Testnet only - private key for EAS delegate wallet
+# Private key for EAS delegate wallet (local dev only)
 EAS_DELEGATE_PRIVATE_KEY=0x...
 
 # Optional: max gas per transaction (default: 300000)
 MAX_GAS_PER_TX=300000
 ```
 
-For local development, you can also create a key file:
+To generate a throwaway dev key:
 ```bash
 node -e "console.log('0x' + require('crypto').randomBytes(32).toString('hex'))" > ~/.ssh/eas-delegate-key
 chmod 600 ~/.ssh/eas-delegate-key
@@ -216,9 +227,9 @@ chmod 600 ~/.ssh/eas-delegate-key
 #### Wallet Connection Issues
 - Try refreshing the page
 - Clear browser cache and cookies
-- Ensure you're on a supported network (BSC or Ethereum)
+- Ensure you're connected to OMAChain (the app auto-switches networks)
 
 #### Transaction Failures
-- Check you have sufficient gas tokens (BNB for BSC, ETH for Ethereum)
+- Check that the delegate wallet has sufficient OMA for gas
 - Verify you're connected to the correct network
-- Check that the attestation schema is deployed on the current network
+- Check that the attestation schema is deployed on the active chain

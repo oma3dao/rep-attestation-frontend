@@ -7,7 +7,7 @@ describe('subsidized-schemas', () => {
 
   describe('isSubsidizedSchema', () => {
     const EXPECTED_USER_REVIEW_UID = '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47';
-    const EXPECTED_LINKED_ID_UID = '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453';
+    const EXPECTED_LINKED_ID_UID = '0x56d1e74383cbcfb89e23b25f444a081951a5d2fa7876b159da082b8cbd967af8';
     const EXPECTED_CERT_UID = '0x2b0d1100f7943c0c2ea29e35c1286bd860fa752124e035cafb503bb83f234805';
 
     it('returns true for user-review schema UID on OMAChain Testnet', () => {
@@ -47,7 +47,7 @@ describe('subsidized-schemas', () => {
         '0x7ab3911527e5e47eaab9f5a2c571060026532dde8cb4398185553053963b2a47' // user-review
       );
       expect(uids).toContain(
-        '0x26e21911c55587925afee4b17839ab091e9829321b4a4e1658c497eb0088b453' // linked-identifier
+        '0x56d1e74383cbcfb89e23b25f444a081951a5d2fa7876b159da082b8cbd967af8' // linked-identifier
       );
     });
 

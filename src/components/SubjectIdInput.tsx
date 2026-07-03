@@ -14,6 +14,8 @@ import { Caip10Input } from "@/components/caip10-input"
 import { DidHandleInput } from "@/components/did-handle-input"
 import { DidKeyInput } from "@/components/did-key-input"
 import { DidJwkInput } from "@/components/did-jwk-input"
+import { ArtifactDidInput } from "@/components/artifact-did-input"
+import { PublicKeyInput } from "@/components/public-key-input"
 import { HelpCircle } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -26,7 +28,7 @@ interface SubjectIdInputProps {
   handlePlatforms?: string[] // e.g. ["twitter", "github", "discord"]
 }
 
-type DidMethod = "did:web" | "did:pkh" | "did:handle" | "did:key" | "did:jwk" | ""
+type DidMethod = "did:web" | "did:pkh" | "did:handle" | "did:key" | "did:jwk" | "did:artifact" | ""
 
 /**
  * Subject ID Input Component
@@ -48,22 +50,26 @@ export function SubjectIdInput({
     if (val.startsWith("did:handle:")) return "did:handle"
     if (val.startsWith("did:key:")) return "did:key"
     if (val.startsWith("did:jwk:")) return "did:jwk"
+    if (val.startsWith("did:artifact:")) return "did:artifact"
     return ""
   }
 
   const [method, setMethod] = useState<DidMethod>(getMethodFromValue(value))
 
+  // Derive effective method: prefer detected from value when state hasn't caught up
+  const effectiveMethod = method || getMethodFromValue(value)
+
   // Build the list of available methods based on allowedMethods prop
   const allMethodDefs: Record<string, { value: DidMethod; emoji: string; label: string }> = {
-    web:    { value: "did:web", emoji: "🌐", label: "Web Domain - For websites and web-based identities" },
-    pkh:    { value: "did:pkh", emoji: "🔑", label: "Blockchain Address - For smart contracts and wallet addresses" },
-    handle: { value: "did:handle", emoji: "👤", label: "Social Handle - For Twitter, GitHub, Discord, etc." },
-    jwk:    { value: "did:jwk", emoji: "🔐", label: "JWK Key - For non-EVM public key identifiers" },
-    key:    { value: "did:key", emoji: "🔐", label: "Cryptographic Key - For public key identifiers" },
+    web:      { value: "did:web", emoji: "🌐", label: "Web Domain - For websites and URLs" },
+    pkh:      { value: "did:pkh", emoji: "🔑", label: "Blockchain Address - For smart contract and wallet addresses" },
+    handle:   { value: "did:handle", emoji: "👤", label: "Social Handle - X, GitHub, Discord, etc." },
+    jwk:      { value: "did:jwk", emoji: "🔐", label: "JWK Key - Public key identifiers" },
+    artifact: { value: "did:artifact", emoji: "📦", label: "Artifact - For binaries, files, and text like JSON" },
   }
 
   // Default fallback order (most common to least)
-  const defaultOrder = ["web", "pkh", "handle", "jwk", "key"]
+  const defaultOrder = ["web", "pkh", "jwk", "artifact", "handle"]
 
   // If allowedMethods is provided, use its order (schema wins); otherwise use default order
   const methodOrder = allowedMethods ?? defaultOrder
@@ -80,9 +86,12 @@ export function SubjectIdInput({
   }, [value])
 
   const handleMethodChange = (newMethod: string) => {
+    const currentMethod = getMethodFromValue(value)
     setMethod(newMethod as DidMethod)
-    // Clear the value when switching methods
-    onChange(null)
+    // Only clear the value when switching to a genuinely different method
+    if (currentMethod !== newMethod) {
+      onChange(null)
+    }
   }
 
   const handleDidWebChange = (did: string | null) => {
@@ -119,7 +128,7 @@ export function SubjectIdInput({
             </Tooltip>
           </TooltipProvider>
         </div>
-        <Select value={method} onValueChange={handleMethodChange}>
+        <Select value={effectiveMethod} onValueChange={handleMethodChange}>
           <SelectTrigger id="did-method">
             <SelectValue placeholder="Select ID type" />
           </SelectTrigger>
@@ -134,7 +143,7 @@ export function SubjectIdInput({
       </div>
 
       {/* Conditional Input based on selected method */}
-      {method === "did:web" && (
+      {effectiveMethod === "did:web" && (
         <DidWebInput
           value={value}
           onChange={handleDidWebChange}
@@ -142,7 +151,7 @@ export function SubjectIdInput({
         />
       )}
 
-      {method === "did:pkh" && (
+      {effectiveMethod === "did:pkh" && (
         <Caip10Input
           value={caip10Value}
           onChange={handleCaip10Change}
@@ -150,7 +159,7 @@ export function SubjectIdInput({
         />
       )}
 
-      {method === "did:handle" && (
+      {effectiveMethod === "did:handle" && (
         <DidHandleInput
           value={value}
           onChange={onChange}
@@ -159,10 +168,28 @@ export function SubjectIdInput({
         />
       )}
 
-      {method === "did:key" && (
-        <DidKeyInput
+      {effectiveMethod === "did:key" && (
+        <PublicKeyInput
           value={value}
           onChange={onChange}
+          error={error}
+          label="Public Key (legacy did:key)"
+        />
+      )}
+
+      {effectiveMethod === "did:jwk" && (
+        <PublicKeyInput
+          value={value}
+          onChange={onChange}
+          error={error}
+          label="Public Key"
+        />
+      )}
+
+      {effectiveMethod === "did:artifact" && (
+        <ArtifactDidInput
+          value={value}
+          onChange={(did) => onChange(did || "")}
           error={error}
         />
       )}

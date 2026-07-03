@@ -84,7 +84,7 @@ describe('EvidencePointerProofInput', () => {
         />
       )
       const input = getProofUrlInput()
-      expect(input.className).toContain('border-red-500')
+      expect(input.className).toContain('field-error')
     })
   })
 

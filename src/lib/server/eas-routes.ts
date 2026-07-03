@@ -52,6 +52,46 @@ export class EasRouteError extends Error {
 }
 
 // ============================================================================
+// Maintenance Mode
+// ============================================================================
+
+/**
+ * This flag is used during Thirdweb secret rotation so delegated attestations
+ * fail gracefully while the server wallet credential is being updated.
+ * Set MAINTENANCE_IN_PROGRESS=true in the environment before redeploying
+ * when performing planned key rotation or dependency maintenance.
+ */
+export function isMaintenanceMode(): boolean {
+  return process.env.MAINTENANCE_IN_PROGRESS === 'true';
+}
+
+/**
+ * Detect whether a Thirdweb SDK error is an authentication/authorization failure (HTTP 401).
+ * The Thirdweb SDK may wrap the error in various ways, so we check multiple indicators.
+ */
+export function isThirdwebAuthError(error: unknown): boolean {
+  if (!error) return false;
+
+  const err = error as Record<string, unknown>;
+
+  // Check common status code properties
+  if (err.status === 401 || err.statusCode === 401) return true;
+
+  // Check nested response object (fetch-style errors)
+  const response = err.response as Record<string, unknown> | undefined;
+  if (response?.status === 401 || response?.statusCode === 401) return true;
+
+  // Check error message for 401/Unauthorized indicators
+  const message = (err.message as string) || String(error);
+  if (/\b401\b/.test(message) || /\bunauthorized\b/i.test(message)) return true;
+
+  // Check cause chain
+  if (err.cause) return isThirdwebAuthError(err.cause);
+
+  return false;
+}
+
+// ============================================================================
 // Shared Utilities
 // ============================================================================
 
@@ -320,10 +360,6 @@ export async function submitDelegatedAttestation(
   processedSignatures.set(sigHash, Date.now());
 
   // 7. Submit to EAS
-  if (isMainnet()) {
-    throw new EasRouteError('Mainnet delegated attestations not yet available', 501, 'MAINNET_NOT_SUPPORTED');
-  }
-
   const { v, r, s } = splitSignature(signature);
 
   // Build the on-chain DelegatedAttestationRequest struct from server-rebuilt typed data
@@ -359,35 +395,57 @@ export async function submitDelegatedAttestation(
     // Thirdweb server wallet path — private key never leaves Vault
     console.log(`[delegated-attest] Using Thirdweb server wallet: ${managedWallet.walletAddress}`);
 
-    const client = createThirdwebClient({ secretKey: managedWallet.secretKey });
-    const chain = defineChain({ id: chainConfig.id, rpc: chainConfig.rpc });
+    try {
+      const client = createThirdwebClient({ secretKey: managedWallet.secretKey });
+      const chain = defineChain({ id: chainConfig.id, rpc: chainConfig.rpc });
 
-    const easContract = getContract({ client, chain, address: easAddress });
-    const serverWallet = Engine.serverWallet({
-      client,
-      address: managedWallet.walletAddress,
-      executionOptions: { type: 'EOA', from: managedWallet.walletAddress },
-    });
+      const easContract = getContract({ client, chain, address: easAddress });
+      const serverWallet = Engine.serverWallet({
+        client,
+        address: managedWallet.walletAddress,
+        executionOptions: { type: 'EOA', from: managedWallet.walletAddress },
+      });
 
-    const transaction = prepareContractCall({
-      contract: easContract,
-      method: 'function attestByDelegation((bytes32 schema, (address recipient, uint64 expirationTime, bool revocable, bytes32 refUID, bytes data, uint256 value) data, (uint8 v, bytes32 r, bytes32 s) signature, address attester, uint64 deadline) delegatedRequest) payable returns (bytes32)',
-      params: [delegatedRequest as any],
-      gas: BigInt(maxGas),
-    });
+      const transaction = prepareContractCall({
+        contract: easContract,
+        method: 'function attestByDelegation((bytes32 schema, (address recipient, uint64 expirationTime, bool revocable, bytes32 refUID, bytes data, uint256 value) data, (uint8 v, bytes32 r, bytes32 s) signature, address attester, uint64 deadline) delegatedRequest) payable returns (bytes32)',
+        params: [delegatedRequest as any],
+        gas: BigInt(maxGas),
+      });
 
-    const { transactionId } = await serverWallet.enqueueTransaction({ transaction });
-    console.log(`[delegated-attest] Enqueued transaction: ${transactionId}`);
+      const { transactionId } = await serverWallet.enqueueTransaction({ transaction });
+      console.log(`[delegated-attest] Enqueued transaction: ${transactionId}`);
 
-    const txResult = await Engine.waitForTransactionHash({ client, transactionId });
-    console.log(`[delegated-attest] Transaction sent: ${txResult.transactionHash}`);
+      const txResult = await Engine.waitForTransactionHash({ client, transactionId });
+      console.log(`[delegated-attest] Transaction sent: ${txResult.transactionHash}`);
 
-    const receipt = await waitForReceipt({ client, chain, transactionHash: txResult.transactionHash });
-    console.log(`[delegated-attest] Transaction confirmed in block ${receipt.blockNumber}`);
+      const receipt = await waitForReceipt({ client, chain, transactionHash: txResult.transactionHash });
+      console.log(`[delegated-attest] Transaction confirmed in block ${receipt.blockNumber}`);
 
-    txHash = receipt.transactionHash;
-    blockNumber = Number(receipt.blockNumber);
-    logs = receipt.logs as Array<{ topics: readonly string[]; data: string }>;
+      txHash = receipt.transactionHash;
+      blockNumber = Number(receipt.blockNumber);
+      logs = receipt.logs as Array<{ topics: readonly string[]; data: string }>;
+    } catch (error: unknown) {
+      if (isThirdwebAuthError(error)) {
+        if (isMaintenanceMode()) {
+          console.log('[delegated-attest] Thirdweb 401 during planned maintenance — returning 503');
+          throw new EasRouteError(
+            'Delegated publishing is temporarily unavailable for scheduled maintenance. Please try again in a few minutes.',
+            503,
+            'MAINTENANCE_IN_PROGRESS'
+          );
+        } else {
+          console.error('[delegated-attest] CRITICAL: Unexpected Thirdweb authentication failure — check THIRDWEB_SECRET_KEY configuration');
+          throw new EasRouteError(
+            'Delegated publishing is temporarily unavailable. Please try again later.',
+            503,
+            'THIRDWEB_AUTH_FAILURE'
+          );
+        }
+      }
+      // Non-401 errors: rethrow to preserve existing behavior
+      throw error;
+    }
   } else {
     // Fallback: direct private key signing via ethers
     console.log('[delegated-attest] Using private key fallback');

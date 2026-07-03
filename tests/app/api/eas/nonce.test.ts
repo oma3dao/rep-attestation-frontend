@@ -57,6 +57,28 @@ describe('GET /api/eas/nonce', () => {
       expect(json.elapsed).toBeDefined();
     });
 
+    it('always returns chainId and easAddress (required by delegated attestation client)', async () => {
+      const { getNonce } = await import('@/lib/server/eas-routes');
+      (getNonce as any).mockResolvedValue({
+        nonce: '0',
+        chain: 'OMAChain Testnet',
+        chainId: 66238,
+        easAddress: '0x8835AF90f1537777F52E482C8630cE4e947eCa32',
+      });
+
+      const { GET } = await import('@/app/api/eas/nonce/route');
+      const req = new NextRequest(`http://localhost/api/eas/nonce?attester=${validAttester}`);
+      const res = await GET(req);
+
+      const json = await res.json();
+      // Client-side delegated attestation uses these values to build typed data.
+      // If these are missing, signature verification will fail on the relay.
+      expect(json).toHaveProperty('chainId');
+      expect(json).toHaveProperty('easAddress');
+      expect(typeof json.chainId).toBe('number');
+      expect(json.easAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    });
+
     it('includes elapsed time in response', async () => {
       const { getNonce } = await import('@/lib/server/eas-routes');
       (getNonce as any).mockResolvedValue({

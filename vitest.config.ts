@@ -26,7 +26,6 @@ export default defineConfig({
     },
     exclude: [
       'node_modules/**',
-      'tests/lib/bas.test.ts', // BAS is deprecated, no longer supported
     ],
     coverage: {
       provider: 'v8',
@@ -58,6 +57,10 @@ export default defineConfig({
       '@oma3/omatrust/reputation': path.resolve(
         __dirname,
         './node_modules/@oma3/omatrust/dist/reputation/index.cjs'
+      ),
+      '@oma3/omatrust/widgets': path.resolve(
+        __dirname,
+        './tests/mocks/omatrust-widgets.ts'
       ),
     },
   },
