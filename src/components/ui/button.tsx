@@ -4,18 +4,19 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { client } from "@/app/client"
 import { ConnectButton as ThirdwebConnectButton } from "thirdweb/react"
 import { defineChain } from "thirdweb/chains"
-import { DEFAULT_CHAIN } from "@/config/chains"
+import { getActiveChain } from "@/lib/blockchain"
 import { managedWallet, nativeWallets, allWallets } from "@/config/wallets"
 
 import { cn } from "@/lib/utils"
 
 // The active chain — scopes Thirdweb RPC and balance display to this chain
+const envChain = getActiveChain()
 const activeThirdwebChain = defineChain({
-  id: DEFAULT_CHAIN.id,
-  rpc: DEFAULT_CHAIN.rpc,
-  name: DEFAULT_CHAIN.name,
-  nativeCurrency: DEFAULT_CHAIN.nativeCurrency,
-  blockExplorers: DEFAULT_CHAIN.blockExplorers,
+  id: envChain.id,
+  rpc: envChain.rpc,
+  name: envChain.name,
+  nativeCurrency: envChain.nativeCurrency,
+  blockExplorers: envChain.blockExplorers,
 })
 
 const buttonVariants = cva(

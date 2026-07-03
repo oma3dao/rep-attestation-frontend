@@ -12,6 +12,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/blockchain', () => ({
   useWallet: () => ({ chainId: undefined, address: undefined, isConnected: false }),
+  getActiveChain: () => ({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/', name: 'OMAChain Testnet', nativeCurrency: { name: 'OMA', symbol: 'OMA', decimals: 18 }, blockExplorers: [{ name: 'Explorer', url: 'https://explorer.testnet.chain.oma3.org', apiUrl: 'https://explorer.testnet.chain.oma3.org/api' }] }),
 }));
 
 vi.mock('@/lib/attestation-queries', () => ({
