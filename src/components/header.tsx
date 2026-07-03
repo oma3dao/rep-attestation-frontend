@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Menu, X, MessageSquarePlus } from "lucide-react"
+import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AuthEntryDialog } from "@/components/auth-entry-dialog"
-import { ReviewWidgetModal } from "@/components/review-widget-modal"
+// import { ReviewWidgetModal } from "@/components/review-widget-modal"
 import { useBackendSession } from "@/components/backend-session-provider"
 
 type NavLink = {
@@ -33,7 +33,7 @@ export function Header() {
   const { session, authDialog, closeAuthDialog, openAuthDialog: openBackendAuthDialog } = useBackendSession()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [reviewOpen, setReviewOpen] = useState(false)
+  // const [reviewOpen, setReviewOpen] = useState(false)
 
   const isSignedIn = !!session
   const displayName = session?.account?.displayName
@@ -123,16 +123,6 @@ export function Header() {
             ))}
             {isSignedIn ? (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-md border-primary/25 bg-background/80 px-3 text-foreground hover:border-primary/50 hover:bg-primary/5"
-                  onClick={() => setReviewOpen(true)}
-                >
-                  <MessageSquarePlus className="mr-1.5 h-4 w-4" />
-                  Review
-                </Button>
                 <Link
                   href="/account"
                   className="rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
@@ -181,18 +171,6 @@ export function Header() {
             ))}
             {isSignedIn ? (
               <div className="mt-4 space-y-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full border-primary/25 bg-background/80 text-foreground hover:border-primary/50 hover:bg-primary/5"
-                  onClick={() => {
-                    setMobileOpen(false)
-                    setReviewOpen(true)
-                  }}
-                >
-                  <MessageSquarePlus className="mr-1.5 h-4 w-4" />
-                  Review
-                </Button>
                 <Link
                   href="/account"
                   className="block w-full rounded-md border border-primary/25 bg-background/80 px-4 py-2 text-center text-sm font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/5"
@@ -237,7 +215,7 @@ export function Header() {
         />
       )}
 
-      <ReviewWidgetModal open={reviewOpen} onOpenChange={setReviewOpen} />
+      {/* <ReviewWidgetModal open={reviewOpen} onOpenChange={setReviewOpen} /> */}
     </>
   )
 }
