@@ -13,7 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 
-const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://app.omatrust.org"
+const WIDGET_BASE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || "https://widgets.omatrust.org"
 const WIDGET_SRC = `${WIDGET_BASE}/widgets/reviews/embed?url=app.omatrust.org&contract=0x8835AF90f1537777F52E482C8630cE4e947eCa32&chainId=66238&name=OMATrust+Reputation+Portal&explorer=https%3A%2F%2Fexplorer.testnet.chain.oma3.org%2Fapi`
 
 const DEV_ORIGIN_OVERRIDE = process.env.NEXT_PUBLIC_WIDGET_BASE_URL || undefined
