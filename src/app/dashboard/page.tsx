@@ -213,9 +213,13 @@ function ActionGrid({ title, description, actions, children }: {
 function AccountSection({
   session,
   serviceDids,
+  registeredSubjects,
+  onAddSubject,
 }: {
   session: BackendSessionMeResponse
   serviceDids: string[]
+  registeredSubjects: BackendSubject[]
+  onAddSubject: () => void
 }) {
   return (
     <Card className="mb-6">
@@ -234,11 +238,25 @@ function AccountSection({
             </div>
           </div>
           <div className="rounded-xl border border-border/70 bg-muted/40 p-4 md:col-span-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {serviceDids.length > 1 ? "Service IDs" : "Service ID"}
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {serviceDids.length > 1 ? "Service IDs" : "Service ID"}
+              </div>
+              <Button variant="outline" size="sm" onClick={onAddSubject}>
+                + Add Subject
+              </Button>
             </div>
-            <div className="mt-2 space-y-1">
-              {serviceDids.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {registeredSubjects.length > 0 ? (
+                registeredSubjects.map((subject) => (
+                  <div key={subject.id} className="rounded-lg border border-border/50 bg-background px-3 py-2">
+                    <div className="break-all font-mono text-sm text-foreground">{subject.canonicalDid}</div>
+                    {subject.displayName ? (
+                      <div className="text-xs text-muted-foreground">{subject.displayName}</div>
+                    ) : null}
+                  </div>
+                ))
+              ) : serviceDids.length > 0 ? (
                 serviceDids.map((did) => (
                   <div key={did} className="break-all font-mono text-sm text-foreground">{did}</div>
                 ))
@@ -1957,6 +1975,22 @@ function DashboardContent() {
     await loadSubjects()
   }, [loadSubjects])
 
+  const [accountSubjectDialogOpen, setAccountSubjectDialogOpen] = useState(false)
+
+  const handleAccountAddSubject = useCallback(() => {
+    setAccountSubjectDialogOpen(true)
+  }, [])
+
+  const handleAccountSubjectCreated = useCallback(async (subject: BackendSubject) => {
+    setAccountSubjectDialogOpen(false)
+    setRegisteredSubjects((current) => {
+      const next = current.filter((item) => item.id !== subject.id)
+      next.unshift(subject)
+      return next
+    })
+    await loadSubjects()
+  }, [loadSubjects])
+
   const dashboardReturnTo = useMemo(() => {
     const query = searchParams.toString()
     return query ? `/dashboard?${query}` : "/dashboard"
@@ -2099,7 +2133,12 @@ function DashboardContent() {
         </div>
       </div>
 
-      <AccountSection session={session} serviceDids={serviceDids} />
+      <AccountSection
+        session={session}
+        serviceDids={serviceDids}
+        registeredSubjects={registeredSubjects}
+        onAddSubject={handleAccountAddSubject}
+      />
 
       {/* Service Controller — only if user has a valid subject */}
       {hasValidSubject && (
@@ -2253,6 +2292,16 @@ function DashboardContent() {
         onConfirm={() => { if (revokeTarget) void handleRevoke(revokeTarget) }}
         attestationUid={revokeTarget?.uid ?? ""}
         isRevoking={revokingUid !== null}
+      />
+
+      <SubjectConfirmationDialog
+        open={accountSubjectDialogOpen}
+        onOpenChange={setAccountSubjectDialogOpen}
+        walletDid={accountWalletDid}
+        existingSubjectDids={registeredSubjectDids}
+        onSubjectCreated={(subject) => {
+          void handleAccountSubjectCreated(subject)
+        }}
       />
     </div>
   )
