@@ -193,6 +193,14 @@ export function SubjectIdInput({
           error={error}
         />
       )}
+
+      {method === "did:jwk" && (
+        <DidJwkInput
+          value={value}
+          onChange={onChange}
+          error={error}
+        />
+      )}
     </div>
   )
 }
