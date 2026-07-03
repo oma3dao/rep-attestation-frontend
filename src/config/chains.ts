@@ -53,8 +53,8 @@ export const omachainMainnet = {
   blockExplorers: [
     {
       name: "OMAChain Explorer",
-      url: "https://explorer.chain.oma3.org",
-      apiUrl: "https://explorer.chain.oma3.org/api",
+      url: "https://explorer.omachain.org",
+      apiUrl: "https://explorer.omachain.org/api",
     },
   ],
   testnet: false,
