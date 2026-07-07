@@ -173,6 +173,18 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
   }
 
+  // Mirrors the key-binding schema's allOf rule (1.0.1): publicKeyJwk is hidden
+  // when the keyId already contains the full key (did:jwk embeds it; a Solana
+  // address is the raw ed25519 public key), optional for did:pkh:eip155 (the key
+  // is recoverable from any ECDSA signature), and required for every other keyId
+  // method (hash-based addresses like Sui or Cosmos). Returns null when hidden.
+  const resolvePublicKeyJwkField = (field: typeof schema.fields[0]) => {
+    const keyId = typeof formData['keyId'] === 'string' ? formData['keyId'] : ''
+    if (keyId.startsWith('did:jwk:') || keyId.startsWith('did:pkh:eip155:') || keyId.startsWith('did:pkh:solana:')) return null
+    if (keyId) return { ...field, required: true }
+    return field
+  }
+
   const validateFormInternal = (): boolean => {
     if (validateForm) {
       const newErrors = validateForm(formData)
@@ -181,7 +193,9 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
     const newErrors: FormErrors = {}
     schema.fields.forEach(field => {
-      const error = validateField(field, formData[field.name])
+      const effective = field.name === 'publicKeyJwk' ? resolvePublicKeyJwkField(field) : field
+      if (!effective) return
+      const error = validateField(effective, formData[field.name])
       if (error) {
         newErrors[field.name] = error
       }
@@ -396,6 +410,11 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
     }
   }
 
+  // Track whether the optional proofs section is expanded
+  const [proofsExpanded, setProofsExpanded] = useState(false)
+  // Track whether the optional publicKeyJwk section is expanded
+  const [publicKeyExpanded, setPublicKeyExpanded] = useState(false)
+
   const renderField = (field: typeof schema.fields[0]) => {
     // Conditional visibility: hide proofs field unless method is 'proof'
     // Only applies to schemas that have a 'method' field (e.g., linked-identifier)
@@ -403,12 +422,68 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
       return null
     }
 
-    // Hide publicKeyJwk when keyId is did:jwk (key material is already in the DID)
+    // Collapsible proofs for key-binding and linked-identifier when subject is did:web or did:pkh
+    // (verification is implicit via controller witness, DNS TXT, or wallet signing)
+    if (field.name === 'proofs' && SUBJECT_SCOPED_SCHEMA_IDS.has(schema.id)) {
+      const subject = typeof formData['subject'] === 'string' ? formData['subject'] : ''
+      if (subject.startsWith('did:web:') || subject.startsWith('did:pkh:')) {
+        return (
+          <div key={field.name} className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setProofsExpanded(!proofsExpanded)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span className={`transition-transform ${proofsExpanded ? 'rotate-90' : ''}`}>▶</span>
+              <span>Add proof manually</span>
+              <span className="text-xs">(optional — controller witness provides verification)</span>
+            </button>
+            {proofsExpanded && (
+              <FieldRenderer
+                field={field}
+                value={formData[field.name] || []}
+                onChange={(value) => handleFieldChange(field.name, value)}
+                error={errors[field.name]}
+              />
+            )}
+          </div>
+        )
+      }
+    }
+
+    // publicKeyJwk visibility and requiredness depend on keyId (schema allOf rule)
     if (field.name === 'publicKeyJwk') {
-      const keyId = typeof formData['keyId'] === 'string' ? formData['keyId'] : ''
-      if (keyId.startsWith('did:jwk:')) {
+      const resolved = resolvePublicKeyJwkField(field)
+      if (!resolved) {
+        const keyId = typeof formData['keyId'] === 'string' ? formData['keyId'] : ''
+        // did:pkh:eip155 — key is recoverable but not embedded, show collapsible
+        if (keyId.startsWith('did:pkh:eip155:')) {
+          return (
+            <div key={field.name} className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setPublicKeyExpanded(!publicKeyExpanded)}
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className={`transition-transform ${publicKeyExpanded ? 'rotate-90' : ''}`}>▶</span>
+                <span>Add optional public key</span>
+                <span className="text-xs">(not common)</span>
+              </button>
+              {publicKeyExpanded && (
+                <FieldRenderer
+                  field={{ ...field, required: false }}
+                  value={formData[field.name] || ''}
+                  onChange={(value) => handleFieldChange(field.name, value)}
+                  error={errors[field.name]}
+                />
+              )}
+            </div>
+          )
+        }
+        // did:jwk or did:pkh:solana — key is embedded in the DID, hide entirely
         return null
       }
+      field = resolved
     }
 
     return (

@@ -13,7 +13,6 @@ import { DidWebInput } from "@/components/did-web-input"
 import { Caip10Input } from "@/components/caip10-input"
 import { DidHandleInput } from "@/components/did-handle-input"
 import { DidKeyInput } from "@/components/did-key-input"
-import { DidJwkInput } from "@/components/did-jwk-input"
 import { ArtifactDidInput } from "@/components/artifact-did-input"
 import { PublicKeyInput } from "@/components/public-key-input"
 import { HelpCircle } from "lucide-react"
@@ -55,6 +54,11 @@ export function SubjectIdInput({
   }
 
   const [method, setMethod] = useState<DidMethod>(getMethodFromValue(value))
+  // Store per-method draft values so switching methods doesn't lose user input
+  const [drafts, setDrafts] = useState<Partial<Record<DidMethod, string>>>(() => {
+    const initial = getMethodFromValue(value)
+    return initial ? { [initial]: value } : {}
+  })
 
   // Derive effective method: prefer detected from value when state hasn't caught up
   const effectiveMethod = method || getMethodFromValue(value)
@@ -77,21 +81,35 @@ export function SubjectIdInput({
     .filter(m => m in allMethodDefs)
     .map(m => allMethodDefs[m])
 
-  // Update method when value changes externally
+  // Update method and drafts when value changes externally
   useEffect(() => {
     const detectedMethod = getMethodFromValue(value)
     if (detectedMethod && detectedMethod !== method) {
       setMethod(detectedMethod)
     }
+    if (detectedMethod && value) {
+      setDrafts((prev) => ({ ...prev, [detectedMethod]: value }))
+    }
   }, [value])
 
   const handleMethodChange = (newMethod: string) => {
-    const currentMethod = getMethodFromValue(value)
-    setMethod(newMethod as DidMethod)
-    // Only clear the value when switching to a genuinely different method
-    if (currentMethod !== newMethod) {
-      onChange(null)
+    // Radix Select renders a hidden native <select> when inside a <form>, and
+    // dispatches change events from it whose value can be "" while its <option>
+    // children are still registering (e.g. right after a URL-param pre-fill).
+    // A real user selection always carries a non-empty method, so ignore these.
+    if (!newMethod || newMethod === effectiveMethod) return
+
+    // Save the current value as a draft for the current method
+    if (effectiveMethod && value) {
+      setDrafts((prev) => ({ ...prev, [effectiveMethod]: value }))
     }
+
+    const nextMethod = newMethod as DidMethod
+    setMethod(nextMethod)
+
+    // Restore the draft for the new method, or null if none exists
+    const draft = drafts[nextMethod] ?? null
+    onChange(draft)
   }
 
   const handleDidWebChange = (did: string | null) => {
@@ -190,14 +208,6 @@ export function SubjectIdInput({
         <ArtifactDidInput
           value={value}
           onChange={(did) => onChange(did || "")}
-          error={error}
-        />
-      )}
-
-      {method === "did:jwk" && (
-        <DidJwkInput
-          value={value}
-          onChange={onChange}
           error={error}
         />
       )}

@@ -69,9 +69,12 @@ function getDashboardContext(searchParams: Pick<URLSearchParams, "get">): Dashbo
 
 /**
  * Determine whether a DID is a "real" subject (not just the user's wallet DID).
- * A real subject is a did:web, or a did:pkh that differs from the connected wallet.
+ * Only did:web and did:pkh are valid service identifiers — other DID methods
+ * (did:artifact, did:key, did:jwk, etc.) don't represent services that can
+ * authorize keys or have controller relationships.
  */
 function isRealSubjectDid(did: string, walletDid: string | null): boolean {
+  if (!did.startsWith("did:web:") && !did.startsWith("did:pkh:")) return false
   if (did.startsWith("did:web:")) return true
   if (!walletDid) return true
   return did.toLowerCase() !== walletDid.toLowerCase()

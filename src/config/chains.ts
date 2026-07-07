@@ -35,10 +35,10 @@ export const omachainTestnet = {
 };
 
 /**
- * OMAChain Mainnet (Placeholder)
+ * OMAChain Mainnet
  * Chain ID: 6623
- * RPC: TBD
- * Explorer: TBD
+ * RPC: https://rpc.omachain.org/
+ * Explorer: https://explorer.omachain.org/
  */
 export const omachainMainnet = {
   id: 6623,
