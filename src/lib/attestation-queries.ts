@@ -6,7 +6,11 @@
  */
 
 import * as reputation from '@oma3/omatrust/reputation'
-import type { Hex, AttestationQueryResult as SdkAttestationQueryResult } from '@oma3/omatrust/reputation'
+import type {
+    Hex,
+    AttestationQueryResult as SdkAttestationQueryResult,
+    VerifyAttestationResult,
+} from '@oma3/omatrust/reputation'
 import logger from './logger'
 import { ethers } from 'ethers'
 import { getAllSchemas, type AttestationSchema } from '@/config/schemas'
@@ -37,7 +41,13 @@ export interface EnrichedAttestationResult {
     schemaId?: string
     schemaTitle?: string
     decodedData?: Record<string, any>
+    verification?: VerifyAttestationResult
 }
+
+const PROOF_VERIFICATION_SCHEMA_IDS = new Set([
+    'user-review',
+    'user-review-response',
+])
 
 // ============================================================================
 // Helpers
@@ -47,7 +57,7 @@ export interface EnrichedAttestationResult {
  * Create a provider and resolve the EAS contract address for a given chain.
  * Uses getChainById to look up the RPC URL so we don't hardcode any chain.
  */
-function getProviderAndEas(chainId: number) {
+export function getProviderAndEas(chainId: number) {
     const easContractAddress = getContractAddress('eas', chainId)
     if (!easContractAddress) throw new Error(`EAS not deployed on chain ${chainId}`)
 
@@ -63,6 +73,12 @@ function findSchemaByUid(uid: string, chainId: number): AttestationSchema | unde
     return getAllSchemas().find(s => s.deployedUIDs?.[chainId] === uid)
 }
 
+function getDeployedSchemaUids(chainId: number): Hex[] {
+    return getAllSchemas()
+        .map(s => s.deployedUIDs?.[chainId])
+        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+}
+
 /**
  * Convert an SDK attestation result to the frontend's enriched type,
  * adding schema metadata and decoded data when available.
@@ -70,7 +86,8 @@ function findSchemaByUid(uid: string, chainId: number): AttestationSchema | unde
 function toFrontendResult(
     att: SdkAttestationQueryResult,
     chainId: number,
-    schema?: AttestationSchema
+    schema?: AttestationSchema,
+    verification?: VerifyAttestationResult
 ): EnrichedAttestationResult {
     let decodedData = att.data as Record<string, any> | undefined
     if (schema?.easSchemaString && att.raw) {
@@ -96,7 +113,30 @@ function toFrontendResult(
         schemaId: schema?.id,
         schemaTitle: schema?.title,
         decodedData,
+        verification,
     }
+}
+
+async function verifySdkAttestation(
+    attestation: SdkAttestationQueryResult,
+    provider: unknown
+): Promise<VerifyAttestationResult> {
+    try {
+        return await reputation.verifyAttestation({
+            attestation,
+            provider,
+        })
+    } catch (error) {
+        return {
+            valid: false,
+            checks: {},
+            reasons: [error instanceof Error ? error.message : 'Verification failed'],
+        }
+    }
+}
+
+function shouldRunProofVerification(schema?: AttestationSchema) {
+    return schema?.id ? PROOF_VERIFICATION_SCHEMA_IDS.has(schema.id) : false
 }
 
 // ============================================================================
@@ -144,10 +184,7 @@ export async function getAllAttestationsForDIDWithMetadata(
     const chainId = getActiveChain().id
     const { provider, easContractAddress } = getProviderAndEas(chainId)
 
-    const schemas = getAllSchemas()
-    const deployedSchemaUids = schemas
-        .map(s => s.deployedUIDs?.[chainId])
-        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+    const deployedSchemaUids = getDeployedSchemaUids(chainId)
 
     if (deployedSchemaUids.length === 0) {
         return []
@@ -175,6 +212,47 @@ export async function getAllAttestationsForDIDWithMetadata(
 }
 
 /**
+ * Query all attestations for a DID and run SDK verification for each result.
+ * Used by the Trust Verifier page while preserving the same enriched shape
+ * consumed by activity cards.
+ */
+export async function getVerifiedAttestationsForDIDWithMetadata(
+    did: string,
+    limit: number = 100
+): Promise<EnrichedAttestationResult[]> {
+    const chainId = getActiveChain().id
+    const { provider, easContractAddress } = getProviderAndEas(chainId)
+    const deployedSchemaUids = getDeployedSchemaUids(chainId)
+
+    if (deployedSchemaUids.length === 0) {
+        return []
+    }
+
+    const results = await reputation.listAttestations({
+        subjectDid: did,
+        provider,
+        easContractAddress,
+        schemas: deployedSchemaUids,
+        limit,
+    })
+
+    return Promise.all(results.map(async att => {
+        const schema = findSchemaByUid(att.schema, chainId)
+        let enriched = att
+        if (schema?.easSchemaString && att.raw) {
+            try {
+                const decoded = reputation.decodeAttestationData(schema.easSchemaString, att.raw)
+                enriched = { ...att, data: decoded }
+            } catch (err) { logger.warn('[Query] Failed to decode attestation data', att.uid, err) }
+        }
+        const verification = shouldRunProofVerification(schema)
+            ? await verifySdkAttestation(enriched, provider)
+            : undefined
+        return toFrontendResult(enriched, chainId, schema, verification)
+    }))
+}
+
+/**
  * Get latest attestations across all deployed schemas, enriched with
  * schema metadata (schemaId, schemaTitle, decodedData).
  *
@@ -187,10 +265,7 @@ export async function getLatestAttestationsWithMetadata(
 ): Promise<EnrichedAttestationResult[]> {
     const { provider, easContractAddress } = getProviderAndEas(chainId)
 
-    const schemas = getAllSchemas()
-    const deployedSchemaUids = schemas
-        .map(s => s.deployedUIDs?.[chainId])
-        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+    const deployedSchemaUids = getDeployedSchemaUids(chainId)
 
     if (deployedSchemaUids.length === 0) {
         logger.log('[Query] No schemas deployed on chain', chainId)
@@ -218,6 +293,54 @@ export async function getLatestAttestationsWithMetadata(
     })
 }
 
+// ============================================================================
+// Category Priority Sorting
+// ============================================================================
+
+/**
+ * Schema priority order for the verify page — most important trust signals first.
+ * Schemas not in this list get a default middle priority.
+ */
+const SCHEMA_PRIORITY: Record<string, number> = {
+  'security-assessment': 0,
+  'certification': 1,
+  'controller-witness': 2,
+  'key-binding': 3,
+  'linked-identifier': 4,
+  'user-review-response': 5,
+  'user-review': 6,
+}
+
+const DEFAULT_PRIORITY = 4
+
+/**
+ * Sort attestations by category priority (most important first).
+ * Within the same category, attestations are sorted by time descending (newest first).
+ * User reviews are capped at `reviewLimit` entries.
+ */
+export function sortByCategoryPriority(
+    attestations: EnrichedAttestationResult[],
+    reviewLimit: number = 20
+): EnrichedAttestationResult[] {
+    const sorted = [...attestations].sort((a, b) => {
+        const priorityA = SCHEMA_PRIORITY[a.schemaId ?? ''] ?? DEFAULT_PRIORITY
+        const priorityB = SCHEMA_PRIORITY[b.schemaId ?? ''] ?? DEFAULT_PRIORITY
+        if (priorityA !== priorityB) return priorityA - priorityB
+        // Within same category, newest first
+        return b.time - a.time
+    })
+
+    // Cap user reviews
+    let reviewCount = 0
+    return sorted.filter(att => {
+        if (att.schemaId === 'user-review') {
+            reviewCount++
+            return reviewCount <= reviewLimit
+        }
+        return true
+    })
+}
+
 /**
  * Query attestations created by a specific attester wallet address.
  * Used by the "My Attestations" dashboard page.
@@ -229,10 +352,7 @@ export async function getAttestationsByAttesterWithMetadata(
 ): Promise<EnrichedAttestationResult[]> {
     const { provider, easContractAddress } = getProviderAndEas(chainId)
 
-    const schemas = getAllSchemas()
-    const deployedSchemaUids = schemas
-        .map(s => s.deployedUIDs?.[chainId])
-        .filter((uid): uid is string => !!uid && uid !== '0x'.padEnd(66, '0')) as Hex[]
+    const deployedSchemaUids = getDeployedSchemaUids(chainId)
 
     if (deployedSchemaUids.length === 0) {
         logger.log('[Query] No schemas deployed on chain', chainId)

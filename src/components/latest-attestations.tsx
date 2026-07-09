@@ -8,13 +8,24 @@ import { useWallet } from '@/lib/blockchain'
 import logger from '@/lib/logger'
 import { ATTESTATION_QUERY_CONFIG } from '@/config/attestation-services'
 
+/** Set of schema IDs eligible for the "Trusted" badge when attested by an approved issuer. */
+const TRUSTED_BADGE_SCHEMAS = new Set(['security-assessment', 'certification'])
+
 interface LatestAttestationsProps {
   showHeading?: boolean
   /** Pre-fetched attestation data. When provided, the component skips its own fetch. */
   data?: EnrichedAttestationResult[]
+  emptyMessage?: string
+  /** Approved issuer addresses (lowercased) mapped to their approved schema IDs. */
+  approvedIssuers?: Map<string, Set<string>>
 }
 
-export function LatestAttestations({ showHeading = true, data }: LatestAttestationsProps) {
+export function LatestAttestations({
+  showHeading = true,
+  data,
+  emptyMessage = 'No attestations found yet. Be the first to submit one!',
+  approvedIssuers,
+}: LatestAttestationsProps) {
   const [attestations, setAttestations] = useState<EnrichedAttestationResult[]>(data ?? [])
   const [isLoading, setIsLoading] = useState(!data)
   const [error, setError] = useState<string | null>(null)
@@ -96,7 +107,7 @@ export function LatestAttestations({ showHeading = true, data }: LatestAttestati
           <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
         ) : null}
         <div className="text-center text-muted-foreground">
-          <p>No attestations found yet. Be the first to submit one!</p>
+          <p>{emptyMessage}</p>
         </div>
       </div>
     )
@@ -109,13 +120,22 @@ export function LatestAttestations({ showHeading = true, data }: LatestAttestati
           <h2 className="mb-8 text-center text-3xl font-semibold tracking-tight">Latest Attestations</h2>
         ) : null}
         <div className="grid grid-cols-1 gap-4 max-w-4xl mx-auto">
-          {attestations.map((attestation) => (
-            <AttestationCard 
-              key={attestation.uid} 
-              attestation={attestation}
-              onClick={() => handleCardClick(attestation)}
-            />
-          ))}
+          {attestations.map((attestation) => {
+            const isTrusted = !!(
+              approvedIssuers &&
+              attestation.schemaId &&
+              TRUSTED_BADGE_SCHEMAS.has(attestation.schemaId) &&
+              approvedIssuers.get(attestation.attester.toLowerCase())?.has(attestation.schemaId)
+            )
+            return (
+              <AttestationCard 
+                key={attestation.uid} 
+                attestation={attestation}
+                trusted={isTrusted}
+                onClick={() => handleCardClick(attestation)}
+              />
+            )
+          })}
         </div>
       </div>
 

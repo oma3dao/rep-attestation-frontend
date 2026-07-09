@@ -35,11 +35,11 @@ vi.mock('@/components/did-web-input', () => ({
     </div>
   ),
 }));
-vi.mock('@/components/caip10-input', () => ({
-  Caip10Input: ({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) => (
-    <div data-testid="caip10-input">
+vi.mock('@/components/did-pkh-input', () => ({
+  DidPkhInput: ({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) => (
+    <div data-testid="did-pkh-input">
       <input
-        aria-label="caip10"
+        aria-label="did:pkh"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
       />
@@ -121,20 +121,20 @@ describe('SubjectIdInput', () => {
     expect(screen.getByTestId('did-web-input')).toBeInTheDocument();
   });
 
-  it('shows Caip10Input when did:pkh is selected', () => {
+  it('shows DidPkhInput when did:pkh is selected', () => {
     const onChange = vi.fn();
     render(<SubjectIdInput onChange={onChange} />);
     const select = screen.getByTestId('subject-method-select');
     fireEvent.change(select, { target: { value: 'did:pkh' } });
-    expect(screen.getByTestId('caip10-input')).toBeInTheDocument();
+    expect(screen.getByTestId('did-pkh-input')).toBeInTheDocument();
   });
 
-  it('calls onChange with did:pkh when caip10 value is entered', () => {
+  it('calls onChange with did:pkh value when entered', () => {
     const onChange = vi.fn();
     render(<SubjectIdInput onChange={onChange} />);
     fireEvent.change(screen.getByTestId('subject-method-select'), { target: { value: 'did:pkh' } });
-    const input = screen.getByLabelText('caip10');
-    fireEvent.change(input, { target: { value: 'eip155:1:0xabc' } });
+    const input = screen.getByLabelText('did:pkh');
+    fireEvent.change(input, { target: { value: 'did:pkh:eip155:1:0xabc' } });
     expect(onChange).toHaveBeenCalledWith('did:pkh:eip155:1:0xabc');
   });
 
@@ -184,12 +184,12 @@ describe('SubjectIdInput', () => {
     expect(onChange).toHaveBeenCalledWith('did:web:newdomain.com');
   });
 
-  it('extracts caip10 value from did:pkh format', () => {
+  it('passes did:pkh value directly to DidPkhInput', () => {
     const onChange = vi.fn();
     render(<SubjectIdInput value="did:pkh:eip155:1:0xabc" onChange={onChange} />);
-    expect(screen.getByTestId('caip10-input')).toBeInTheDocument();
-    const input = screen.getByLabelText('caip10');
-    expect(input).toHaveValue('eip155:1:0xabc');
+    expect(screen.getByTestId('did-pkh-input')).toBeInTheDocument();
+    const input = screen.getByLabelText('did:pkh');
+    expect(input).toHaveValue('did:pkh:eip155:1:0xabc');
   });
 
   it('shows empty caip10 value for non-did:pkh values', () => {
