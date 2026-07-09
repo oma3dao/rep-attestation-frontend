@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DidWebInput } from "@/components/did-web-input"
-import { Caip10Input } from "@/components/caip10-input"
+import { DidPkhInput } from "@/components/did-pkh-input"
 import { DidHandleInput } from "@/components/did-handle-input"
 import { DidKeyInput } from "@/components/did-key-input"
 import { ArtifactDidInput } from "@/components/artifact-did-input"
@@ -116,16 +116,9 @@ export function SubjectIdInput({
     onChange(did)
   }
 
-  const handleCaip10Change = (caip10: string | null) => {
-    // Convert CAIP-10 to did:pkh format
-    const did = caip10 ? `did:pkh:${caip10}` : null
+  const handleDidPkhChange = (did: string | null) => {
     onChange(did)
   }
-
-  // Extract CAIP-10 from did:pkh for the input
-  const caip10Value = value?.startsWith("did:pkh:") 
-    ? value.replace("did:pkh:", "") 
-    : ""
 
   return (
     <div className={`ml-4 rounded-lg border border-border/70 bg-muted/30 p-4 space-y-4 ${className}`}>
@@ -170,9 +163,9 @@ export function SubjectIdInput({
       )}
 
       {effectiveMethod === "did:pkh" && (
-        <Caip10Input
-          value={caip10Value}
-          onChange={handleCaip10Change}
+        <DidPkhInput
+          value={value}
+          onChange={handleDidPkhChange}
           error={error}
         />
       )}

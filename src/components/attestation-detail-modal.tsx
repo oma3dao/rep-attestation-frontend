@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { Shield, Award, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
 import { getActiveChain } from "@/lib/blockchain"
@@ -57,6 +58,16 @@ const FIELD_LABEL_MAP: Record<string, string> = {
 function getFieldLabel(key: string): string {
   if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key]
   return key.replace(/([A-Z])/g, ' $1').trim()
+}
+
+/** Format check names to be more user-friendly */
+function formatCheckName(name: string, passed: boolean): string {
+  switch (name) {
+    case 'revocation': return passed ? 'Not revoked' : 'Revoked'
+    case 'expiration': return passed ? 'Not expired' : 'Expired'
+    case 'proofs': return passed ? 'Verified' : 'Not verified'
+    default: return name.replace(/([A-Z])/g, ' $1').trim()
+  }
 }
 
 // Format observedAt timestamps to human-readable dates
@@ -173,6 +184,37 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
               {new Date(attestation.expirationTime * 1000).toLocaleString()}
             </div>
           )}
+
+          {/* Verification Status */}
+          {attestation.verification ? (
+            <div className="space-y-3">
+              <h3 className="font-semibold tracking-tight text-foreground">Status</h3>
+              <div className="rounded-lg border border-border/70 bg-muted/50 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="font-medium text-foreground">Overall:</span>
+                  <span className={attestation.verification.valid ? "text-primary font-medium" : "text-muted-foreground"}>
+                    {attestation.verification.valid ? "Passed" : "Not verified"}
+                  </span>
+                </div>
+                {Object.keys(attestation.verification.checks).length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(attestation.verification.checks).map(([name, passed]) => (
+                      <Badge key={name} variant={passed ? "success" : "secondary"}>
+                        {formatCheckName(name, passed)}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+                {attestation.verification.reasons.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {attestation.verification.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
         </div>
       </DialogContent>

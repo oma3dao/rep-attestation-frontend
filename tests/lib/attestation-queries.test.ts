@@ -4,10 +4,12 @@ import * as schemas from '@/config/schemas';
 import * as chains from '@/config/chains';
 import {
   getAttestationsForDIDWithMetadata,
+  getVerifiedAttestationsForDIDWithMetadata,
   getLatestAttestationsWithMetadata,
   getAttestationsByAttesterWithMetadata,
   type EnrichedAttestationResult,
 } from '@/lib/attestation-queries';
+import * as reputation from '@oma3/omatrust/reputation';
 
 vi.mock('@/config/attestation-services', () => ({
   getContractAddress: vi.fn(),
@@ -22,6 +24,8 @@ vi.mock('@oma3/omatrust/reputation', () => ({
   decodeAttestationData: vi.fn().mockReturnValue({}),
   getAttestation: vi.fn().mockRejectedValue(new Error('not found')),
   getAttestationsForDid: vi.fn().mockResolvedValue([]),
+  listAttestations: vi.fn().mockResolvedValue([]),
+  verifyAttestation: vi.fn().mockResolvedValue({ valid: true, checks: { proofs: true }, reasons: [] }),
   getLatestAttestations: vi.fn().mockResolvedValue([]),
   getAttestationsByAttester: vi.fn().mockResolvedValue([]),
 }));
@@ -107,4 +111,77 @@ describe('attestation-queries', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('getVerifiedAttestationsForDIDWithMetadata', () => {
+    beforeEach(() => {
+      vi.mocked(getContractAddress).mockReset();
+      vi.mocked(reputation.listAttestations).mockReset();
+      vi.mocked(reputation.verifyAttestation).mockReset();
+      vi.mocked(reputation.verifyAttestation).mockResolvedValue({
+        valid: true,
+        checks: { proofs: true },
+        reasons: [],
+      });
+    });
+
+    it('runs proof verification only for user review schemas', async () => {
+      vi.mocked(getContractAddress).mockReturnValue('0x' + '1'.repeat(40));
+      vi.spyOn(chains, 'getChainById').mockReturnValue({ id: 66238, rpc: 'https://rpc.testnet.chain.oma3.org/' } as any);
+
+      const userReviewSchema = {
+        id: 'user-review',
+        title: 'User Review',
+        deployedUIDs: { 66238: '0x' + 'a'.repeat(64) },
+      } as any;
+      const responseSchema = {
+        id: 'user-review-response',
+        title: 'User Review Response',
+        deployedUIDs: { 66238: '0x' + 'b'.repeat(64) },
+      } as any;
+      const certificationSchema = {
+        id: 'certification',
+        title: 'Certification',
+        deployedUIDs: { 66238: '0x' + 'c'.repeat(64) },
+      } as any;
+
+      const getAllSchemasSpy = vi.spyOn(schemas, 'getAllSchemas').mockReturnValue([
+        userReviewSchema,
+        responseSchema,
+        certificationSchema,
+      ]);
+
+      vi.mocked(reputation.listAttestations).mockResolvedValue([
+        sdkAttestation(userReviewSchema.deployedUIDs[66238]),
+        sdkAttestation(responseSchema.deployedUIDs[66238]),
+        sdkAttestation(certificationSchema.deployedUIDs[66238]),
+      ] as any);
+
+      const results = await getVerifiedAttestationsForDIDWithMetadata('did:web:example.com');
+
+      expect(reputation.verifyAttestation).toHaveBeenCalledTimes(2);
+      expect(results).toEqual([
+        expect.objectContaining({ schemaId: 'user-review', verification: expect.objectContaining({ valid: true }) }),
+        expect.objectContaining({ schemaId: 'user-review-response', verification: expect.objectContaining({ valid: true }) }),
+        expect.objectContaining({ schemaId: 'certification', verification: undefined }),
+      ]);
+
+      getAllSchemasSpy.mockRestore();
+    });
+  });
 });
+
+function sdkAttestation(schema: string) {
+  return {
+    uid: '0x' + '1'.repeat(64),
+    schema,
+    attester: '0x' + '2'.repeat(40),
+    recipient: '0x' + '3'.repeat(40),
+    data: {},
+    raw: '0x',
+    time: 1n,
+    expirationTime: 0n,
+    revocationTime: 0n,
+    refUID: '0x' + '0'.repeat(64),
+    revocable: true,
+  };
+}

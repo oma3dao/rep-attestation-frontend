@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DidWebInput } from "@/components/did-web-input"
-import { Caip10Input } from "@/components/caip10-input"
+import { DidPkhInput } from "@/components/did-pkh-input"
 import {
   BackendApiError,
   createSubject,
@@ -114,7 +114,6 @@ export function SubjectConfirmationDialog({
     return inferred || selectedMethod
   }, [selectedMethod, subjectDid])
 
-  const caip10Value = subjectDid.startsWith("did:pkh:") ? subjectDid.replace("did:pkh:", "") : ""
   const subjectDomain = extractDidWebDomain(subjectDid)
   const normalizedExistingDids = useMemo(
     () => new Set(existingSubjectDids.map((did) => did.toLowerCase())),
@@ -250,9 +249,9 @@ export function SubjectConfirmationDialog({
     }
 
     return (
-      <Caip10Input
-        value={caip10Value}
-        onChange={(caip10) => setDidValue(caip10 ? `did:pkh:${caip10}` : null)}
+      <DidPkhInput
+        value={subjectDid}
+        onChange={(did) => setDidValue(did)}
       />
     )
   }
