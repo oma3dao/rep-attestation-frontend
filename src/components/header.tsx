@@ -17,6 +17,7 @@ type NavLink = {
 
 const navLinks: NavLink[] = [
   { label: "Activity", href: "/" },
+  { label: "Verify", href: "/verify" },
   { label: "Dashboard", href: "/dashboard" },
   { label: "Docs", href: "https://docs.omatrust.org/", external: true },
 ]
@@ -82,6 +83,7 @@ export function Header() {
   return (
     <>
       <nav
+        suppressHydrationWarning
         className={`sticky top-0 z-50 transition-all duration-500 ${
         scrolled
           ? "bg-background/80 backdrop-blur-xl border-b border-border"

@@ -51,7 +51,7 @@ import { getContractAddress } from "@/config/attestation-services"
 import { getChainById } from "@/config/chains"
 import { callControllerWitness } from "@/lib/controller-witness-client"
 import { PublicKeyInput } from "@/components/public-key-input"
-import { Caip10Input } from "@/components/caip10-input"
+import { DidPkhInput } from "@/components/did-pkh-input"
 
 const activeThirdwebChain = getActiveThirdwebChain()
 
@@ -899,9 +899,9 @@ function AddSigningKeyDialog({
             </div>
 
             {keyMethod === "pkh" && !isEdit ? (
-              <Caip10Input
-                value={keyDid.startsWith("did:pkh:") ? keyDid.replace("did:pkh:", "") : ""}
-                onChange={(caip10) => setKeyDid(caip10 ? `did:pkh:${caip10}` : "")}
+              <DidPkhInput
+                value={keyDid}
+                onChange={(did) => setKeyDid(did ?? "")}
               />
             ) : null}
 
