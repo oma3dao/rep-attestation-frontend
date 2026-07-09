@@ -325,7 +325,7 @@ const keyBindingFields: FormField[] = [
     "name": "keyId",
     "type": "string",
     "label": "Key ID",
-    "description": "DID representing this key. If using did:jwk or did:pkh:eip155, publicKeyJwk is optional.",
+    "description": "DID representing this key. If the keyId is self-certifying (did:jwk, did:pkh:eip155, did:pkh:solana), publicKeyJwk is optional.",
     "required": true,
     "placeholder": "Select an ID type above",
     "didMethods": [
@@ -340,7 +340,7 @@ const keyBindingFields: FormField[] = [
     "name": "publicKeyJwk",
     "type": "json",
     "label": "Public Key (JWK)",
-    "description": "JWK-formatted public key. Required if keyId is not a self-certifying did:jwk. Paste the full JWK JSON object.",
+    "description": "JWK-formatted public key. Required if keyId is not self-certifying. Paste the full public JWK JSON object. Private key material (d, k) is rejected.",
     "required": false,
     "placeholder": "Paste JSON object..."
   },
@@ -373,8 +373,8 @@ const keyBindingFields: FormField[] = [
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "One or more proofs that demonstrate the service's authorization of the key.",
-    "required": true,
+    "description": "One or more proofs that demonstrate the service's authorization of the key. Optional when verifiers can confirm authorization through other means (e.g., DNS TXT, did.json, or controller witness for did:web/did:pkh subjects).",
+    "required": false,
     "placeholder": "Enter proofs",
     "proofPurpose": "shared-control",
     "proofTypes": [
@@ -473,7 +473,7 @@ const linkedIdentifierFields: FormField[] = [
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "One or more proofs that demonstrate the two linked IDs have the same ownership.",
+    "description": "One or more proofs that demonstrate the two linked IDs have the same ownership. Optional when verifiers can confirm the link through other means (e.g., controller witness for did:web/did:pkh subjects).",
     "required": false,
     "placeholder": "Enter proofs",
     "proofPurpose": "shared-control",

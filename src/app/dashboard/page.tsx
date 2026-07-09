@@ -69,9 +69,12 @@ function getDashboardContext(searchParams: Pick<URLSearchParams, "get">): Dashbo
 
 /**
  * Determine whether a DID is a "real" subject (not just the user's wallet DID).
- * A real subject is a did:web, or a did:pkh that differs from the connected wallet.
+ * Only did:web and did:pkh are valid service identifiers — other DID methods
+ * (did:artifact, did:key, did:jwk, etc.) don't represent services that can
+ * authorize keys or have controller relationships.
  */
 function isRealSubjectDid(did: string, walletDid: string | null): boolean {
+  if (!did.startsWith("did:web:") && !did.startsWith("did:pkh:")) return false
   if (did.startsWith("did:web:")) return true
   if (!walletDid) return true
   return did.toLowerCase() !== walletDid.toLowerCase()
@@ -507,7 +510,7 @@ function buildServiceKeys({
       if (attestation.schemaId === "key-binding") {
         const keyDid = getDecodedString(attestation, ["keyId"])
         if (!keyDid) continue
-        const pair = ensurePair(keyDid, subjectDid, "Key binding")
+        const pair = ensurePair(keyDid, subjectDid, "Key Binding Attestation")
         if (!pair) continue
         pair.keyBindingUid = attestation.uid
         pair.keyBindingSchemaUid = attestation.schema
@@ -517,7 +520,7 @@ function buildServiceKeys({
       if (attestation.schemaId === "controller-witness") {
         const keyDid = getDecodedString(attestation, ["controller"])
         if (!keyDid) continue
-        const pair = ensurePair(keyDid, subjectDid, "Controller witness")
+        const pair = ensurePair(keyDid, subjectDid, "Controller Witness Attestation")
         if (!pair) continue
         pair.intermediate = true
         pair.controllerWitnessUid = attestation.uid
@@ -534,6 +537,16 @@ function buildServiceKeys({
   const results = pairs.filter(
     (pair) => !isSameControllerId(pair.keyDid, pair.subjectDid)
   )
+
+  // Sort sources in desired display order
+  const SOURCE_ORDER = ["DNS TXT", "DID document", "Controller Witness Attestation", "Key Binding Attestation", "Account wallet"]
+  for (const pair of results) {
+    pair.sources.sort((a, b) => {
+      const ai = SOURCE_ORDER.indexOf(a)
+      const bi = SOURCE_ORDER.indexOf(b)
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+    })
+  }
 
   return results.sort((a, b) => {
     const score = (key: ServiceKey) => Number(key.advanced) * 3 + Number(key.intermediate) * 2 + Number(key.basic)
@@ -596,28 +609,15 @@ function ServiceKeyCard({
     }
   }
 
-  const Signal = ({ active, label, tooltip }: { active: boolean; label: string; tooltip?: string }) => {
-    const badge = (
-      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-        active
-          ? "border-primary/25 bg-primary/10 text-primary"
-          : "border-border bg-background text-muted-foreground"
-      }`}>
-        {label}: {active ? "Yes" : "No"}
-      </span>
-    )
-    if (!tooltip) return badge
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>{badge}</TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs text-xs">
-            {tooltip}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    )
-  }
+  const Signal = ({ active, label }: { active: boolean; label: string }) => (
+    <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-medium ${
+      active
+        ? "border-primary/25 bg-primary/10 text-primary"
+        : "border-border bg-background text-muted-foreground"
+    }`}>
+      {label}: {active ? "Yes" : "No"}
+    </span>
+  )
 
   return (
     <div className="rounded-xl border border-border/70 bg-background p-4">
@@ -632,43 +632,29 @@ function ServiceKeyCard({
             <span className="font-mono text-xs">{keyInfo.keyDid}</span>
           </p>
           <p className="mt-2 text-sm font-medium text-foreground/70">
-            Sources: {keyInfo.sources.join(", ")}
+            Public visibility: {(() => {
+              const publicSources = keyInfo.sources.filter(s => s !== "Account wallet")
+              return publicSources.length > 0 ? publicSources.join(", ") : "None"
+            })()}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Signal
-            active={keyInfo.basic}
-            label="Basic"
-            tooltip={keyInfo.basic
-              ? `Ownership verified via ${keyInfo.sources.find(s => s === "DNS TXT" || s === "DID document") ?? keyInfo.sources[0] ?? "endpoint evidence"}`
-              : "Publish this key in DNS TXT or did.json to prove ownership"}
-          />
-          <Signal
-            active={keyInfo.intermediate}
-            label="Intermediate"
-            tooltip={keyInfo.intermediate
-              ? "Controller witness attested on-chain"
-              : "Submit a controller witness after proving ownership"}
-          />
-          <Signal
-            active={keyInfo.advanced}
-            label="Advanced"
-            tooltip={keyInfo.advanced
-              ? "Key binding published on-chain"
-              : "Publish a key binding after controller witness"}
-          />
+          <Signal active={keyInfo.basic} label="Basic" />
+          <Signal active={keyInfo.intermediate} label="Intermediate" />
+          <Signal active={keyInfo.advanced} label="Advanced" />
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {!isSubjectRegistered && onAddSubjectToAccount ? (
+        {!isSubjectRegistered && onAddSubjectToAccount && !keyInfo.sources.every(s => s === "Account wallet") ? (
           <Button
-            variant="default"
+            variant="outline"
             size="sm"
             type="button"
+            className="border-primary text-primary hover:bg-primary/10"
             onClick={() => onAddSubjectToAccount(keyInfo.subjectDid)}
           >
-            Add to account
+            Add subject to account
           </Button>
         ) : null}
         {canSubmitControllerWitness ? (
@@ -1039,17 +1025,17 @@ function SigningKeyCard({
 
   const Signal = ({ active, label, tooltip }: { active: boolean; label: string; tooltip?: string }) => {
     const badge = (
-      <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+      <span className={`inline-block cursor-default rounded-full border px-2.5 py-1 text-xs font-medium ${
         active
           ? "border-primary/25 bg-primary/10 text-primary"
           : "border-border bg-background text-muted-foreground"
-      }`}>
+      }`} tabIndex={0}>
         {label}: {active ? "Yes" : "No"}
       </span>
     )
     if (!tooltip) return badge
     return (
-      <TooltipProvider>
+      <TooltipProvider delayDuration={0}>
         <Tooltip>
           <TooltipTrigger asChild>{badge}</TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs text-xs">
@@ -1110,9 +1096,8 @@ function SigningKeyCard({
                 basic: acc.basic || sk.basic,
                 intermediate: acc.intermediate || sk.intermediate,
                 advanced: acc.advanced || sk.advanced,
-                basicSource: acc.basicSource || (sk.basic ? sk.sources.find(s => s === "DNS TXT" || s === "DID document") ?? sk.sources[0] : undefined),
               }),
-              { basic: false, intermediate: false, advanced: false, basicSource: undefined as string | undefined }
+              { basic: false, intermediate: false, advanced: false }
             )
             return (
               <>
@@ -1120,7 +1105,7 @@ function SigningKeyCard({
                   active={best.basic}
                   label="Basic"
                   tooltip={best.basic
-                    ? `Ownership verified via ${best.basicSource ?? "endpoint evidence"}`
+                    ? "Ownership verified — key is published in DNS TXT or did.json"
                     : "Publish this key in DNS TXT or did.json to prove ownership"}
                 />
                 <Signal
@@ -1594,8 +1579,8 @@ function ServiceTrustWorkspace({
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold tracking-tight text-foreground">Signing Keys</h3>
-              <p className="text-sm text-muted-foreground">Register and manage external keys that sign artifacts for your services.</p>
+              <h3 className="font-semibold tracking-tight text-foreground">External Key Authorizations</h3>
+              <p className="text-sm text-muted-foreground">Authorize signing keys that sign artifacts (e.g.- x402 receipts) for your services.  Each authorization pairs a key ID to a service ID.</p>
             </div>
             <Button size="sm" onClick={() => { setEditingSigningKey(null); setSigningKeyDialogOpen(true) }}>
               + Add Signing Key
@@ -1634,8 +1619,8 @@ function ServiceTrustWorkspace({
         {/* Attestation Keys subsection */}
         <section className="space-y-3">
           <div>
-            <h3 className="font-semibold tracking-tight text-foreground">Attestation Keys</h3>
-            <p className="text-sm text-muted-foreground">Keys used for signing into the portal and submitting delegated attestations.</p>
+            <h3 className="font-semibold tracking-tight text-foreground">Account Key Authorizations</h3>
+            <p className="text-sm text-muted-foreground">Pair OMATrust account keys (used for logging in to this portal and signing attestations on OMATrust) to your service IDs.</p>
           </div>
 
           {isLoadingControllerSummaries ? (

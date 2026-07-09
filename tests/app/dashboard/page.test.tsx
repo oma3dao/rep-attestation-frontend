@@ -712,7 +712,7 @@ describe('Dashboard Page', () => {
     await waitFor(() => {
       expect(screen.getByText('Service Management')).toBeInTheDocument()
     })
-    expect(screen.getByText('Signing Keys')).toBeInTheDocument()
+    expect(screen.getByText('External Key Authorizations')).toBeInTheDocument()
     expect(screen.getByText('Linked Identifiers')).toBeInTheDocument()
   })
 
