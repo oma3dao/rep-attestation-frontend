@@ -215,15 +215,19 @@ function ActionGrid({ title, description, actions, children }: {
 
 function AccountSection({
   session,
-  serviceDids,
   registeredSubjects,
   onAddSubject,
 }: {
   session: BackendSessionMeResponse
-  serviceDids: string[]
   registeredSubjects: BackendSubject[]
   onAddSubject: () => void
 }) {
+  // Hide subjects that are just the user's own wallet DID — only show
+  // genuinely distinct service identities.
+  const walletDid = session.wallet?.did ?? null
+  const visibleSubjects = registeredSubjects.filter(
+    (subject) => !(subject.isDefault && walletDid && subject.canonicalDid.toLowerCase() === walletDid.toLowerCase())
+  )
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -243,25 +247,21 @@ function AccountSection({
           <div className="rounded-xl border border-border/70 bg-muted/40 p-4 md:col-span-2">
             <div className="flex items-start justify-between gap-2">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {serviceDids.length > 1 ? "Service IDs" : "Service ID"}
+                {visibleSubjects.length > 1 ? "Service IDs" : "Service ID"}
               </div>
               <Button variant="outline" size="sm" onClick={onAddSubject}>
                 + Add Service ID
               </Button>
             </div>
             <div className="mt-2 space-y-2">
-              {registeredSubjects.length > 0 ? (
-                registeredSubjects.map((subject) => (
+              {visibleSubjects.length > 0 ? (
+                visibleSubjects.map((subject) => (
                   <div key={subject.id} className="rounded-lg border border-border/50 bg-background px-3 py-2">
                     <div className="break-all font-mono text-sm text-foreground">{subject.canonicalDid}</div>
                     {subject.displayName ? (
                       <div className="text-xs text-muted-foreground">{subject.displayName}</div>
                     ) : null}
                   </div>
-                ))
-              ) : serviceDids.length > 0 ? (
-                serviceDids.map((did) => (
-                  <div key={did} className="break-all font-mono text-sm text-foreground">{did}</div>
                 ))
               ) : (
                 <div className="space-y-2">
@@ -2122,7 +2122,6 @@ function DashboardContent() {
 
       <AccountSection
         session={session}
-        serviceDids={serviceDids}
         registeredSubjects={registeredSubjects}
         onAddSubject={handleAccountAddSubject}
       />
