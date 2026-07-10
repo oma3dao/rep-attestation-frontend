@@ -65,7 +65,7 @@ function getInitialStep(request: AuthDialogRequest): WizardStep {
 function getDialogTitle(step: WizardStep) {
   switch (step) {
     case "createSimple": return "Create Account"
-    case "setupSubject": return "Verify Subject Ownership"
+    case "setupSubject": return "Verify Service ID Ownership"
     case "authenticated": return "Signed In"
     case "signin":
     case "chooser":
@@ -79,21 +79,21 @@ function getFriendlyError(error: unknown) {
       case "BACKEND_UNREACHABLE":
         return "The OMATrust backend is not reachable right now."
       case "EXECUTION_MODE_REQUIRED":
-        return "Choose how this wallet should publish before we finish creating your account."
+        return "Choose how your account should publish before we finish setup."
       case "EXECUTION_MODE_ALREADY_SET":
-        return "This wallet already has an execution mode configured. Sign in with the same choice you used before."
+        return "This account already has a publishing mode configured. Sign in with the same choice you used before."
       case "SUBJECT_ALREADY_EXISTS":
-        return "This subject is already attached to your account."
+        return "This service ID is already attached to your account."
       case "SUBJECT_OWNED_BY_ANOTHER_ACCOUNT":
-        return "That subject is already associated with another OMATrust account."
+        return "That service ID is already associated with another OMATrust account."
       case "INVALID_CHALLENGE":
         return "Your sign-in request expired or became invalid. Please try again."
       case "CHALLENGE_EXPIRED":
         return "Your sign-in request expired. Please try again."
       case "ACCOUNT_NOT_FOUND":
-        return "No account found for this wallet. Please create an account first."
+        return "No account found. Please create an account first."
       case "ACCOUNT_ALREADY_EXISTS":
-        return "This wallet already has an account. Please sign in instead."
+        return "An account already exists for this user ID. Please sign in instead."
       default:
         return error.message
     }
@@ -218,12 +218,8 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     }
 
     // Non-submission — close the dialog explicitly, then navigate.
-    const defaultDestination =
-      intent?.kind === "signin" || request.mode === "signin"
-        ? "/dashboard"
-        : "/account"
     onOpenChange(false)
-    router.push(request.redirectTo ?? defaultDestination)
+    router.push(request.redirectTo ?? "/dashboard")
   }, [isSubmissionFlow, onOpenChange, request, router])
 
   const hydrateSessionAfterVerify = async () => {
@@ -275,7 +271,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       // The wallet object is returned directly — we can read the account from it.
       const account = wallet.getAccount()
       if (!account) {
-        throw new Error("Wallet connected but no account available.")
+        throw new Error("Signed in but no account available.")
       }
       return { account, wallet }
     } catch {
@@ -406,7 +402,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
 
   const handleVerifyAndAttachSubject = async () => {
     if (!walletDid) {
-      setErrorMessage("Connect a wallet before verifying a subject.")
+      setErrorMessage("Sign in before verifying a service ID.")
       return
     }
 
@@ -416,7 +412,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     }
 
     if (derivedDidWeb.toLowerCase() === walletDid.toLowerCase()) {
-      setErrorMessage("Add a subject identifier that is different from your wallet DID.")
+      setErrorMessage("Add a service ID that is different from your User ID.")
       return
     }
 
@@ -468,7 +464,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       }
 
       if (!attachedSubject) {
-        throw new Error("The subject could not be attached to your account.")
+        throw new Error("The service ID could not be attached to your account.")
       }
 
       const refreshedSession = await refreshSession()
@@ -518,10 +514,10 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            {isAddingSubject ? "Adding your subject…" : "Verifying subject ownership…"}
+            {isAddingSubject ? "Adding your service ID…" : "Verifying service ID ownership…"}
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Keep this dialog open while we confirm control of your subject and attach it to your account.
+            Keep this dialog open while we confirm control of your service ID and attach it to your account.
           </p>
         </div>
       )
@@ -568,7 +564,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
         <div className="rounded-xl border border-border/80 bg-card p-5 shadow-sm shadow-slate-950/5">
           <h3 className="text-lg font-semibold tracking-tight text-foreground">Existing account</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to your existing account with your wallet, email, or social login.
+            Sign in to your existing with passkey, crypto wallet, email, or social login.
           </p>
           <div className="mt-4">
             <Button
@@ -602,7 +598,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
       <div className="rounded-xl border border-border/80 bg-card p-5 shadow-sm shadow-slate-950/5">
         <h3 className="text-lg font-semibold tracking-tight text-foreground">Existing account</h3>
         <p className="mt-2 text-sm text-muted-foreground">
-          Sign in to your existing account with your wallet, email, or social login.
+          Sign in with your passkey, crypto wallet, email, or social login.
         </p>
         <div className="mt-4">
           <Button
@@ -635,6 +631,9 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
         </div>
 
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            OMATrust accounts are based on keys. You can use a passkey, a wallet you already own, or email/social login (we&apos;ll create a key for you). Your User ID will be based on your login key.
+          </p>
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <Button
               type="button"
@@ -680,13 +679,13 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
     return (
       <div className="space-y-5">
         <div className="rounded-xl border border-border/80 bg-card p-4">
-          <p className="font-medium text-foreground">Add your Subject Identifier.</p>
+          <p className="font-medium text-foreground">Add your Service ID.</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            This attestation needs a verified subject before it can be submitted. Add a URL you control for yourself or your organization.
+            This attestation needs a verified service ID before it can be submitted. Add a URL you control for yourself or your organization.
           </p>
           {derivedDidWeb ? (
             <p className="mt-3 break-all text-xs text-muted-foreground">
-              Subject: <span className="font-mono">{derivedDidWeb}</span>
+              Service ID: <span className="font-mono">{derivedDidWeb}</span>
             </p>
           ) : null}
         </div>
@@ -709,7 +708,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
 
         <div className="space-y-3 rounded-xl border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
           <div className="space-y-2">
-            <p className="font-medium text-foreground">Verification method</p>
+            <p className="font-medium text-foreground">Verification method (DNS or did.json)</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -780,7 +779,7 @@ export function AuthEntryDialog({ request, onOpenChange }: AuthEntryDialogProps)
             onClick={() => void handleVerifyAndAttachSubject()}
             disabled={!subjectReady || isVerifyingSubject || isAddingSubject}
           >
-            Verify and Add Subject
+            Verify and Add Service ID
           </Button>
         </div>
       </div>

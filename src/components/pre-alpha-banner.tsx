@@ -28,7 +28,7 @@ export function PreAlphaBanner() {
     <div className="relative border-b border-primary/30 bg-primary/10 px-4 py-3 text-foreground shadow-sm">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <p className="text-sm font-medium">
-          Public Beta running on mainnet- your data will not be lost. If you encounter an issue, please{' '}
+          Public Beta running on OMAChain mainnet- your data will not be lost. If you encounter an issue, please{' '}
           <a
             href="https://github.com/oma3dao/rep-attestation-frontend/issues/new/choose"
             target="_blank"

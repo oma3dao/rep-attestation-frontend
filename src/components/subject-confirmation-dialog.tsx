@@ -137,22 +137,22 @@ export function SubjectConfirmationDialog({
 
   async function handleVerify() {
     if (!walletDid) {
-      setErrorMessage("Connect your wallet before verifying a subject.")
+      setErrorMessage("Sign in before verifying a service ID.")
       return
     }
 
     if (!subjectDid) {
-      setErrorMessage("Enter a subject identifier before verifying.")
+      setErrorMessage("Enter a service ID before verifying.")
       return
     }
 
     if (subjectDid.toLowerCase() === walletDid.toLowerCase()) {
-      setErrorMessage("This matches your default wallet subject. Add a separate subject identifier instead.")
+      setErrorMessage("This matches your User ID. Add a separate service ID instead.")
       return
     }
 
     if (normalizedExistingDids.has(subjectDid.toLowerCase())) {
-      setErrorMessage("This subject is already attached to your account.")
+      setErrorMessage("This service ID is already attached to your account.")
       return
     }
 
@@ -199,7 +199,7 @@ export function SubjectConfirmationDialog({
             : error.details || error.message
         )
       } else {
-        setErrorMessage(error instanceof Error ? error.message : "Failed to verify subject ownership.")
+        setErrorMessage(error instanceof Error ? error.message : "Failed to verify service ID ownership.")
       }
     } finally {
       setIsVerifying(false)
@@ -208,12 +208,12 @@ export function SubjectConfirmationDialog({
 
   async function handleSubmit() {
     if (!subjectDid) {
-      setErrorMessage("Enter a subject identifier before submitting.")
+      setErrorMessage("Enter a service ID before submitting.")
       return
     }
 
     if (verificationState !== "verified") {
-      setErrorMessage("Verify ownership before adding this subject.")
+      setErrorMessage("Verify ownership before adding this service ID.")
       return
     }
 
@@ -236,7 +236,7 @@ export function SubjectConfirmationDialog({
         })
         setErrorMessage(error.details || error.message)
       } else {
-        setErrorMessage(error instanceof Error ? error.message : "Failed to add subject.")
+        setErrorMessage(error instanceof Error ? error.message : "Failed to add service ID.")
       }
     } finally {
       setIsSubmitting(false)
@@ -261,7 +261,7 @@ export function SubjectConfirmationDialog({
       return (
         <div className="space-y-3 rounded-xl border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
           <div className="space-y-2">
-            <p className="font-medium text-foreground">Verification method</p>
+            <p className="font-medium text-foreground">Verification method (DNS or did.json)</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -311,7 +311,7 @@ export function SubjectConfirmationDialog({
       <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">How verification works</p>
         <p>
-          The wallet you are signed in with must either match this subject DID directly or control the contract through a standard ownership pattern such as <span className="font-mono text-xs">owner()</span>, <span className="font-mono text-xs">admin()</span>, or <span className="font-mono text-xs">getOwner()</span>.
+          The wallet you are signed in with must either match this service ID directly or control the contract through a standard ownership pattern such as <span className="font-mono text-xs">owner()</span>, <span className="font-mono text-xs">admin()</span>, or <span className="font-mono text-xs">getOwner()</span>.
         </p>
       </div>
     )
@@ -321,18 +321,18 @@ export function SubjectConfirmationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Verify Subject Ownership</DialogTitle>
+          <DialogTitle>Verify Service ID Ownership</DialogTitle>
           <DialogDescription>
-            Choose a DID method, confirm ownership, and then submit the subject to your account.
+            Choose an ID format, confirm ownership, and then add the service ID to your account.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="subject-did-method">DID method</Label>
+            <Label htmlFor="subject-did-method">ID format</Label>
             <Select value={selectedMethod} onValueChange={(value) => handleDidMethodChange(value as SupportedDidMethod)}>
               <SelectTrigger id="subject-did-method">
-                <SelectValue placeholder="Select a DID method" />
+                <SelectValue placeholder="Select an ID format" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="did:web">did:web</SelectItem>
@@ -374,7 +374,7 @@ export function SubjectConfirmationDialog({
               onClick={handleSubmit}
               disabled={isSubmitting || verificationState !== "verified"}
             >
-              {isSubmitting ? "Adding Subject…" : "Submit"}
+              {isSubmitting ? "Adding Service ID…" : "Submit"}
             </Button>
           </div>
         </div>

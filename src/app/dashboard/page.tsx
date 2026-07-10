@@ -246,7 +246,7 @@ function AccountSection({
                 {serviceDids.length > 1 ? "Service IDs" : "Service ID"}
               </div>
               <Button variant="outline" size="sm" onClick={onAddSubject}>
-                + Add Subject
+                + Add Service ID
               </Button>
             </div>
             <div className="mt-2 space-y-2">
@@ -266,10 +266,10 @@ function AccountSection({
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    No subject identifier configured.
+                    No service ID configured.
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    You only need a subject if you represent a service, application, or smart contract that others will review or attest to.
+                    You only need a service ID if you represent a service, application, or smart contract that others will review or attest to.
                   </p>
                 </div>
               )}
@@ -1658,6 +1658,7 @@ function ServiceTrustWorkspace({
           </div>
         </section>
 
+        {/* Linked Identifiers — hidden for now, needs copy refinement
         <section className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1692,6 +1693,7 @@ function ServiceTrustWorkspace({
             </Link>
           </Button>
         </section>
+        */}
 
         {serviceCredentials.length > 0 ? (
           <section className="space-y-3">
@@ -1782,7 +1784,7 @@ function ServiceTrustWorkspace({
               <p className="text-sm text-muted-foreground">Third-party reviews filed against your service identities.</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button variant="default" size="sm" asChild>
+              {/* <Button variant="default" size="sm" asChild>
                 <a href={`${buildServiceUrl("app.omatrust.org")}/widgets/reviews/create`} target="_blank" rel="noopener noreferrer">
                   Create review widget
                 </a>
@@ -1794,7 +1796,7 @@ function ServiceTrustWorkspace({
                 className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
               >
                 Docs
-              </a>
+              </a> */}
             </div>
           </div>
           {isLoadingServiceAttestations ? (
@@ -2114,7 +2116,7 @@ function DashboardContent() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <PublishButton />
+          {/* <PublishButton /> */}
         </div>
       </div>
 

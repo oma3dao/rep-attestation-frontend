@@ -103,7 +103,7 @@ const certificationFields: FormField[] = [
   {
     "name": "subjectURI",
     "type": "uri",
-    "label": "Subject Informational URI",
+    "label": "Service Informational URI",
     "description": "Optional URI that provides mutable, human-readable metadata about the certification recipient.",
     "required": false,
     "placeholder": "https://example.com",
@@ -373,7 +373,7 @@ const keyBindingFields: FormField[] = [
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "One or more proofs that demonstrate the service's authorization of the key. Optional when verifiers can confirm authorization through other means (e.g., DNS TXT, did.json, or controller witness for did:web/did:pkh subjects).",
+    "description": "One or more proofs that demonstrate the service's authorization of the key. Optional when verifiers can confirm authorization through other means (e.g., DNS TXT, did.json, or controller witness for did:web/did:pkh IDs).",
     "required": false,
     "placeholder": "Enter proofs",
     "proofPurpose": "shared-control",
@@ -473,7 +473,7 @@ const linkedIdentifierFields: FormField[] = [
     "name": "proofs",
     "type": "array",
     "label": "Proofs",
-    "description": "One or more proofs that demonstrate the two linked IDs have the same ownership. Optional when verifiers can confirm the link through other means (e.g., controller witness for did:web/did:pkh subjects).",
+    "description": "One or more proofs that demonstrate the two linked IDs have the same ownership. Optional when verifiers can confirm the link through other means (e.g., controller witness for did:web/did:pkh IDs).",
     "required": false,
     "placeholder": "Enter proofs",
     "proofPurpose": "shared-control",
@@ -566,7 +566,7 @@ const securityAssessmentFields: FormField[] = [
     "name": "versionHW",
     "type": "string",
     "label": "Hardware Version",
-    "description": "Hardware version of the assessed subject, if applicable.",
+    "description": "Hardware version of the assessed service, if applicable.",
     "required": false,
     "placeholder": "Enter hardware version",
     "maxLength": 50
@@ -814,7 +814,7 @@ const userReviewFields: FormField[] = [
 export const certificationSchema: AttestationSchema = {
   id: 'certification',
   title: 'Certification',
-  description: 'Certification bodies use this attestation when a subject passes certification.',
+  description: 'Certification bodies use this attestation when a service passes certification.',
   fields: certificationFields,
   easSchemaString: 'string subject, string organization, string version, string versionHW, string subjectURI, string programID, string programURI, string assessor, string assessorURI, string certificationLevel, string outcome, string reportURI, string reportDigest, string payload, string payloadVersion, string payloadSpecURI, string payloadSpecDigest, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
   deployedUIDs: {
@@ -876,7 +876,7 @@ export const controllerWitnessSchema: AttestationSchema = {
 export const keyBindingSchema: AttestationSchema = {
   id: 'key-binding',
   title: 'Key Binding',
-  description: 'Publishes a cryptographic key associated with a DID. Supports multi-purpose bindings, rotation, and revocation. Each attestation binds one key to one subject.',
+  description: 'Publishes a cryptographic key associated with an ID. Supports multi-purpose bindings, rotation, and revocation. Each attestation binds one key to one service.',
   fields: keyBindingFields,
   revocable: true,
   easSchemaString: 'string subject, string keyId, string publicKeyJwk, string[] keyPurpose, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
@@ -900,7 +900,7 @@ export const keyBindingSchema: AttestationSchema = {
 export const linkedIdentifierSchema: AttestationSchema = {
   id: 'linked-identifier',
   title: 'Linked Identifier',
-  description: 'An attestation where the attester (a trusted third party) asserts that the subject controls the linked identifier. Both subject and linkedId MUST be valid DIDs, creating a symmetric DID-to-DID link that attests two identities are owned by the same entity.',
+  description: 'An attestation where the attester (a trusted third party) asserts that the service controls the linked identifier. Both subject and linkedId MUST be valid IDs, creating a symmetric ID-to-ID link that attests two identities are owned by the same entity.',
   fields: linkedIdentifierFields,
   revocable: true,
   easSchemaString: 'string subject, string linkedId, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
