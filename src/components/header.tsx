@@ -23,8 +23,8 @@ const navLinks: NavLink[] = [
 ]
 
 const HINT_MESSAGES: Record<string, string> = {
-  "account-exists": "This wallet already has an account. Please sign in instead.",
-  "no-account": "No account found for this wallet. Please create an account first.",
+  "account-exists": "An account already exists for this user ID. Please sign in instead.",
+  "no-account": "No account found. Please create an account first.",
 }
 
 export function Header() {

@@ -376,7 +376,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         logger.log('[AttestationForm] Backend requires subject ownership proof, opening dialog')
         pendingSubmitDataRef.current = buildCompleteData()
         setSubjectDialogMessage(
-          'Subject ownership verification failed. Re-confirm your proof and try again.  Failure explanation- ' + (error.details || error.message)
+          'Service ID ownership verification failed. Re-confirm your proof and try again.  Failure explanation- ' + (error.details || error.message)
         )
         setSubjectDialogOpen(true)
         return

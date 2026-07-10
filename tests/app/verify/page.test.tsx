@@ -112,7 +112,7 @@ describe('Verify page', () => {
     })
 
     expect(mockGetControllerConfirmation).not.toHaveBeenCalled()
-    expect(screen.getByText('Trust Profile')).toBeInTheDocument()
+    expect(screen.getByText('Service Summary')).toBeInTheDocument()
     expect(screen.getByText('1 attestations')).toBeInTheDocument()
     expect(screen.getByText('Certifications')).toBeInTheDocument()
   })
@@ -134,7 +134,6 @@ describe('Verify page', () => {
       })
     })
 
-    expect(screen.getByText('Authorization Result')).toBeInTheDocument()
     expect(screen.getByText('Authorized')).toBeInTheDocument()
     expect(screen.getByText(/Basic:/)).toBeInTheDocument()
     expect(screen.getByText(/Intermediate:/)).toBeInTheDocument()

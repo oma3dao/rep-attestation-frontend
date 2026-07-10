@@ -255,7 +255,7 @@ describe('EvidencePointerProofInput', () => {
         />
       )
       expect(
-        screen.getByText(/Connect your wallet or enter the controller field/i)
+        screen.getByText(/Sign in or enter the controller field/i)
       ).toBeInTheDocument()
 
       // Restore the default mock

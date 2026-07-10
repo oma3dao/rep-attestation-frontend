@@ -30,7 +30,7 @@ describe('PreAlphaBanner', () => {
     render(<PreAlphaBanner />);
     
     expect(screen.getByText(/Public Beta/i)).toBeInTheDocument();
-    expect(screen.getByText(/Running on mainnet/i)).toBeInTheDocument();
+    expect(screen.getByText(/running on OMAChain mainnet/i)).toBeInTheDocument();
   });
 
   it('does not render on testnet', () => {
