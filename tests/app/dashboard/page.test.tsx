@@ -713,7 +713,6 @@ describe('Dashboard Page', () => {
       expect(screen.getByText('Service Management')).toBeInTheDocument()
     })
     expect(screen.getByText('External Key Authorizations')).toBeInTheDocument()
-    expect(screen.getByText('Linked Identifiers')).toBeInTheDocument()
   })
 
   it('does not render the ServiceTrustWorkspace without a service subject', async () => {

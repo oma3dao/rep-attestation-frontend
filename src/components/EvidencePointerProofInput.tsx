@@ -157,7 +157,7 @@ export function EvidencePointerProofInput({
             <p className="text-xs">
               {controllerDid
                 ? "Enter the controller field above to generate the verification string."
-                : "Connect your wallet or enter the controller field to generate the verification string."}
+                : "Sign in or enter the controller field to generate the verification string."}
             </p>
           </div>
         )}

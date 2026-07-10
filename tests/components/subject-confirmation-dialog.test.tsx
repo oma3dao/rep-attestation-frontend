@@ -69,7 +69,7 @@ describe('SubjectConfirmationDialog', () => {
 
   it('renders the dialog title and a disabled Verify button initially', () => {
     setup();
-    expect(screen.getByText('Verify Subject Ownership')).toBeInTheDocument();
+    expect(screen.getByText('Verify Service ID Ownership')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled();
   });

@@ -51,7 +51,7 @@ function getSubjectType(did: string) {
   if (did.startsWith("did:pkh:")) return "Blockchain Address"
   if (did.startsWith("did:jwk:")) return "JWK Key"
   if (did.startsWith("did:handle:")) return "Social Handle"
-  return "DID"
+  return "ID"
 }
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
@@ -157,7 +157,7 @@ export default function VerifyPage() {
     const controller = controllerDid.trim()
 
     if (!subject) {
-      setError("Select a subject to verify.")
+      setError("Select a service ID to verify.")
       return
     }
 
@@ -232,8 +232,7 @@ export default function VerifyPage() {
           <ShieldCheck className="h-5 w-5" />
         </div>
         <div>
-          <p className="technical-label text-primary">Trust Verifier</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Verify</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Trust Verifier</h1>
         </div>
       </div>
 
@@ -241,7 +240,7 @@ export default function VerifyPage() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="text-sm font-medium text-foreground">Subject</label>
+              <label className="text-sm font-medium text-foreground">Service ID</label>
               <Badge variant="secondary">Required</Badge>
             </div>
             <SubjectIdInput
@@ -286,8 +285,7 @@ export default function VerifyPage() {
             <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="technical-label text-primary">Controller Authorization</p>
-                  <h2 className="text-xl font-semibold tracking-tight">Authorization Result</h2>
+                  <p className="technical-label text-primary">Signing Key Authorization</p>
                 </div>
                 {result.keyAuthorization ? (
                   <StatusBadge
@@ -314,7 +312,7 @@ export default function VerifyPage() {
                         <span className="font-mono text-xs">{result.keyAuthorization.controllerDid}</span>
                       </p>
                       <p className="mt-2 text-sm font-medium text-foreground/70">
-                        Mechanisms: {result.keyAuthorization.sources.length > 0 ? result.keyAuthorization.sources.join(", ") : "None"}
+                        Verification Methods: {result.keyAuthorization.sources.length > 0 ? result.keyAuthorization.sources.join(", ") : "None"}
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
@@ -331,20 +329,15 @@ export default function VerifyPage() {
           <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="technical-label text-primary">Subject Summary</p>
-                <h2 className="text-xl font-semibold tracking-tight">Trust Profile</h2>
+                <p className="technical-label text-primary">Service Summary</p>
               </div>
               <Badge variant="secondary">{getSubjectType(result.subjectDid)}</Badge>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="min-w-0 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <p className="text-xs font-medium uppercase text-muted-foreground">Subject DID</p>
+                <p className="text-xs font-medium uppercase text-muted-foreground">Service ID</p>
                 <p className="mt-2 break-all font-mono text-sm">{result.subjectDid}</p>
-              </div>
-              <div className="min-w-0 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <p className="text-xs font-medium uppercase text-muted-foreground">Canonical DID</p>
-                <p className="mt-2 break-all font-mono text-sm">{result.canonicalDid}</p>
               </div>
             </div>
 
@@ -359,15 +352,15 @@ export default function VerifyPage() {
           </section>
 
           <section>
-            <div className="mb-3">
-              <p className="technical-label text-primary">Attestations</p>
-            </div>
             <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
+              <div className="mb-3 pt-4">
+                <p className="technical-label text-primary">Attestations</p>
+              </div>
               <LatestAttestations
                 showHeading={false}
                 data={result.attestations}
                 approvedIssuers={result.approvedIssuers}
-                emptyMessage="No attestations found for this subject."
+                emptyMessage="No attestations found for this service."
               />
             </div>
           </section>

@@ -46,7 +46,7 @@ const proofTypeDefs: Record<string, { emoji: string; label: string; description:
   "pop-eip712": {
     emoji: "✍️",
     label: "EIP-712 signature",
-    description: "Sign a typed message with your wallet to prove control"
+    description: "Sign a typed message using your account key to prove control"
   },
   "pop-jws": {
     emoji: "🔏",
