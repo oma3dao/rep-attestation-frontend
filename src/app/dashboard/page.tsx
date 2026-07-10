@@ -321,7 +321,7 @@ function ApprovedIssuerRequest({
     event.preventDefault()
     const subject = "OMA3 authorized issuer request"
     const body = [
-      "Make your wallets an OMA3-authorized issuer to increase trust in your attestations.",
+      "Make your user ID an OMA3-authorized issuer to increase trust in your attestations.",
       "",
       `Wallets: ${wallets}`,
       `Schemas: ${schemas.join(", ") || "Not specified"}`,
@@ -337,7 +337,7 @@ function ApprovedIssuerRequest({
         <div>
           <h3 className="font-semibold tracking-tight text-foreground">Request approved issuer status</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Make your wallets an OMA3-authorized issuer to increase trust in your attestations.
+            Make your user ID an OMA3-authorized issuer to increase trust in your attestations.
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => setShowForm((open) => !open)}>
@@ -348,7 +348,7 @@ function ApprovedIssuerRequest({
       {showForm ? (
         <form className="mt-4 space-y-4" onSubmit={submitRequest}>
           <div className="space-y-2">
-            <label htmlFor="issuer-wallets" className="text-sm font-medium text-foreground">Wallets</label>
+            <label htmlFor="issuer-wallets" className="text-sm font-medium text-foreground">Key IDs</label>
             <textarea
               id="issuer-wallets"
               value={wallets}
@@ -639,9 +639,17 @@ function ServiceKeyCard({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Signal active={keyInfo.basic} label="Basic" />
-          <Signal active={keyInfo.intermediate} label="Intermediate" />
-          <Signal active={keyInfo.advanced} label="Advanced" />
+          {keyInfo.basic || keyInfo.intermediate || keyInfo.advanced ? (
+            <>
+              <Signal active={keyInfo.basic} label="Basic" />
+              <Signal active={keyInfo.intermediate} label="Intermediate" />
+              <Signal active={keyInfo.advanced} label="Advanced" />
+            </>
+          ) : (
+            <span className="inline-block rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+              Not authorized
+            </span>
+          )}
         </div>
       </div>
 
@@ -681,9 +689,11 @@ function ServiceKeyCard({
         <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
           <p className="text-sm font-medium text-foreground">Confirm controller witness</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            This will submit a blockchain transaction using one of your sponsored writes.
-            A trusted third party will verify your endpoint evidence (DNS or DID document)
-            and anchor the controller relationship on-chain.
+            A controller witness is a trusted third-party attestation that this key is currently
+            authorized to sign on behalf of your service. This is useful because if you later
+            rotate your signing keys (in DNS TXT or did.json), signatures made with previous
+            keys remain valid — the witness creates durable on-chain evidence of the
+            authorization at this point in time.
           </p>
           <div className="mt-3 flex gap-2">
             <Button
@@ -731,9 +741,6 @@ const TAG_OPTIONS: { value: KeyMetadataTag; label: string }[] = [
 function getTagLabel(tag: string): string {
   return TAG_OPTIONS.find((t) => t.value === tag)?.label ?? tag
 }
-
-const SIGNING_KEYS_DESCRIPTION_FULL =
-  "Manage keys that your service uses to sign artifacts such as x402 offers and receipts. Store your private key wherever you choose \u2014 CDP, Thirdweb, Turnkey, AWS KMS, or your own server. Register your public keys with OMATrust to tell agents and verifiers which keys are authorized for your service. To follow good security hygene, use OMATrust to rotate your keys- the security of your key storage dictates your rotation frequency (less secure -> more frequent rotations)."
 
 const PRIVATE_KEY_DID_PREFIXES_SIGNING = ["did:pkh:", "did:jwk:"]
 
@@ -959,15 +966,15 @@ function AddSigningKeyDialog({
 
 function SigningKeyCard({
   keyMetadata,
+  subjectDid,
   serviceKeys,
-  serviceDids,
   chainId,
   onEdit,
   onControllerWitnessSubmitted,
 }: {
   keyMetadata: KeyMetadataRecord
+  subjectDid: string
   serviceKeys: ServiceKey[]
-  serviceDids: string[]
   chainId: number
   onEdit: () => void
   onControllerWitnessSubmitted?: () => Promise<void> | void
@@ -975,19 +982,17 @@ function SigningKeyCard({
   const [isSubmittingWitness, setIsSubmittingWitness] = useState(false)
   const [witnessMessage, setWitnessMessage] = useState<string | null>(null)
   const [witnessError, setWitnessError] = useState<string | null>(null)
-  const [showWitnessConfirm, setShowWitnessConfirm] = useState<string | null>(null) // subjectDid or null
+  const [showWitnessConfirm, setShowWitnessConfirm] = useState(false)
 
-  // Find matching ServiceKey entries for this key (across all subjects)
-  const boundSubjects = useMemo(() => {
+  // Find the ServiceKey for this specific key+subject pair, or create a stub
+  const keyInfo: ServiceKey = useMemo(() => {
     const canonical = canonicalIdentifier(keyMetadata.keyDid)
-    // Show all service DIDs as potential subjects, enriched with trust data if available
-    const matchedKeys = serviceKeys.filter((sk) => sk.canonicalKeyDid === canonical)
-    if (matchedKeys.length > 0) return matchedKeys
-
-    // If no service keys match yet (key not discovered via DNS/attestations),
-    // return stub entries for all service DIDs so the user can see their subjects
-    // and follow the trust-building flow
-    return serviceDids.map((subjectDid): ServiceKey => ({
+    const canonicalSubject = canonicalIdentifier(subjectDid)
+    const match = serviceKeys.find(
+      (sk) => sk.canonicalKeyDid === canonical && canonicalIdentifier(sk.subjectDid) === canonicalSubject
+    )
+    if (match) return match
+    return {
       keyDid: keyMetadata.keyDid,
       canonicalKeyDid: canonical,
       subjectDid,
@@ -996,11 +1001,14 @@ function SigningKeyCard({
       basic: false,
       intermediate: false,
       advanced: false,
-    }))
-  }, [keyMetadata.keyDid, keyMetadata.displayName, serviceKeys, serviceDids])
+    }
+  }, [keyMetadata.keyDid, keyMetadata.displayName, subjectDid, serviceKeys])
 
-  const submitControllerWitness = async (subjectDid: string) => {
-    setShowWitnessConfirm(null)
+  const isAuthorized = keyInfo.basic || keyInfo.intermediate || keyInfo.advanced
+  const publishParams = `subject=${encodeURIComponent(subjectDid)}&keyId=${encodeURIComponent(keyMetadata.keyDid)}`
+
+  const submitControllerWitness = async () => {
+    setShowWitnessConfirm(false)
     setIsSubmittingWitness(true)
     setWitnessMessage(null)
     setWitnessError(null)
@@ -1046,13 +1054,6 @@ function SigningKeyCard({
     )
   }
 
-  const StatusBadge = ({ keyInfo }: { keyInfo: ServiceKey }) => {
-    if (keyInfo.keyBindingUid) {
-      return <Badge variant="success">Active</Badge>
-    }
-    return <Badge variant="secondary">Registered</Badge>
-  }
-
   return (
     <div className="rounded-xl border border-border/70 bg-background p-4">
       {/* Header: name + edit + signals */}
@@ -1066,11 +1067,7 @@ function SigningKeyCard({
           </div>
           <p className="mt-1 text-sm text-foreground break-all">
             <span className="font-medium">Service ID:</span>{" "}
-            {boundSubjects.length > 0 && boundSubjects[0].subjectDid ? (
-              <span className="font-mono text-xs">{boundSubjects.map((s) => s.subjectDid).join(", ")}</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">None (see below)</span>
-            )}
+            <span className="font-mono text-xs">{subjectDid}</span>
           </p>
           <p className="mt-1 text-sm text-foreground break-all">
             <span className="font-medium">Key ID:</span>{" "}
@@ -1090,121 +1087,90 @@ function SigningKeyCard({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {(() => {
-            const best = boundSubjects.reduce(
-              (acc, sk) => ({
-                basic: acc.basic || sk.basic,
-                intermediate: acc.intermediate || sk.intermediate,
-                advanced: acc.advanced || sk.advanced,
-              }),
-              { basic: false, intermediate: false, advanced: false }
-            )
-            return (
-              <>
-                <Signal
-                  active={best.basic}
-                  label="Basic"
-                  tooltip={best.basic
-                    ? "Ownership verified — key is published in DNS TXT or did.json"
-                    : "Publish this key in DNS TXT or did.json to prove ownership"}
-                />
-                <Signal
-                  active={best.intermediate}
-                  label="Intermediate"
-                  tooltip={best.intermediate
-                    ? "Controller witness attested on-chain"
-                    : "Submit a controller witness after proving ownership"}
-                />
-                <Signal
-                  active={best.advanced}
-                  label="Advanced"
-                  tooltip={best.advanced
-                    ? "Key binding published on-chain"
-                    : "Publish a key binding after controller witness"}
-                />
-              </>
-            )
-          })()}
+          {isAuthorized ? (
+            <>
+              <Signal
+                active={keyInfo.basic}
+                label="Basic"
+                tooltip={keyInfo.basic
+                  ? "Ownership verified — key is published in DNS TXT or did.json"
+                  : "Publish this key in DNS TXT or did.json to prove ownership"}
+              />
+              <Signal
+                active={keyInfo.intermediate}
+                label="Intermediate"
+                tooltip={keyInfo.intermediate
+                  ? "Controller witness attested on-chain"
+                  : "Submit a controller witness after proving ownership"}
+              />
+              <Signal
+                active={keyInfo.advanced}
+                label="Advanced"
+                tooltip={keyInfo.advanced
+                  ? "Key binding published on-chain"
+                  : "Publish a key binding after controller witness"}
+              />
+            </>
+          ) : (
+            <span className="inline-block rounded-full border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+              Not authorized
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Trust status + actions */}
-      <div className="mt-4">
-        {(() => {
-          // Use the best trust level across all subjects
-          const best = boundSubjects.reduce(
-            (acc, sk) => ({
-              basic: acc.basic || sk.basic,
-              intermediate: acc.intermediate || sk.intermediate,
-              advanced: acc.advanced || sk.advanced,
-              keyBindingUid: acc.keyBindingUid || sk.keyBindingUid,
-              // Pick first subject with intermediate for witness/binding actions
-              witnessSubject: acc.witnessSubject || (sk.basic && !sk.intermediate ? sk.subjectDid : null),
-              bindingSubject: acc.bindingSubject || (sk.intermediate && !sk.keyBindingUid ? sk.subjectDid : null),
-            }),
-            { basic: false, intermediate: false, advanced: false, keyBindingUid: undefined as string | undefined, witnessSubject: null as string | null, bindingSubject: null as string | null }
-          )
-          const publishParams = best.bindingSubject
-            ? `subject=${encodeURIComponent(best.bindingSubject)}&keyId=${encodeURIComponent(keyMetadata.keyDid)}`
-            : boundSubjects[0]?.subjectDid
-              ? `subject=${encodeURIComponent(boundSubjects[0].subjectDid)}&keyId=${encodeURIComponent(keyMetadata.keyDid)}`
-              : `keyId=${encodeURIComponent(keyMetadata.keyDid)}`
+      {/* Ownership proof guidance (only when basic is missing) */}
+      {!keyInfo.basic ? (() => {
+        const domain = subjectDid.startsWith("did:web:") ? subjectDid.slice("did:web:".length).replaceAll(":", "/") : null
+        return (
+        <div className="mt-4 space-y-2 rounded-lg border border-border/80 bg-muted/30 p-3 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">Authorize this key</p>
+          <p className="text-xs">
+            Tell the world who this key belongs to by binding it to your web domain. Add a DNS TXT record or host a did.json.
+          </p>
+          <div className="space-y-1">
+            <p className="text-xs font-medium">Option 1: DNS TXT</p>
+            <p className="text-xs">
+              Add a TXT record at <span className="font-mono">_controllers.{domain ?? "your-domain.com"}</span>. DNS TXT name should be &ldquo;_controllers&rdquo; and value should be:
+            </p>
+            <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground break-all select-all">
+              v=1;controller={keyMetadata.keyDid}
+            </code>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-medium">Option 2: did.json</p>
+            <p className="text-xs">
+              Host a DID document at <span className="font-mono">https://{domain ?? "your-domain.com"}/.well-known/did.json</span> with this key listed as a controller.{" "}
+              <a href="https://docs.omatrust.org/api/controller-witness#setting-up-didjson-evidence" target="_blank" rel="noopener noreferrer" className="underline">See format →</a>
+            </p>
+          </div>
+          <p className="text-xs">
+            After publishing, wait a few minutes for propagation then refresh the dashboard.
+          </p>
+        </div>
+        )
+      })() : null}
 
-          return (
-            <>
-              {/* Ownership proof guidance (only when basic is missing) */}
-              {!best.basic ? (
-                <div className="mt-3 space-y-2 rounded-lg border border-border/80 bg-muted/30 p-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">Authorize this key</p>
-                  <p className="text-xs">
-                    Tell the world who this key belongs to by binding it to your web domain. Add a DNS TXT record or host a did.json.
-                  </p>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium">Option 1: DNS TXT</p>
-                    <p className="text-xs">
-                      Add a TXT record at <span className="font-mono">_controllers.example.com</span> (replace with your domain). DNS TXT name should be &ldquo;_controllers&rdquo; and value should be:
-                    </p>
-                    <code className="block rounded bg-muted px-2 py-1.5 text-xs font-mono text-foreground break-all select-all">
-                      v=1;controller={keyMetadata.keyDid}
-                    </code>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium">Option 2: did.json</p>
-                    <p className="text-xs">
-                      Host a DID document at <span className="font-mono">https://example.com/.well-known/did.json</span> with this key listed as a controller.{" "}
-                      <a href="https://docs.omatrust.org/api/controller-witness#setting-up-didjson-evidence" target="_blank" rel="noopener noreferrer" className="underline">See format →</a>
-                    </p>
-                  </div>
-                  <p className="text-xs">
-                    After publishing, wait a few minutes for propagation then refresh the dashboard.
-                  </p>
-                </div>
-              ) : null}
-
-              {/* Action buttons (matching Key Authorizations) */}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {best.basic && !best.intermediate ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    onClick={() => setShowWitnessConfirm(best.witnessSubject ?? boundSubjects[0]?.subjectDid ?? null)}
-                    disabled={isSubmittingWitness}
-                  >
-                    {isSubmittingWitness ? "Submitting witness..." : "Add controller witness"}
-                  </Button>
-                ) : null}
-                {best.intermediate && !best.keyBindingUid ? (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/publish/key-binding?${publishParams}`}>
-                      Publish key binding
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-            </>
-          )
-        })()}
+      {/* Action buttons */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {keyInfo.basic && !keyInfo.intermediate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => setShowWitnessConfirm(true)}
+            disabled={isSubmittingWitness}
+          >
+            {isSubmittingWitness ? "Submitting witness..." : "Add controller witness"}
+          </Button>
+        ) : null}
+        {keyInfo.intermediate && !keyInfo.keyBindingUid ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/publish/key-binding?${publishParams}`}>
+              Publish key binding
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       {/* Controller witness confirmation */}
@@ -1212,15 +1178,17 @@ function SigningKeyCard({
         <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
           <p className="text-sm font-medium text-foreground">Confirm controller witness</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            This will submit a blockchain transaction using one of your sponsored writes.
-            A trusted third party will verify your endpoint evidence (DNS or DID document)
-            and anchor the controller relationship on-chain.
+            A controller witness is a trusted third-party attestation that this key is currently
+            authorized to sign on behalf of your service. This is useful because if you later
+            rotate your signing keys (in DNS TXT or did.json), signatures made with previous
+            keys remain valid — the witness creates durable on-chain evidence of the
+            authorization at this point in time.
           </p>
           <div className="mt-3 flex gap-2">
             <Button
               size="sm"
               type="button"
-              onClick={() => { void submitControllerWitness(showWitnessConfirm) }}
+              onClick={() => { void submitControllerWitness() }}
               disabled={isSubmittingWitness}
             >
               {isSubmittingWitness ? "Submitting..." : "Confirm"}
@@ -1229,7 +1197,7 @@ function SigningKeyCard({
               variant="outline"
               size="sm"
               type="button"
-              onClick={() => setShowWitnessConfirm(null)}
+              onClick={() => setShowWitnessConfirm(false)}
               disabled={isSubmittingWitness}
             >
               Cancel
@@ -1577,12 +1545,12 @@ function ServiceTrustWorkspace({
       <CardContent className="space-y-6">
         {/* Signing Keys subsection */}
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="font-semibold tracking-tight text-foreground">External Key Authorizations</h3>
-              <p className="text-sm text-muted-foreground">Authorize signing keys that sign artifacts (e.g.- x402 receipts) for your services.  Each authorization pairs a key ID to a service ID.</p>
+              <p className="text-sm text-muted-foreground">Keys your services use to sign artifacts like x402 receipts or software releases. These keys live in your own infrastructure (HSM, environment variable, etc.). Here you can record which keys are authorized for which services.</p>
             </div>
-            <Button size="sm" onClick={() => { setEditingSigningKey(null); setSigningKeyDialogOpen(true) }}>
+            <Button size="sm" className="shrink-0" onClick={() => { setEditingSigningKey(null); setSigningKeyDialogOpen(true) }}>
               + Add Signing Key
             </Button>
           </div>
@@ -1598,20 +1566,22 @@ function ServiceTrustWorkspace({
             </div>
           ) : (
             <div className="space-y-3">
-              {keyMetadataRecords.map((record) => (
-                <SigningKeyCard
-                  key={record.id}
-                  keyMetadata={record}
-                  serviceKeys={serviceKeys}
-                  serviceDids={serviceDids}
-                  chainId={chainId}
-                  onEdit={() => { setEditingSigningKey(record); setSigningKeyDialogOpen(true) }}
-                  onControllerWitnessSubmitted={async () => {
-                    setServiceAttestationsRefreshKey((k) => k + 1)
-                    await onControllerWitnessSubmitted?.()
-                  }}
-                />
-              ))}
+              {keyMetadataRecords.flatMap((record) =>
+                serviceDids.map((subjectDid) => (
+                  <SigningKeyCard
+                    key={`${record.id}-${subjectDid}`}
+                    keyMetadata={record}
+                    subjectDid={subjectDid}
+                    serviceKeys={serviceKeys}
+                    chainId={chainId}
+                    onEdit={() => { setEditingSigningKey(record); setSigningKeyDialogOpen(true) }}
+                    onControllerWitnessSubmitted={async () => {
+                      setServiceAttestationsRefreshKey((k) => k + 1)
+                      await onControllerWitnessSubmitted?.()
+                    }}
+                  />
+                ))
+              )}
             </div>
           )}
         </section>
@@ -1620,7 +1590,7 @@ function ServiceTrustWorkspace({
         <section className="space-y-3">
           <div>
             <h3 className="font-semibold tracking-tight text-foreground">Account Key Authorizations</h3>
-            <p className="text-sm text-muted-foreground">Pair OMATrust account keys (used for logging in to this portal and signing attestations on OMATrust) to your service IDs.</p>
+            <p className="text-sm text-muted-foreground">Keys you use to log in to OMATrust and publish attestations (reviews, certifications, etc.). These are your personal login keys, linked to your service IDs so attestations you publish are traceable back to your services.</p>
           </div>
 
           {isLoadingControllerSummaries ? (
@@ -1804,7 +1774,7 @@ function ServiceTrustWorkspace({
           ) : null}
           {!isLoadingServiceAttestations && serviceReviews.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground">
-              No reviews found for your services yet.
+              No OMATrust user reviews found for your services yet.
             </div>
           ) : null}
           {reviewRows.length > 0 ? (
@@ -2162,7 +2132,7 @@ function DashboardContent() {
         <CardHeader>
           <CardTitle>My Attestations</CardTitle>
           <CardDescription>
-            View attestations created by your signed-in account or connected wallet, ordered latest to earliest.
+            View attestations created by this user ID, ordered latest to earliest.
           </CardDescription>
         </CardHeader>
         <CardContent>
