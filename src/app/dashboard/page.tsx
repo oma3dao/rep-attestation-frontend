@@ -1236,9 +1236,9 @@ function ServiceTrustWorkspace({
     const attestationDids = attestations
       .filter((attestation) => ["key-binding", "controller-witness", "linked-identifier", "security-assessment", "certification"].includes(attestation.schemaId ?? ""))
       .map(getServiceDidFromAttestation)
-    return uniqueValues([session.primarySubject?.canonicalDid, ...attestationDids])
+    return uniqueValues([session.primarySubject?.canonicalDid, ...registeredSubjectDids, ...attestationDids])
       .filter((did) => did.startsWith("did:") && isRealSubjectDid(did, walletDid))
-  }, [attestations, session.primarySubject?.canonicalDid, session.wallet?.did, address, chainId])
+  }, [attestations, session.primarySubject?.canonicalDid, session.wallet?.did, address, chainId, registeredSubjectDids])
 
   const [controllerSummaries, setControllerSummaries] = useState<Map<string, ControllerConfirmResponse>>(new Map())
   const [isLoadingControllerSummaries, setIsLoadingControllerSummaries] = useState(false)
@@ -1889,20 +1889,6 @@ function DashboardContent() {
   // Derive which sections to show based on context + attestation data
   const accountWalletDid = session?.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
 
-  const serviceDids = useMemo(() => {
-    if (!session) return []
-    const walletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
-    const attestationDids = attestations
-      .filter((a) => ["key-binding", "controller-witness", "linked-identifier", "security-assessment", "certification"].includes(a.schemaId ?? ""))
-      .map(getServiceDidFromAttestation)
-    return uniqueValues([session.primarySubject?.canonicalDid, ...attestationDids])
-      .filter((did) => did.startsWith("did:") && isRealSubjectDid(did, walletDid))
-  }, [attestations, session, address, chainId])
-
-  const hasValidSubject = serviceDids.length > 0
-  const hasIssuerRecords = attestations.some(isIssuerAttestation)
-  const hasAttestations = attestations.length > 0
-
   // Load registered subjects from the backend
   const loadSubjects = useCallback(async () => {
     if (!session) return
@@ -1922,6 +1908,20 @@ function DashboardContent() {
     () => registeredSubjects.map((s) => s.canonicalDid),
     [registeredSubjects]
   )
+
+  const serviceDids = useMemo(() => {
+    if (!session) return []
+    const walletDid = session.wallet?.did ?? (address ? `did:pkh:eip155:${chainId}:${address}` : null)
+    const attestationDids = attestations
+      .filter((a) => ["key-binding", "controller-witness", "linked-identifier", "security-assessment", "certification"].includes(a.schemaId ?? ""))
+      .map(getServiceDidFromAttestation)
+    return uniqueValues([session.primarySubject?.canonicalDid, ...registeredSubjectDids, ...attestationDids])
+      .filter((did) => did.startsWith("did:") && isRealSubjectDid(did, walletDid))
+  }, [attestations, session, address, chainId, registeredSubjectDids])
+
+  const hasValidSubject = serviceDids.length > 0
+  const hasIssuerRecords = attestations.some(isIssuerAttestation)
+  const hasAttestations = attestations.length > 0
 
   const handleSubjectCreated = useCallback(async (subject: BackendSubject) => {
     setRegisteredSubjects((current) => {
