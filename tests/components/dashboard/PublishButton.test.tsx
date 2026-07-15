@@ -4,7 +4,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { PublishButton } from '@/components/dashboard/PublishButton';
-import { PUBLISH_MENU_ITEMS } from '@/config/publish-categories';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -23,9 +22,34 @@ describe('PublishButton', () => {
     render(<PublishButton />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    for (const item of PUBLISH_MENU_ITEMS) {
-      const link = await screen.findByRole('menuitem', { name: item.label });
-      expect(link).toHaveAttribute('href', item.href);
-    }
+    const userReview = await screen.findByRole('menuitem', { name: /User Review/i });
+    expect(userReview).toHaveAttribute('href', '/publish/user-review');
+
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
+
+    const other = await screen.findByRole('menuitem', { name: /Other attestations/i });
+    expect(other).toHaveAttribute('href', '/publish');
+  });
+
+  it('pre-fills responsibleParty when user has exactly one subject', async () => {
+    const subjects = [{ id: '1', canonicalDid: 'did:web:example.com', subjectDidHash: 'abc', displayName: null, isDefault: true }];
+    render(<PublishButton subjects={subjects} />);
+    await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
+
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
+  });
+
+  it('does not pre-fill when user has multiple subjects', async () => {
+    const subjects = [
+      { id: '1', canonicalDid: 'did:web:a.com', subjectDidHash: 'a', displayName: null, isDefault: true },
+      { id: '2', canonicalDid: 'did:web:b.com', subjectDidHash: 'b', displayName: null, isDefault: false },
+    ];
+    render(<PublishButton subjects={subjects} />);
+    await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
+
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
   });
 });
