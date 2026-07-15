@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 interface SubjectIdInputProps {
   value?: string
   onChange: (did: string | null) => void
+  onMethodChange?: (method: string) => void
   error?: string
   className?: string
   allowedMethods?: string[] // e.g. ["web", "pkh", "jwk", "key", "handle"]
@@ -37,6 +38,7 @@ type DidMethod = "did:web" | "did:pkh" | "did:handle" | "did:key" | "did:jwk" | 
 export function SubjectIdInput({
   value = "",
   onChange,
+  onMethodChange,
   error,
   className = "",
   allowedMethods,
@@ -106,6 +108,11 @@ export function SubjectIdInput({
 
     const nextMethod = newMethod as DidMethod
     setMethod(nextMethod)
+
+    // Notify parent of method change
+    if (onMethodChange) {
+      onMethodChange(nextMethod.replace("did:", ""))
+    }
 
     // Restore the draft for the new method, or null if none exists
     const draft = drafts[nextMethod] ?? null

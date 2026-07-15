@@ -138,6 +138,7 @@ function buildKeyAuthorization(
 export default function VerifyPage() {
   const [subjectDid, setSubjectDid] = useState("")
   const [controllerDid, setControllerDid] = useState("")
+  const [isArtifactMode, setIsArtifactMode] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<VerifyResult | null>(null)
@@ -246,12 +247,13 @@ export default function VerifyPage() {
             <SubjectIdInput
               value={subjectDid}
               onChange={(did) => setSubjectDid(did ?? "")}
+              onMethodChange={(method) => setIsArtifactMode(method === "artifact")}
               allowedMethods={["web", "pkh", "jwk", "artifact"]}
               className="ml-0"
             />
           </div>
 
-          {!subjectDid.startsWith("did:artifact:") && (
+          {!isArtifactMode && (
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-foreground">Signing Key</label>
