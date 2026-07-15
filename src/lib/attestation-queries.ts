@@ -303,12 +303,13 @@ export async function getLatestAttestationsWithMetadata(
  */
 const SCHEMA_PRIORITY: Record<string, number> = {
   'security-assessment': 0,
-  'certification': 1,
-  'controller-witness': 2,
-  'key-binding': 3,
-  'linked-identifier': 4,
-  'user-review-response': 5,
-  'user-review': 6,
+  'responsibility-claim': 1,
+  'certification': 2,
+  'controller-witness': 3,
+  'key-binding': 4,
+  'linked-identifier': 5,
+  'user-review-response': 6,
+  'user-review': 7,
 }
 
 const DEFAULT_PRIORITY = 4

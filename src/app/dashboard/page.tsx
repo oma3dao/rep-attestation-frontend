@@ -2086,7 +2086,7 @@ function DashboardContent() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          {/* <PublishButton /> */}
+          <PublishButton subjects={registeredSubjects} />
         </div>
       </div>
 

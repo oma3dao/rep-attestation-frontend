@@ -37,6 +37,11 @@ export const PUBLISH_MENU_ITEMS = [
     href: "/publish/user-review",
   },
   {
+    id: "claim",
+    label: "Responsibility Claim",
+    href: "/publish/responsibility-claim",
+  },
+  {
     id: "issuer",
     label: "Audit / Certification",
     href: "/publish?category=issuer",
