@@ -246,11 +246,12 @@ export default function VerifyPage() {
             <SubjectIdInput
               value={subjectDid}
               onChange={(did) => setSubjectDid(did ?? "")}
-              allowedMethods={["web", "pkh", "jwk"]}
+              allowedMethods={["web", "pkh", "jwk", "artifact"]}
               className="ml-0"
             />
           </div>
 
+          {!subjectDid.startsWith("did:artifact:") && (
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="text-sm font-medium text-foreground">Signing Key</label>
@@ -263,6 +264,7 @@ export default function VerifyPage() {
               className="ml-0"
             />
           </div>
+          )}
         </div>
 
         {error ? (

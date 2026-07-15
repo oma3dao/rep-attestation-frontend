@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useCallback, useRef, useEffect } from "react"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { artifactDidFromJson, artifactDidFromBytes } from "@oma3/omatrust/identity"
+import { artifactDidFromJson, artifactDidFromBytes, parseArtifactDid } from "@oma3/omatrust/identity"
 import { Upload, X } from "lucide-react"
 
 interface ArtifactDidInputProps {
@@ -20,9 +21,12 @@ interface ArtifactDidInputProps {
 /**
  * Artifact DID Input Component
  *
- * Upload a file to generate a content-addressed did:artifact identifier.
- * JSON files are canonicalized (JCS/RFC 8785) before hashing.
- * All other files are hashed as raw bytes.
+ * Two input modes:
+ * 1. Paste a did:artifact DID directly
+ * 2. Upload a file to generate the DID from content
+ *
+ * When a file is uploaded, the DID field updates automatically.
+ * When a DID is pasted, it is validated against the did:artifact format.
  */
 export function ArtifactDidInput({
   value = "",
@@ -30,20 +34,53 @@ export function ArtifactDidInput({
   error: externalError,
   className = "",
 }: ArtifactDidInputProps) {
+  const [didText, setDidText] = useState<string>(value || "")
   const [fileName, setFileName] = useState<string | null>(null)
   const [fileSize, setFileSize] = useState<number | null>(null)
-  const [resolvedDid, setResolvedDid] = useState<string | null>(value || null)
   const [internalError, setInternalError] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [matchedAs, setMatchedAs] = useState<"json" | "binary" | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync resolved DID from external value on mount
+  // Sync from external value changes
   useEffect(() => {
-    if (value && value.startsWith("did:artifact:") && !resolvedDid) {
-      setResolvedDid(value)
+    if (value && value !== didText) {
+      setDidText(value)
     }
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle direct DID text input
+  const handleDidTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value
+    setDidText(text)
+    setInternalError(null)
+
+    if (!text.trim()) {
+      onChange(null)
+      return
+    }
+
+    // Validate if it looks like a complete did:artifact
+    if (text.startsWith("did:artifact:")) {
+      try {
+        parseArtifactDid(text)
+        onChange(text)
+        // Clear file state since user typed directly
+        setFileName(null)
+        setFileSize(null)
+        setMatchedAs(null)
+      } catch (err) {
+        // Don't show error while typing — only if it looks complete but invalid
+        if (text.length > 20) {
+          setInternalError(err instanceof Error ? err.message : "Invalid did:artifact format")
+        }
+        onChange(null)
+      }
+    } else if (text.length > 5) {
+      setInternalError("Must start with did:artifact:")
+      onChange(null)
+    }
+  }
 
   const handleFileSelect = useCallback(async (file: File) => {
     setFileName(file.name)
@@ -74,11 +111,11 @@ export function ArtifactDidInput({
         setMatchedAs("binary")
       }
 
-      setResolvedDid(did)
+      setDidText(did)
       setInternalError(null)
       onChange(did)
     } catch (err) {
-      setResolvedDid(null)
+      setDidText("")
       setMatchedAs(null)
       setInternalError(err instanceof Error ? err.message : "Failed to process file")
       onChange(null)
@@ -109,7 +146,7 @@ export function ArtifactDidInput({
   const removeFile = () => {
     setFileName(null)
     setFileSize(null)
-    setResolvedDid(null)
+    setDidText("")
     setMatchedAs(null)
     setInternalError(null)
     onChange(null)
@@ -128,11 +165,25 @@ export function ArtifactDidInput({
 
   return (
     <div className={`space-y-3 ${className}`}>
+      {/* DID text input */}
       <div className="space-y-1">
-        <Label>Upload Artifact</Label>
+        <Label htmlFor="artifact-did">DID</Label>
+        <Input
+          id="artifact-did"
+          type="text"
+          value={didText}
+          onChange={handleDidTextChange}
+          placeholder="did:artifact:bafkrei..."
+          className="font-mono text-sm"
+        />
         <p className="text-xs text-muted-foreground">
-          Upload a file to generate its content-addressed identifier. JSON files are canonicalized before hashing. Examples: JSON configs, markdown documents, package manifests, firmware, applications.
+          Paste a DID, or upload a file below to generate one.
         </p>
+      </div>
+
+      {/* File upload section */}
+      <div className="space-y-1">
+        <Label>Or upload file</Label>
       </div>
 
       {hasFile ? (
@@ -140,9 +191,16 @@ export function ArtifactDidInput({
           <Upload className="h-5 w-5 shrink-0 text-muted-foreground" />
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
-            {fileSize !== null && (
-              <p className="text-xs text-muted-foreground">{formatFileSize(fileSize)}</p>
-            )}
+            <div className="flex items-center gap-2">
+              {fileSize !== null && (
+                <p className="text-xs text-muted-foreground">{formatFileSize(fileSize)}</p>
+              )}
+              {matchedAs && (
+                <p className="text-xs text-muted-foreground">
+                  · {matchedAs === "json" ? "canonical JSON" : "raw bytes"}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex shrink-0 gap-1">
             <Button
@@ -173,15 +231,15 @@ export function ArtifactDidInput({
         </div>
       ) : (
         <div
-          className={`flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+          className={`flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
             showError ? "border-destructive" : "border-border hover:border-primary/50"
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
         >
-          <Upload className="h-8 w-8 text-muted-foreground" />
+          <Upload className="h-6 w-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            Drag and drop a file here, or{" "}
+            Drag and drop, or{" "}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -210,18 +268,6 @@ export function ArtifactDidInput({
       {/* Error */}
       {showError && !isProcessing && (
         <p className="text-xs text-destructive">{errorMessage}</p>
-      )}
-
-      {/* Resolved DID */}
-      {resolvedDid && !isProcessing && (
-        <div className="rounded-md border border-border bg-muted/50 p-3">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">
-            Generated did:artifact{matchedAs ? ` (${matchedAs === "json" ? "canonical JSON" : "raw bytes"})` : ""}:
-          </p>
-          <code className="block break-all text-xs font-mono text-foreground select-all">
-            {resolvedDid}
-          </code>
-        </div>
       )}
     </div>
   )

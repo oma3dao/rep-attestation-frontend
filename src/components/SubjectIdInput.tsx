@@ -69,7 +69,7 @@ export function SubjectIdInput({
     pkh:      { value: "did:pkh", emoji: "🔑", label: "Blockchain Address - For smart contract and wallet addresses" },
     handle:   { value: "did:handle", emoji: "👤", label: "Social Handle - X, GitHub, Discord, etc." },
     jwk:      { value: "did:jwk", emoji: "🔐", label: "JWK Key - Public key identifiers" },
-    artifact: { value: "did:artifact", emoji: "📦", label: "Artifact - For binaries, files, and text like JSON" },
+    artifact: { value: "did:artifact", emoji: "📦", label: "Content / File - Binaries, documents, configs (e.g. .json)" },
   }
 
   // Default fallback order (most common to least)
