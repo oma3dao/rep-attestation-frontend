@@ -33,7 +33,7 @@
   "homepage": "https://github.com/oma3dao/rep-attestation-frontend#readme",
   "dependencies": {
     "@ethereum-attestation-service/eas-sdk": "^2.9.0",
-    "@oma3/omatrust": "^0.1.0-alpha.12",
+    "@oma3/omatrust": "^0.1.0-alpha.13",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.15",
     "@radix-ui/react-label": "^2.1.7",
