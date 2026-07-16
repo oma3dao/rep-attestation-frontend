@@ -518,6 +518,109 @@ const linkedIdentifierFields: FormField[] = [
   }
 ]
 
+const responsibilityClaimFields: FormField[] = [
+  {
+    "name": "responsibleParty",
+    "type": "string",
+    "label": "Responsible Party ID",
+    "description": "DID of the organization or identity publicly accepting responsibility. The attester must be an authorized key for this identity.",
+    "required": true,
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "handle"
+    ],
+    "maxLength": 256,
+    "pattern": "^did:[a-z0-9]+:.+$",
+    "format": "did"
+  },
+  {
+    "name": "subject",
+    "type": "string",
+    "label": "File ID",
+    "description": "DID of the resource, service, application, agent, product, or artifact for which responsibility is being claimed.",
+    "required": true,
+    "placeholder": "Select an ID type above",
+    "didMethods": [
+      "web",
+      "pkh",
+      "jwk",
+      "artifact"
+    ],
+    "maxLength": 256,
+    "pattern": "^did:[a-z0-9]+:.+$",
+    "format": "did"
+  },
+  {
+    "name": "subjectLabel",
+    "type": "string",
+    "label": "File Name",
+    "description": "Human-readable label supplied by the responsible party to identify the content. This value is descriptive metadata and is not part of the subject's cryptographic identity.",
+    "required": false,
+    "placeholder": "Enter file name",
+    "minLength": 1,
+    "maxLength": 128
+  },
+  {
+    "name": "responsibilityType",
+    "type": "array",
+    "label": "Responsibilities",
+    "description": "The complete current set of responsibilities the responsible party accepts for the subject. If responsibilities change, revoke this attestation and publish a replacement with a new array. Partial revocation of individual types is not supported.",
+    "required": true,
+    "placeholder": "Enter responsibilities",
+    "options": [
+      {
+        "value": "creator",
+        "label": "Creator",
+        "description": "Original author or maker of the subject. Asserts authorship of the resource."
+      },
+      {
+        "value": "distributor",
+        "label": "Distributor",
+        "description": "Responsible for delivering or distributing the subject through a channel. Covers publishing, mirroring, packaging, app store distribution, and CDN hosting."
+      },
+      {
+        "value": "maintainer",
+        "label": "Maintainer",
+        "description": "Actively maintains the subject. Implies ongoing responsibility for updates, patches, and security fixes."
+      }
+    ]
+  },
+  {
+    "name": "issuedAt",
+    "type": "integer",
+    "label": "Issued Date",
+    "description": "Time the responsibility claim was issued. Default is current time.",
+    "required": true,
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
+    "min": 0
+  },
+  {
+    "name": "effectiveAt",
+    "type": "integer",
+    "label": "Effective Date",
+    "description": "Time the responsibility claim becomes effective. Default is current time.",
+    "required": false,
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "autoDefault": "current-timestamp",
+    "min": 0
+  },
+  {
+    "name": "expiresAt",
+    "type": "integer",
+    "label": "Expiration Date",
+    "description": "Time the responsibility claim expires. Default is no expiration.",
+    "required": false,
+    "placeholder": "0",
+    "subtype": "timestamp",
+    "min": 0
+  }
+]
+
 const securityAssessmentFields: FormField[] = [
   {
     "name": "subject",
@@ -922,6 +1025,27 @@ export const linkedIdentifierSchema: AttestationSchema = {
   }
 };
 
+export const responsibilityClaimSchema: AttestationSchema = {
+  id: 'responsibility-claim',
+  title: 'Responsibility Claim',
+  description: 'An identity, acting through an authorized key, publicly accepts one or more defined responsibilities for a subject.',
+  fields: responsibilityClaimFields,
+  revocable: true,
+  easSchemaString: 'string responsibleParty, string subject, string subjectLabel, string[] responsibilityType, string[] proofs, uint256 issuedAt, uint256 effectiveAt, uint256 expiresAt',
+  deployedUIDs: {
+    97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
+    56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
+    66238: '0x877911f942a77a527661b288f8b0f6703fe461286bbf2e4a71967e2f2ec1b651', // OMAChain Testnet
+    6623: '0x877911f942a77a527661b288f8b0f6703fe461286bbf2e4a71967e2f2ec1b651'  // OMAChain Mainnet
+  },
+  deployedBlocks: {
+    97: 0, // BSC Testnet
+    56: 0, // BSC Mainnet
+    66238: 524, // OMAChain Testnet
+    6623: 51  // OMAChain Mainnet
+  }
+};
+
 export const securityAssessmentSchema: AttestationSchema = {
   id: 'security-assessment',
   title: 'Security Assessment',
@@ -992,6 +1116,7 @@ const allSchemas: AttestationSchema[] = [
   controllerWitnessSchema,
   keyBindingSchema,
   linkedIdentifierSchema,
+  responsibilityClaimSchema,
   securityAssessmentSchema,
   userReviewResponseSchema,
   userReviewSchema

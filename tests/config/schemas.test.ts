@@ -309,7 +309,7 @@ describe('schemas config', () => {
   describe('getSchemaIds function', () => {
     it('returns all schema IDs', () => {
       const ids = getSchemaIds();
-      expect(ids).toEqual(['certification', 'common', 'controller-witness', 'key-binding', 'linked-identifier', 'security-assessment', 'user-review-response', 'user-review']);
+      expect(ids).toEqual(['certification', 'common', 'controller-witness', 'key-binding', 'linked-identifier', 'responsibility-claim', 'security-assessment', 'user-review-response', 'user-review']);
     });
 
     it('returns array of strings', () => {
@@ -324,7 +324,7 @@ describe('schemas config', () => {
   describe('getAllSchemas function', () => {
     it('returns all schemas', () => {
       const schemas = getAllSchemas();
-      expect(schemas).toHaveLength(8);
+      expect(schemas).toHaveLength(9);
       expect(schemas).toContain(certificationSchema);
       expect(schemas).toContain(commonSchema);
       expect(schemas).toContain(controllerWitnessSchema);

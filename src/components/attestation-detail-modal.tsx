@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
+import { getAttestationFieldLabel, isHiddenAttestationField } from "@/lib/display"
 import { Shield, Award, LinkIcon, Star, MessageSquare, ExternalLink } from "lucide-react"
 import { getActiveChain } from "@/lib/blockchain"
 
@@ -45,19 +46,6 @@ function formatValue(value: any): string {
     }
   }
   return String(value)
-}
-
-// Map decoded data field keys to user-friendly labels
-const FIELD_LABEL_MAP: Record<string, string> = {
-  subject: 'Service ID',
-  controller: 'Key ID',
-  method: 'Proof Mechanism',
-  observedAt: 'Observed at',
-}
-
-function getFieldLabel(key: string): string {
-  if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key]
-  return key.replace(/([A-Z])/g, ' $1').trim()
 }
 
 /** Format check names to be more user-friendly */
@@ -163,10 +151,12 @@ export function AttestationDetailModal({ isOpen, onClose, attestation }: Attesta
               <h3 className="font-semibold tracking-tight text-foreground">Attestation Data</h3>
               
               <div className="rounded-lg border border-border/70 bg-muted/50 p-4 space-y-3">
-                {Object.entries(attestation.decodedData).map(([key, value]) => (
+                {Object.entries(attestation.decodedData)
+                  .filter(([key, value]) => !isHiddenAttestationField(key, value, attestation.schemaId))
+                  .map(([key, value]) => (
                   <div key={key} className="min-w-0">
                     <span className="font-medium text-foreground capitalize">
-                      {getFieldLabel(key)}:
+                      {getAttestationFieldLabel(key, attestation.schemaId)}:
                     </span>
                     <p className="mt-1 whitespace-pre-wrap break-all text-muted-foreground">
                       {formatFieldValue(key, value)}

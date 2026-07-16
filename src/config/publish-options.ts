@@ -3,7 +3,7 @@ export interface PublishOption {
   title: string
   description: string
   href: string
-  icon: "star" | "shield" | "award" | "link" | "eye" | "key-round" | "message-square"
+  icon: "star" | "shield" | "award" | "file-check" | "link" | "eye" | "key-round" | "message-square"
   docsHref?: string
 }
 
@@ -14,6 +14,13 @@ export interface DashboardAction {
 }
 
 export const publishOptions: PublishOption[] = [
+  {
+    schemaId: "responsibility-claim",
+    title: "Publish a responsibility claim",
+    description: "Publicly accept responsibility for an artifact, service, or resource — as creator, distributor, or maintainer.",
+    href: "/publish/responsibility-claim",
+    icon: "file-check",
+  },
   {
     schemaId: "key-binding",
     title: "Authorize a signing key",
