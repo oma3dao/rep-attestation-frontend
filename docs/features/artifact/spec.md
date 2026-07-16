@@ -1,6 +1,6 @@
 # Artifact Verification --- Specification
 
-**Status: Draft**
+**Status: Implemented**
 
 ## Purpose
 
