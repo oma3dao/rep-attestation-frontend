@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Shield, Award, LinkIcon, Star, MessageSquare, CheckCircle2 } from "lucide-react"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { StarRating } from "@/components/star-rating"
+import { getAttestationFieldLabel } from "@/lib/display"
 
 interface AttestationCardProps {
   attestation: EnrichedAttestationResult
@@ -79,12 +80,12 @@ export function AttestationCard({ attestation, trusted, onClick }: AttestationCa
             <span className="font-mono text-muted-foreground break-all">{attestation.attester}</span>
           </div>
           <div>
-            <span className="font-medium text-foreground">Service ID:</span>{' '}
+            <span className="font-medium text-foreground">{getAttestationFieldLabel('subject', attestation.schemaId)}:</span>{' '}
             <span className="font-mono text-muted-foreground break-all">{subject}</span>
           </div>
           {isControllerWitness && attestation.decodedData?.controller && (
             <div>
-              <span className="font-medium text-foreground">Controller:</span>{' '}
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('controller', attestation.schemaId)}:</span>{' '}
               <span className="font-mono text-muted-foreground break-all">
                 {String(attestation.decodedData.controller)}
               </span>
@@ -92,7 +93,7 @@ export function AttestationCard({ attestation, trusted, onClick }: AttestationCa
           )}
           {isControllerWitness && attestation.decodedData?.method && (
             <div>
-              <span className="font-medium text-foreground">Method:</span>{' '}
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('method', attestation.schemaId)}:</span>{' '}
               <span className="text-muted-foreground capitalize">
                 {String(attestation.decodedData.method).replace(/-/g, ' ')}
               </span>
@@ -100,7 +101,7 @@ export function AttestationCard({ attestation, trusted, onClick }: AttestationCa
           )}
           {isControllerWitness && attestation.decodedData?.observedAt && (
             <div>
-              <span className="font-medium text-foreground">Observed:</span>{' '}
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('observedAt', attestation.schemaId)}:</span>{' '}
               <span className="text-muted-foreground">
                 {(() => {
                   const val = attestation.decodedData!.observedAt

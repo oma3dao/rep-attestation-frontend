@@ -538,7 +538,7 @@ const responsibilityClaimFields: FormField[] = [
   {
     "name": "subject",
     "type": "string",
-    "label": "Subject ID",
+    "label": "File ID",
     "description": "DID of the resource, service, application, agent, product, or artifact for which responsibility is being claimed.",
     "required": true,
     "placeholder": "Select an ID type above",
@@ -555,20 +555,20 @@ const responsibilityClaimFields: FormField[] = [
   {
     "name": "subjectLabel",
     "type": "string",
-    "label": "Subject Label",
-    "description": "Human-readable label supplied by the responsible party to identify the subject. This value is descriptive metadata and is not part of the subject's cryptographic identity.",
+    "label": "File Name",
+    "description": "Human-readable label supplied by the responsible party to identify the content. This value is descriptive metadata and is not part of the subject's cryptographic identity.",
     "required": false,
-    "placeholder": "Enter subject label",
+    "placeholder": "Enter file name",
     "minLength": 1,
     "maxLength": 128
   },
   {
     "name": "responsibilityType",
     "type": "array",
-    "label": "Responsibility Type",
+    "label": "Responsibilities",
     "description": "The complete current set of responsibilities the responsible party accepts for the subject. If responsibilities change, revoke this attestation and publish a replacement with a new array. Partial revocation of individual types is not supported.",
     "required": true,
-    "placeholder": "Enter responsibility type",
+    "placeholder": "Enter responsibilities",
     "options": [
       {
         "value": "creator",
@@ -1036,13 +1036,13 @@ export const responsibilityClaimSchema: AttestationSchema = {
     97: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Testnet
     56: '0x0000000000000000000000000000000000000000000000000000000000000000', // BSC Mainnet
     66238: '0x877911f942a77a527661b288f8b0f6703fe461286bbf2e4a71967e2f2ec1b651', // OMAChain Testnet
-    6623: '0x0000000000000000000000000000000000000000000000000000000000000000'  // OMAChain Mainnet
+    6623: '0x877911f942a77a527661b288f8b0f6703fe461286bbf2e4a71967e2f2ec1b651'  // OMAChain Mainnet
   },
   deployedBlocks: {
     97: 0, // BSC Testnet
     56: 0, // BSC Mainnet
     66238: 524, // OMAChain Testnet
-    6623: 0  // OMAChain Mainnet
+    6623: 51  // OMAChain Mainnet
   }
 };
 
