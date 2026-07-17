@@ -25,7 +25,7 @@ describe('PublishButton', () => {
     const userReview = await screen.findByRole('menuitem', { name: /User Review/i });
     expect(userReview).toHaveAttribute('href', '/publish/user-review');
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
 
     const other = await screen.findByRole('menuitem', { name: /Other attestations/i });
@@ -37,8 +37,21 @@ describe('PublishButton', () => {
     render(<PublishButton subjects={subjects} />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
+  });
+
+  it('does not count the hidden default wallet subject when pre-filling responsibleParty', async () => {
+    const walletDid = 'did:pkh:eip155:66238:0xabc';
+    const subjects = [
+      { id: '1', canonicalDid: walletDid.toUpperCase(), subjectDidHash: 'wallet', displayName: null, isDefault: true },
+      { id: '2', canonicalDid: 'did:web:example.com', subjectDidHash: 'web', displayName: null, isDefault: false },
+    ];
+    render(<PublishButton subjects={subjects} walletDid={walletDid} />);
+    await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
+
+    const responsibilityClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
+    expect(responsibilityClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
   });
 
   it('does not pre-fill when user has multiple subjects', async () => {
@@ -49,7 +62,7 @@ describe('PublishButton', () => {
     render(<PublishButton subjects={subjects} />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
   });
 });

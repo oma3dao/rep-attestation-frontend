@@ -135,6 +135,10 @@ async function verifySdkAttestation(
     }
 }
 
+export function shouldRunProofVerificationForSchema(schemaId?: string) {
+    return schemaId ? PROOF_VERIFICATION_SCHEMA_IDS.has(schemaId) : false
+}
+
 function shouldRunProofVerification(schema?: AttestationSchema) {
     return schema?.id ? PROOF_VERIFICATION_SCHEMA_IDS.has(schema.id) : false
 }

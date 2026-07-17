@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetVerifiedAttestations = vi.fn()
 const mockGetControllerConfirmation = vi.fn()
+let mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] as unknown[] }
 
 vi.mock('@oma3/omatrust/identity', () => ({
   isSameControllerId: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
@@ -26,7 +27,7 @@ vi.mock('@/lib/attestation-queries', () => ({
 
 vi.mock('@/lib/omatrust-backend', () => ({
   getControllerConfirmation: (...args: unknown[]) => mockGetControllerConfirmation(...args),
-  getPublicTrustAnchors: () => Promise.resolve({ version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] }),
+  getPublicTrustAnchors: () => Promise.resolve(mockTrustAnchors),
 }))
 
 vi.mock('@/components/SubjectIdInput', () => ({
@@ -77,16 +78,49 @@ const attestation = {
   },
 }
 
+const responsibilityClaimAttestation = {
+  ...attestation,
+  uid: `0x${'3'.repeat(64)}`,
+  attester: '0x123',
+  schemaId: 'responsibility-claim',
+  schemaTitle: 'Responsibility Claim',
+  decodedData: {
+    responsibleParty: 'did:web:example.com',
+    subject: 'did:artifact:bafkreiabc',
+    subjectLabel: 'example artifact',
+    responsibilityType: ['creator'],
+    effectiveAt: 0,
+    expiresAt: 0,
+  },
+}
+
+const securityAssessmentAttestation = {
+  ...attestation,
+  uid: `0x${'4'.repeat(64)}`,
+  schemaId: 'security-assessment',
+  schemaTitle: 'Security Assessment',
+  decodedData: { subject: 'did:artifact:bafkreiabc', effectiveAt: 0, expiresAt: 0 },
+  verification: undefined,
+}
+
+const certificationAttestation = {
+  ...attestation,
+  uid: `0x${'5'.repeat(64)}`,
+  decodedData: { subject: 'did:artifact:bafkreiabc', effectiveAt: 0, expiresAt: 0 },
+  verification: undefined,
+}
+
 describe('Verify page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] }
     mockGetVerifiedAttestations.mockResolvedValue([attestation])
     mockGetControllerConfirmation.mockResolvedValue({
       subject: { did: 'did:web:example.com', label: 'example.com' },
       domain: 'example.com',
       controllerKeys: [
         {
-          id: 'did:pkh:eip155:66238:0x123',
+          id: `did:pkh:eip155:66238:0x${'1'.repeat(40)}`,
           canonicalId: 'did:pkh:eip155:66238:0x123',
           label: '0x123',
           sources: ['dns-txt'],
@@ -153,5 +187,51 @@ describe('Verify page', () => {
     await waitFor(() => {
       expect(screen.getByText('Query failed')).toBeInTheDocument()
     })
+  })
+
+  it('queries artifact attestations and renders schema-aware artifact verification', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([
+      responsibilityClaimAttestation,
+      securityAssessmentAttestation,
+      certificationAttestation,
+    ])
+    mockTrustAnchors = {
+      version: 1,
+      updatedAt: '',
+      widgetOrigins: [],
+      chains: {},
+      registries: [
+        {
+          type: 'approved-issuers',
+          issuers: [
+            {
+              address: attestation.attester,
+              label: 'Approved issuer',
+              schemas: ['security-assessment', 'certification'],
+              status: 'active',
+              validFrom: '',
+            },
+          ],
+        },
+      ],
+    }
+    render(<VerifyPage />)
+
+    fireEvent.change(screen.getByLabelText('Subject DID'), {
+      target: { value: 'did:artifact:bafkreiabc' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+
+    await waitFor(() => {
+      expect(mockGetVerifiedAttestations).toHaveBeenCalledWith('did:artifact:bafkreiabc')
+    })
+
+    expect(mockGetControllerConfirmation).toHaveBeenCalledWith({ subjectDid: 'did:web:example.com' })
+    expect(screen.getByText('Artifact')).toBeInTheDocument()
+    expect(screen.getByText('Security Assessments Summary')).toBeInTheDocument()
+    expect(screen.getAllByText('Responsibility Claims').length).toBeGreaterThan(0)
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+    expect(screen.getByText('did:web:example.com')).toBeInTheDocument()
+    expect(screen.queryByText('Responsibility Claims', { selector: '.text-sm' })).not.toBeInTheDocument()
   })
 })

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Shield, Award, LinkIcon, Star, MessageSquare, CheckCircle2 } from "lucide-react"
+import { Shield, Award, LinkIcon, Star, MessageSquare, CheckCircle2, FileCheck } from "lucide-react"
 import type { EnrichedAttestationResult } from "@/lib/attestation-queries"
 import { StarRating } from "@/components/star-rating"
 import { getAttestationFieldLabel } from "@/lib/display"
@@ -16,6 +16,7 @@ interface AttestationCardProps {
 const schemaIcons: Record<string, any> = {
   'certification': Award,
   'linked-identifier': LinkIcon,
+  'responsibility-claim': FileCheck,
   'security-assessment': Shield,
   'user-review': Star,
   'user-review-response': MessageSquare,
@@ -38,6 +39,7 @@ export function AttestationCard({ attestation, trusted, onClick }: AttestationCa
   const verification = attestation.verification
   const isUserReview = attestation.schemaId === 'user-review' || attestation.schemaId === 'user-review-response'
   const isControllerWitness = attestation.schemaId === 'controller-witness'
+  const isResponsibilityClaim = attestation.schemaId === 'responsibility-claim'
   
   // Get subject from decoded data if available
   const subject = attestation.decodedData?.subject || attestation.recipient
@@ -111,6 +113,30 @@ export function AttestationCard({ attestation, trusted, onClick }: AttestationCa
                   return new Date(ms).toLocaleDateString()
                 })()}
               </span>
+            </div>
+          )}
+          {isResponsibilityClaim && attestation.decodedData?.responsibleParty && (
+            <div>
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('responsibleParty', attestation.schemaId)}:</span>{' '}
+              <span className="font-mono text-muted-foreground break-all">
+                {String(attestation.decodedData.responsibleParty)}
+              </span>
+            </div>
+          )}
+          {isResponsibilityClaim && attestation.decodedData?.subjectLabel && (
+            <div>
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('subjectLabel', attestation.schemaId)}:</span>{' '}
+              <span className="text-muted-foreground">
+                {String(attestation.decodedData.subjectLabel)}
+              </span>
+            </div>
+          )}
+          {isResponsibilityClaim && Array.isArray(attestation.decodedData?.responsibilityType) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-medium text-foreground">{getAttestationFieldLabel('responsibilityType', attestation.schemaId)}:</span>
+              {attestation.decodedData.responsibilityType.map((type: unknown) => (
+                <Badge key={String(type)} variant="secondary">{String(type)}</Badge>
+              ))}
             </div>
           )}
           {attestation.decodedData?.ratingValue && (
