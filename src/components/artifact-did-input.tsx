@@ -49,6 +49,13 @@ export function ArtifactDidInput({
     }
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const getArtifactDidErrorMessage = (text: string) => {
+    if (!text.startsWith("did:artifact:b")) {
+      return "This isn't a valid content ID. It should start with did:artifact:b..."
+    }
+    return "This isn't a valid content ID. Check that the full did:artifact:b... value was copied correctly."
+  }
+
   // Handle direct DID text input
   const handleDidTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value
@@ -70,10 +77,7 @@ export function ArtifactDidInput({
         setFileSize(null)
         setMatchedAs(null)
       } catch (err) {
-        // Don't show error while typing — only if it looks complete but invalid
-        if (text.length > 20) {
-          setInternalError(err instanceof Error ? err.message : "Invalid did:artifact format")
-        }
+        setInternalError(getArtifactDidErrorMessage(text))
         onChange(null)
       }
     } else if (text.length > 5) {

@@ -14,11 +14,16 @@ import type { BackendSubject } from "@/lib/omatrust-backend"
 interface PublishButtonProps {
   /** Registered subjects for the current user — used to pre-fill forms */
   subjects?: BackendSubject[]
+  /** Connected wallet DID; its hidden default subject should not count as a publish target */
+  walletDid?: string | null
 }
 
-export function PublishButton({ subjects }: PublishButtonProps) {
+export function PublishButton({ subjects, walletDid }: PublishButtonProps) {
+  const visibleSubjects = (subjects ?? []).filter(subject => {
+    return !(subject.isDefault && walletDid && subject.canonicalDid.toLowerCase() === walletDid.toLowerCase())
+  })
   // Pre-fill responsibleParty if the user has exactly one subject
-  const responsiblePartyDid = subjects?.length === 1 ? subjects[0].canonicalDid : null
+  const responsiblePartyDid = visibleSubjects.length === 1 ? visibleSubjects[0].canonicalDid : null
   const responsibilityClaimHref = responsiblePartyDid
     ? `/publish/responsibility-claim?responsibleParty=${encodeURIComponent(responsiblePartyDid)}`
     : "/publish/responsibility-claim"
