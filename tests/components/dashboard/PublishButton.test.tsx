@@ -25,7 +25,7 @@ describe('PublishButton', () => {
     const userReview = await screen.findByRole('menuitem', { name: /User Review/i });
     expect(userReview).toHaveAttribute('href', '/publish/user-review');
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
 
     const other = await screen.findByRole('menuitem', { name: /Other attestations/i });
@@ -37,7 +37,7 @@ describe('PublishButton', () => {
     render(<PublishButton subjects={subjects} />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
   });
 
@@ -50,7 +50,7 @@ describe('PublishButton', () => {
     render(<PublishButton subjects={subjects} walletDid={walletDid} />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    const responsibilityClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
+    const responsibilityClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
     expect(responsibilityClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
   });
 
@@ -62,7 +62,7 @@ describe('PublishButton', () => {
     render(<PublishButton subjects={subjects} />);
     await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
 
-    const contentClaim = await screen.findByRole('menuitem', { name: /Responsibility Claim/i });
+    const contentClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim');
   });
 });
