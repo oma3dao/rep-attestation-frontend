@@ -2007,7 +2007,7 @@ function DashboardContent() {
 
       await loadAttestations()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
+      setError(err instanceof Error ? err.message : "Attestation revocation is not available yet.")
     } finally {
       setRevokingUid(null)
       setRevokeTarget(null)
