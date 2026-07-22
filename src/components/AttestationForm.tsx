@@ -376,7 +376,7 @@ export function AttestationForm({ schema, validateForm }: AttestationFormProps) 
         logger.log('[AttestationForm] Backend requires subject ownership proof, opening dialog')
         pendingSubmitDataRef.current = buildCompleteData()
         setSubjectDialogMessage(
-          'Service ID ownership verification failed. Re-confirm your proof and try again.  Failure explanation- ' + (error.details || error.message)
+          'Service ID ownership verification is required before this attestation can be published. Confirm that this wallet is authorized for the selected Service ID, then try again.'
         )
         setSubjectDialogOpen(true)
         return

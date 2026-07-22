@@ -41,6 +41,19 @@ describe('PublishButton', () => {
     expect(contentClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
   });
 
+  it('does not count the hidden default wallet subject when pre-filling responsibleParty', async () => {
+    const walletDid = 'did:pkh:eip155:66238:0xabc';
+    const subjects = [
+      { id: '1', canonicalDid: walletDid.toUpperCase(), subjectDidHash: 'wallet', displayName: null, isDefault: true },
+      { id: '2', canonicalDid: 'did:web:example.com', subjectDidHash: 'web', displayName: null, isDefault: false },
+    ];
+    render(<PublishButton subjects={subjects} walletDid={walletDid} />);
+    await userEvent.click(screen.getByRole('button', { name: /Publish/i }));
+
+    const responsibilityClaim = await screen.findByRole('menuitem', { name: /Content Claim/i });
+    expect(responsibilityClaim).toHaveAttribute('href', '/publish/responsibility-claim?responsibleParty=did%3Aweb%3Aexample.com');
+  });
+
   it('does not pre-fill when user has multiple subjects', async () => {
     const subjects = [
       { id: '1', canonicalDid: 'did:web:a.com', subjectDidHash: 'a', displayName: null, isDefault: true },

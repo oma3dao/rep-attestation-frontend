@@ -2007,7 +2007,9 @@ function DashboardContent() {
 
       await loadAttestations()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
+      // TODO: restore SDK err.message once OMA token is available and revocation works end-to-end
+      // setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
+      setError("Attestation revocation is not available yet.")
     } finally {
       setRevokingUid(null)
       setRevokeTarget(null)
@@ -2086,7 +2088,7 @@ function DashboardContent() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <PublishButton subjects={registeredSubjects} />
+          <PublishButton subjects={registeredSubjects} walletDid={session.wallet?.did ?? null} />
         </div>
       </div>
 

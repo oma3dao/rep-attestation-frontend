@@ -59,6 +59,25 @@ describe('AttestationCard', () => {
     expect(screen.getByLabelText('4 out of 5 stars')).toBeInTheDocument();
   });
 
+  it('renders responsibility claim fields when present', () => {
+    const att = {
+      ...baseAttestation,
+      schemaId: 'responsibility-claim',
+      schemaTitle: 'Responsibility Claim',
+      decodedData: {
+        subject: 'did:artifact:bafkreiabc',
+        responsibleParty: 'did:web:example.com',
+        subjectLabel: 'Release manifest',
+        responsibilityType: ['creator', 'maintainer'],
+      },
+    };
+    render(<AttestationCard attestation={att} onClick={() => {}} />);
+    expect(screen.getByText('did:web:example.com')).toBeInTheDocument();
+    expect(screen.getByText('Release manifest')).toBeInTheDocument();
+    expect(screen.getByText('creator')).toBeInTheDocument();
+    expect(screen.getByText('maintainer')).toBeInTheDocument();
+  });
+
   it('does not render rating block when ratingValue is absent', () => {
     render(<AttestationCard attestation={baseAttestation} onClick={() => {}} />);
     expect(screen.queryByText(/^Rating:/)).not.toBeInTheDocument();
