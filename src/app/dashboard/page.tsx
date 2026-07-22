@@ -2007,7 +2007,9 @@ function DashboardContent() {
 
       await loadAttestations()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Attestation revocation is not available yet.")
+      // TODO: restore SDK err.message once OMA token is available and revocation works end-to-end
+      // setError(err instanceof Error ? err.message : "Failed to revoke attestation.")
+      setError("Attestation revocation is not available yet.")
     } finally {
       setRevokingUid(null)
       setRevokeTarget(null)
