@@ -1,13 +1,16 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetVerifiedAttestations = vi.fn()
 const mockGetControllerConfirmation = vi.fn()
+const mockGetPublicTrustAnchors = vi.fn()
 let mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] as unknown[] }
 
 vi.mock('@oma3/omatrust/identity', () => ({
   isSameControllerId: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
+  artifactDidFromJson: vi.fn(async () => 'did:artifact:bafkreifromjson'),
+  artifactDidFromBytes: vi.fn(async () => 'did:artifact:bafkreifrombytes'),
 }))
 
 vi.mock('@/lib/blockchain', () => ({
@@ -27,25 +30,7 @@ vi.mock('@/lib/attestation-queries', () => ({
 
 vi.mock('@/lib/omatrust-backend', () => ({
   getControllerConfirmation: (...args: unknown[]) => mockGetControllerConfirmation(...args),
-  getPublicTrustAnchors: () => Promise.resolve(mockTrustAnchors),
-}))
-
-vi.mock('@/components/SubjectIdInput', () => ({
-  SubjectIdInput: ({
-    value,
-    onChange,
-    allowedMethods,
-  }: {
-    value: string
-    onChange: (value: string | null) => void
-    allowedMethods?: string[]
-  }) => (
-    <input
-      aria-label={allowedMethods?.includes('web') ? 'Subject DID' : 'Controller DID'}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  ),
+  getPublicTrustAnchors: (...args: unknown[]) => mockGetPublicTrustAnchors(...args),
 }))
 
 vi.mock('@/components/latest-attestations', () => ({
@@ -110,10 +95,16 @@ const certificationAttestation = {
   verification: undefined,
 }
 
+function searchAndVerify(value: string) {
+  fireEvent.change(screen.getByLabelText('Search DID'), { target: { value } })
+  fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+}
+
 describe('Verify page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] }
+    mockGetPublicTrustAnchors.mockResolvedValue(mockTrustAnchors)
     mockGetVerifiedAttestations.mockResolvedValue([attestation])
     mockGetControllerConfirmation.mockResolvedValue({
       subject: { did: 'did:web:example.com', label: 'example.com' },
@@ -133,69 +124,223 @@ describe('Verify page', () => {
     })
   })
 
-  it('verifies a subject without controller input', async () => {
+  it('shows a Google-style search before results', () => {
     render(<VerifyPage />)
+    expect(screen.getByText('OMATrust')).toBeInTheDocument()
+    expect(screen.getByLabelText('Search DID')).toBeInTheDocument()
+    expect(screen.getByLabelText('Upload file')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /verify/i })).toBeDisabled()
+  })
 
-    fireEvent.change(screen.getByLabelText('Subject DID'), {
-      target: { value: 'did:web:example.com' },
+  it('detects DID type while typing', () => {
+    render(<VerifyPage />)
+    fireEvent.change(screen.getByLabelText('Search DID'), {
+      target: { value: 'did:pkh:eip155:66238:0x1234567890123456789012345678901234567890' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+    expect(screen.getByText(/Detected: Blockchain Address/)).toBeInTheDocument()
+  })
+
+  it('resolves a bare address to did:pkh and verifies', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([])
+    render(<VerifyPage />)
+    searchAndVerify('0x1234567890123456789012345678901234567890')
+
+    await waitFor(() => {
+      expect(mockGetVerifiedAttestations).toHaveBeenCalledWith(
+        'did:pkh:eip155:66238:0x1234567890123456789012345678901234567890'
+      )
+    })
+    expect(screen.getByText('Blockchain Address')).toBeInTheDocument()
+    expect(screen.getByText('Who authorized this')).toBeInTheDocument()
+  })
+
+  it('verifies a web subject and shows a score', async () => {
+    render(<VerifyPage />)
+    searchAndVerify('did:web:example.com')
 
     await waitFor(() => {
       expect(mockGetVerifiedAttestations).toHaveBeenCalledWith('did:web:example.com')
     })
 
-    expect(mockGetControllerConfirmation).not.toHaveBeenCalled()
-    expect(screen.getByText('Service Summary')).toBeInTheDocument()
+    expect(screen.getByText('Web Domain / URL')).toBeInTheDocument()
     expect(screen.getByText('1 attestations')).toBeInTheDocument()
-    expect(screen.getByText('Certifications')).toBeInTheDocument()
   })
 
-  it('renders controller authorization when controller input is provided', async () => {
-    render(<VerifyPage />)
+  it('shows authorizing parties for did:pkh', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([
+      {
+        ...attestation,
+        schemaId: 'controller-witness',
+        decodedData: {
+          subject: 'did:pkh:eip155:66238:0xabc',
+          controller: 'did:web:authorizer.example',
+        },
+      },
+      {
+        ...attestation,
+        uid: `0x${'6'.repeat(64)}`,
+        schemaId: 'key-binding',
+        decodedData: {
+          subject: 'did:pkh:eip155:66238:0xabc',
+          keyId: 'did:web:authorizer.example',
+        },
+      },
+    ])
+    mockGetControllerConfirmation.mockResolvedValueOnce({
+      subject: { did: 'did:pkh:eip155:66238:0xabc', label: '0xabc' },
+      domain: null,
+      controllerKeys: [
+        {
+          id: 'did:pkh:eip155:66238:0xowner',
+          canonicalId: 'did:pkh:eip155:66238:0xowner',
+          label: '0xowner',
+          sources: ['did-json'],
+          basic: true,
+        },
+      ],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
 
-    fireEvent.change(screen.getByLabelText('Subject DID'), {
-      target: { value: 'did:web:example.com' },
-    })
-    fireEvent.change(screen.getByLabelText('Controller DID'), {
-      target: { value: 'did:pkh:eip155:66238:0x123' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+    render(<VerifyPage />)
+    searchAndVerify('did:pkh:eip155:66238:0xabc')
 
     await waitFor(() => {
-      expect(mockGetControllerConfirmation).toHaveBeenCalledWith({
-        subjectDid: 'did:web:example.com',
-      })
+      expect(screen.getByText('Who authorized this')).toBeInTheDocument()
+    })
+    expect(screen.getByText('0xowner')).toBeInTheDocument()
+    expect(screen.getByText(/DID document/)).toBeInTheDocument()
+    expect(screen.getByText('did:web:authorizer.example')).toBeInTheDocument()
+  })
+
+  it('shows websites that claim an artifact', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([responsibilityClaimAttestation])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:example.com', label: 'example.com' },
+      domain: 'example.com',
+      controllerKeys: [
+        {
+          id: `did:pkh:eip155:66238:0x${'1'.repeat(40)}`,
+          canonicalId: 'did:pkh:eip155:66238:0x123',
+          label: '0x123',
+          sources: ['dns-txt'],
+          basic: true,
+        },
+      ],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
     })
 
-    expect(screen.getByText('Authorized')).toBeInTheDocument()
-    expect(screen.getByText(/Basic:/)).toBeInTheDocument()
-    expect(screen.getByText(/Intermediate:/)).toBeInTheDocument()
-    expect(screen.getByText(/Advanced:/)).toBeInTheDocument()
-    expect(screen.getByText(/DNS TXT/)).toBeInTheDocument()
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('Websites that claim this')).toBeInTheDocument()
+    })
+    expect(screen.getByText('example.com')).toBeInTheDocument()
+    expect(screen.getByText('did:web:example.com')).toBeInTheDocument()
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+    expect(screen.getByText('creator')).toBeInTheDocument()
+  })
+
+  it('shows empty website-claim copy when no websites claim the artifact', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([certificationAttestation])
+
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('No websites claim this artifact yet.')).toBeInTheDocument()
+    })
   })
 
   it('shows an error when subject verification fails', async () => {
     mockGetVerifiedAttestations.mockRejectedValueOnce(new Error('Query failed'))
     render(<VerifyPage />)
-
-    fireEvent.change(screen.getByLabelText('Subject DID'), {
-      target: { value: 'did:web:example.com' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+    searchAndVerify('did:web:example.com')
 
     await waitFor(() => {
       expect(screen.getByText('Query failed')).toBeInTheDocument()
     })
   })
 
-  it('queries artifact attestations and renders schema-aware artifact verification', async () => {
+  it('prompts when search is empty and submitted', async () => {
+    render(<VerifyPage />)
+    const form = screen.getByRole('button', { name: /verify/i }).closest('form')
+    fireEvent.submit(form!)
+
+    await waitFor(() => {
+      expect(screen.getByText('Enter a DID, address, domain, or upload a file.')).toBeInTheDocument()
+    })
+    expect(mockGetVerifiedAttestations).not.toHaveBeenCalled()
+  })
+
+  it('still renders results when trust anchors fail to load', async () => {
+    mockGetPublicTrustAnchors.mockRejectedValueOnce(new Error('anchors down'))
+    render(<VerifyPage />)
+    searchAndVerify('did:web:example.com')
+
+    await waitFor(() => {
+      expect(screen.getByText('1 attestations')).toBeInTheDocument()
+    })
+  })
+
+  it('shows failed verification reasons on website claims', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([responsibilityClaimAttestation])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:example.com', label: 'example.com' },
+      domain: 'example.com',
+      controllerKeys: [],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('Needs review')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('Attester is not an authorized controller for the responsible party.')
+    ).toBeInTheDocument()
+  })
+
+  it('marks revoked responsibility claims as Needs review', async () => {
     mockGetVerifiedAttestations.mockResolvedValueOnce([
-      responsibilityClaimAttestation,
-      securityAssessmentAttestation,
-      certificationAttestation,
+      { ...responsibilityClaimAttestation, revocationTime: 1700000000 },
     ])
-    mockTrustAnchors = {
+
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('Needs review')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Responsibility claim has been revoked.')).toBeInTheDocument()
+  })
+
+  it('does not count untrusted security assessments as verified', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([securityAssessmentAttestation])
+
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('Security Assessments')).toBeInTheDocument()
+    })
+    const section = screen.getByText('Security Assessments').closest('section')!
+    expect(within(section).getByText('verified').previousElementSibling).toHaveTextContent('0')
+  })
+
+  it('counts trusted security assessments as verified', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([
+      { ...securityAssessmentAttestation, attester: attestation.attester },
+    ])
+    mockGetPublicTrustAnchors.mockResolvedValue({
       version: 1,
       updatedAt: '',
       widgetOrigins: [],
@@ -207,31 +352,109 @@ describe('Verify page', () => {
             {
               address: attestation.attester,
               label: 'Approved issuer',
-              schemas: ['security-assessment', 'certification'],
+              schemas: ['security-assessment'],
               status: 'active',
               validFrom: '',
             },
           ],
         },
       ],
-    }
-    render(<VerifyPage />)
-
-    fireEvent.change(screen.getByLabelText('Subject DID'), {
-      target: { value: 'did:artifact:bafkreiabc' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /verify/i }))
+
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
 
     await waitFor(() => {
-      expect(mockGetVerifiedAttestations).toHaveBeenCalledWith('did:artifact:bafkreiabc')
+      expect(screen.getByText('Security Assessments')).toBeInTheDocument()
+    })
+    const section = screen.getByText('Security Assessments').closest('section')!
+    expect(within(section).getByText('verified').previousElementSibling).toHaveTextContent('1')
+  })
+
+  it.each([
+    ['did:web:example.com', 'Web Domain / URL'],
+    ['did:jwk:eyJrdHkiOiJPS1AifQ', 'JWK Key'],
+    ['did:handle:twitter:exampleuser', 'Social Handle'],
+    ['did:unknown:foo', 'ID'],
+  ])('shows subject type %s → %s', async (subjectDid, badgeLabel) => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([])
+    render(<VerifyPage />)
+    searchAndVerify(subjectDid)
+
+    await waitFor(() => {
+      expect(screen.getByText(badgeLabel)).toBeInTheDocument()
+    })
+  })
+
+  it('hashes an uploaded file into an artifact DID', async () => {
+    render(<VerifyPage />)
+    const file = new File(['{"hello":"world"}'], 'artifact.json', { type: 'application/json' })
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new TextEncoder().encode('{"hello":"world"}').buffer,
+    })
+    const input = screen.getByLabelText('Upload artifact file')
+    fireEvent.change(input, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Search DID')).toHaveValue('did:artifact:bafkreifromjson')
+    })
+    expect(screen.getByText(/Detected: Artifact/)).toBeInTheDocument()
+  })
+
+  it('shows a generic fetch error when attestation loading rejects a non-Error', async () => {
+    mockGetVerifiedAttestations.mockRejectedValueOnce('network down')
+    render(<VerifyPage />)
+    searchAndVerify('did:web:example.com')
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to fetch attestations.')).toBeInTheDocument()
+    })
+  })
+
+  it('shows authorization error for pkh when controller confirmation fails', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([])
+    mockGetControllerConfirmation.mockRejectedValueOnce(new Error('Controller lookup failed'))
+
+    render(<VerifyPage />)
+    searchAndVerify('did:pkh:eip155:66238:0x1234567890123456789012345678901234567890')
+
+    await waitFor(() => {
+      expect(screen.getByText('Controller lookup failed')).toBeInTheDocument()
+    })
+  })
+
+  it('accepts responsibilityType as a scalar string', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([
+      {
+        ...responsibilityClaimAttestation,
+        decodedData: {
+          ...responsibilityClaimAttestation.decodedData,
+          responsibilityType: 'maintainer',
+        },
+      },
+    ])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:example.com', label: 'example.com' },
+      domain: 'example.com',
+      controllerKeys: [
+        {
+          id: `did:pkh:eip155:66238:0x${'1'.repeat(40)}`,
+          canonicalId: 'did:pkh:eip155:66238:0x123',
+          label: '0x123',
+          sources: ['dns-txt'],
+          basic: true,
+        },
+      ],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
     })
 
-    expect(mockGetControllerConfirmation).toHaveBeenCalledWith({ subjectDid: 'did:web:example.com' })
-    expect(screen.getByText('Artifact')).toBeInTheDocument()
-    expect(screen.getByText('Security Assessments Summary')).toBeInTheDocument()
-    expect(screen.getAllByText('Responsibility Claims').length).toBeGreaterThan(0)
-    expect(screen.getByText('Verified')).toBeInTheDocument()
-    expect(screen.getByText('did:web:example.com')).toBeInTheDocument()
-    expect(screen.queryByText('Responsibility Claims', { selector: '.text-sm' })).not.toBeInTheDocument()
+    render(<VerifyPage />)
+    searchAndVerify('did:artifact:bafkreiabc')
+
+    await waitFor(() => {
+      expect(screen.getByText('maintainer')).toBeInTheDocument()
+    })
   })
 })
