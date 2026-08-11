@@ -1,11 +1,21 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
-import { ShieldCheck, Search, XCircle, CheckCircle2, ChevronDown } from "lucide-react"
-import { isSameControllerId } from "@oma3/omatrust/identity"
+import { FormEvent, useMemo, useRef, useState } from "react"
+import {
+  Search,
+  Upload,
+  X,
+  XCircle,
+  CheckCircle2,
+  ChevronDown,
+} from "lucide-react"
+import {
+  isSameControllerId,
+  artifactDidFromJson,
+  artifactDidFromBytes,
+} from "@oma3/omatrust/identity"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { SubjectIdInput } from "@/components/SubjectIdInput"
 import { LatestAttestations } from "@/components/latest-attestations"
 import {
   getVerifiedAttestationsForDIDWithMetadata,
@@ -19,25 +29,31 @@ import {
   type ControllerConfirmResponse,
 } from "@/lib/omatrust-backend"
 
-/** Derived key authorization info for the simplified card. */
-type KeyAuthorizationInfo = {
-  subjectDid: string
-  controllerDid: string
+type DidMethod = "web" | "pkh" | "jwk" | "handle" | "artifact" | "key" | "unknown"
+
+type TrustScore = {
+  value: number
+  max: number
+  label: string
+  detail: string
+}
+
+type AuthorizedParty = {
+  id: string
+  label: string
   sources: string[]
   basic: boolean
   intermediate: boolean
   advanced: boolean
 }
 
-type VerifyResult = {
-  subjectDid: string
-  canonicalDid: string
-  attestations: EnrichedAttestationResult[]
-  keyAuthorization: KeyAuthorizationInfo | null
-  keyAuthorizationError: string | null
-  /** Approved issuer addresses (lowercased) → set of schema IDs they're approved for */
-  approvedIssuers: Map<string, Set<string>>
-  artifact: EnrichedArtifactVerificationResult | null
+type WebsiteClaim = {
+  website: string
+  domain: string
+  responsibilityTypes: string[]
+  subjectLabel?: string
+  valid: boolean
+  reasons: string[]
 }
 
 type ResponsibilityClaimVerification = {
@@ -68,56 +84,67 @@ type EnrichedArtifactVerificationResult = {
   certifications: EnrichedAttestationResult[]
   otherAttestations: EnrichedAttestationResult[]
   allAttestations: EnrichedAttestationResult[]
+  websiteClaims: WebsiteClaim[]
 }
 
-const TRUST_PROFILE_SCHEMAS = [
-  { id: "user-review", label: "Reviews" },
-  { id: "responsibility-claim", label: "Responsibility Claims" },
-  { id: "certification", label: "Certifications" },
-  { id: "security-assessment", label: "Security Assessments" },
-  { id: "controller-witness", label: "Controller Witnesses" },
-  { id: "key-binding", label: "Key Bindings" },
-]
-
-function getSubjectType(did: string) {
-  if (did.startsWith("did:web:")) return "Web Domain / URL"
-  if (did.startsWith("did:pkh:")) return "Blockchain Address"
-  if (did.startsWith("did:jwk:")) return "JWK Key"
-  if (did.startsWith("did:handle:")) return "Social Handle"
-  if (did.startsWith("did:artifact:")) return "Artifact"
-  return "ID"
+type VerifyResult = {
+  query: string
+  subjectDid: string
+  method: DidMethod
+  score: TrustScore
+  attestations: EnrichedAttestationResult[]
+  approvedIssuers: Map<string, Set<string>>
+  authorizedParties: AuthorizedParty[]
+  authorizationError: string | null
+  artifact: EnrichedArtifactVerificationResult | null
 }
 
-function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <Badge variant={ok ? "success" : "destructive"} className="gap-1">
-      {ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {label}
-    </Badge>
-  )
+function detectDidMethod(did: string): DidMethod {
+  if (did.startsWith("did:web:")) return "web"
+  if (did.startsWith("did:pkh:")) return "pkh"
+  if (did.startsWith("did:jwk:")) return "jwk"
+  if (did.startsWith("did:handle:")) return "handle"
+  if (did.startsWith("did:artifact:")) return "artifact"
+  if (did.startsWith("did:key:")) return "key"
+  return "unknown"
 }
 
-function Signal({ active, label }: { active: boolean; label: string }) {
-  return (
-    <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-medium ${
-      active
-        ? "border-primary/25 bg-primary/10 text-primary"
-        : "border-border bg-background text-muted-foreground"
-    }`}>
-      {label}: {active ? "Yes" : "No"}
-    </span>
-  )
-}
-
-function formatResponsibilityCheckName(name: keyof ResponsibilityClaimVerification["checks"]) {
-  switch (name) {
-    case "schemaValid": return "Schema valid"
-    case "subjectMatches": return "Subject matches artifact"
-    case "notRevoked": return "Not revoked"
-    case "currentlyEffective": return "Currently effective"
-    case "controllerAuthorized": return "Controller authorized"
-    default: return name
+function getSubjectTypeLabel(method: DidMethod) {
+  switch (method) {
+    case "web": return "Web Domain / URL"
+    case "pkh": return "Blockchain Address"
+    case "jwk": return "JWK Key"
+    case "handle": return "Social Handle"
+    case "artifact": return "Artifact"
+    case "key": return "Key"
+    default: return "ID"
   }
+}
+
+function sourceLabel(source: string) {
+  if (source === "dns-txt") return "DNS TXT"
+  if (source === "did-json") return "DID document"
+  if (source === "account-wallet") return "Account wallet"
+  return source
+}
+
+/** Resolve free-text or DID input into a canonical DID when possible. */
+function resolveQueryToDid(raw: string, chainId: number): string | null {
+  const query = raw.trim()
+  if (!query) return null
+
+  if (query.startsWith("did:")) return query
+
+  if (/^0x[a-fA-F0-9]{40}$/.test(query)) {
+    return `did:pkh:eip155:${chainId}:${query.toLowerCase()}`
+  }
+
+  const withoutProtocol = query.replace(/^https?:\/\//i, "").replace(/\/+$/, "")
+  if (/^[a-z0-9.-]+\.[a-z]{2,}([/:].*)?$/i.test(withoutProtocol)) {
+    return `did:web:${withoutProtocol.replace(/\//g, ":")}`
+  }
+
+  return query
 }
 
 function getDecodedString(attestation: EnrichedAttestationResult, field: string) {
@@ -190,6 +217,177 @@ function withIssuerPolicyVerification(
   }
 }
 
+function formatResponsibilityCheckName(name: keyof ResponsibilityClaimVerification["checks"]) {
+  switch (name) {
+    case "schemaValid": return "Schema valid"
+    case "subjectMatches": return "Subject matches artifact"
+    case "notRevoked": return "Not revoked"
+    case "currentlyEffective": return "Currently effective"
+    case "controllerAuthorized": return "Controller authorized"
+    default: return name
+  }
+}
+
+function domainFromDidWeb(did: string) {
+  if (!did.startsWith("did:web:")) return did
+  return did.slice("did:web:".length).split(":")[0]
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function computeScore(params: {
+  method: DidMethod
+  attestations: EnrichedAttestationResult[]
+  authorizedParties: AuthorizedParty[]
+  artifact: EnrichedArtifactVerificationResult | null
+}): TrustScore {
+  const { method, attestations, authorizedParties, artifact } = params
+
+  if (method === "pkh") {
+    const hasBasic = authorizedParties.some((party) => party.basic)
+    const hasIntermediate = authorizedParties.some((party) => party.intermediate)
+    const hasAdvanced = authorizedParties.some((party) => party.advanced)
+    let value = authorizedParties.length > 0 ? 25 : 0
+    if (hasBasic) value += 25
+    if (hasIntermediate) value += 25
+    if (hasAdvanced) value += 25
+    value = clampScore(value)
+    return {
+      value,
+      max: 100,
+      label: hasAdvanced ? "Strong authorization" : hasIntermediate ? "Witnessed" : hasBasic ? "Basic authorization" : authorizedParties.length ? "Partial" : "No authorization",
+      detail: authorizedParties.length
+        ? `${authorizedParties.length} authorizing part${authorizedParties.length === 1 ? "y" : "ies"} found`
+        : "No authorizing party found for this contract or key",
+    }
+  }
+
+  if (method === "artifact" && artifact) {
+    const verifiedClaims = artifact.websiteClaims.filter((claim) => claim.valid).length
+    const verifiedAssessments = artifact.securityAssessments.filter((att) => att.verification?.valid).length
+    const verifiedCerts = artifact.certifications.filter((att) => att.verification?.valid).length
+    const value = clampScore(verifiedClaims * 30 + verifiedAssessments * 20 + verifiedCerts * 15)
+    return {
+      value,
+      max: 100,
+      label: verifiedClaims > 0 ? "Claimed" : value > 0 ? "Assessed" : "Unclaimed",
+      detail: verifiedClaims > 0
+        ? `${verifiedClaims} verified website claim${verifiedClaims === 1 ? "" : "s"}`
+        : "No verified website claims yet",
+    }
+  }
+
+  const reviews = attestations.filter((att) => att.schemaId === "user-review").length
+  const certs = attestations.filter((att) => att.schemaId === "certification").length
+  const assessments = attestations.filter((att) => att.schemaId === "security-assessment").length
+  const witnesses = attestations.filter((att) => att.schemaId === "controller-witness").length
+  const bindings = attestations.filter((att) => att.schemaId === "key-binding").length
+  const value = clampScore(bindings * 20 + witnesses * 20 + assessments * 15 + certs * 15 + Math.min(reviews, 5) * 4)
+
+  return {
+    value,
+    max: 100,
+    label: value >= 70 ? "Strong" : value >= 40 ? "Moderate" : value > 0 ? "Emerging" : "No signals",
+    detail: `${attestations.length} attestation${attestations.length === 1 ? "" : "s"} in trust profile`,
+  }
+}
+
+function buildAuthorizedParties(
+  subjectDid: string,
+  confirmation: ControllerConfirmResponse | null,
+  attestations: EnrichedAttestationResult[]
+): AuthorizedParty[] {
+  const parties = new Map<string, AuthorizedParty>()
+
+  const upsert = (id: string, patch: Partial<AuthorizedParty>) => {
+    const existing = parties.get(id.toLowerCase()) ?? {
+      id,
+      label: id,
+      sources: [],
+      basic: false,
+      intermediate: false,
+      advanced: false,
+    }
+    const sources = [...existing.sources]
+    for (const source of patch.sources ?? []) {
+      if (!sources.includes(source)) sources.push(source)
+    }
+    parties.set(id.toLowerCase(), {
+      ...existing,
+      ...patch,
+      id: existing.id || id,
+      sources,
+      basic: existing.basic || !!patch.basic,
+      intermediate: existing.intermediate || !!patch.intermediate,
+      advanced: existing.advanced || !!patch.advanced,
+    })
+  }
+
+  if (confirmation) {
+    for (const key of confirmation.controllerKeys) {
+      upsert(key.canonicalId || key.id, {
+        id: key.canonicalId || key.id,
+        label: key.label || key.canonicalId || key.id,
+        sources: key.sources.map(sourceLabel),
+        basic: key.basic,
+      })
+    }
+  }
+
+  for (const att of attestations) {
+    if (att.revocationTime > 0) continue
+
+    if (att.schemaId === "controller-witness") {
+      const controller = getDecodedString(att, "controller")
+      const subject = getDecodedString(att, "subject")
+      // Attestation about this subject authorizing a controller, or this key being witnessed for a service
+      if (
+        controller &&
+        (isSameControllerId(subject, subjectDid) || isSameControllerId(controller, subjectDid))
+      ) {
+        const partyId = isSameControllerId(controller, subjectDid) ? subject || att.attester : controller
+        upsert(partyId, {
+          id: partyId,
+          label: partyId,
+          sources: ["Controller witness"],
+          intermediate: true,
+        })
+      }
+    }
+
+    if (att.schemaId === "key-binding") {
+      const keyId = getDecodedString(att, "keyId")
+      const subject = getDecodedString(att, "subject")
+      if (
+        keyId &&
+        (isSameControllerId(subject, subjectDid) || isSameControllerId(keyId, subjectDid))
+      ) {
+        const partyId = isSameControllerId(keyId, subjectDid) ? subject || att.attester : keyId
+        const existing = parties.get(partyId.toLowerCase())
+        upsert(partyId, {
+          id: partyId,
+          label: partyId,
+          sources: ["Key binding"],
+          advanced: !!existing?.intermediate,
+        })
+      }
+    }
+  }
+
+  // Advanced = intermediate + key binding on same party
+  for (const [key, party] of parties) {
+    const hasWitness = party.sources.includes("Controller witness") || party.intermediate
+    const hasBinding = party.sources.includes("Key binding")
+    if (hasWitness && hasBinding) {
+      parties.set(key, { ...party, intermediate: true, advanced: true })
+    }
+  }
+
+  return Array.from(parties.values())
+}
+
 async function verifyResponsibilityClaimForArtifact(
   attestation: EnrichedAttestationResult,
   artifactDid: string
@@ -249,20 +447,31 @@ async function buildArtifactVerification(
 ): Promise<EnrichedArtifactVerificationResult> {
   const responsibilityClaims = await Promise.all(
     attestations
-      .filter(attestation => attestation.schemaId === "responsibility-claim")
-      .map(attestation => verifyResponsibilityClaimForArtifact(attestation, artifactDid))
+      .filter((attestation) => attestation.schemaId === "responsibility-claim")
+      .map((attestation) => verifyResponsibilityClaimForArtifact(attestation, artifactDid))
   )
   const securityAssessments = attestations
-    .filter(attestation => attestation.schemaId === "security-assessment")
-    .map(attestation => withIssuerPolicyVerification(attestation, artifactDid, approvedIssuers))
+    .filter((attestation) => attestation.schemaId === "security-assessment")
+    .map((attestation) => withIssuerPolicyVerification(attestation, artifactDid, approvedIssuers))
   const certifications = attestations
-    .filter(attestation => attestation.schemaId === "certification")
-    .map(attestation => withIssuerPolicyVerification(attestation, artifactDid, approvedIssuers))
-  const otherAttestations = attestations.filter(attestation => (
+    .filter((attestation) => attestation.schemaId === "certification")
+    .map((attestation) => withIssuerPolicyVerification(attestation, artifactDid, approvedIssuers))
+  const otherAttestations = attestations.filter((attestation) => (
     attestation.schemaId !== "responsibility-claim" &&
     attestation.schemaId !== "security-assessment" &&
     attestation.schemaId !== "certification"
   ))
+
+  const websiteClaims: WebsiteClaim[] = responsibilityClaims
+    .filter((claim) => claim.verification.responsibleParty.startsWith("did:web:"))
+    .map((claim) => ({
+      website: claim.verification.responsibleParty,
+      domain: domainFromDidWeb(claim.verification.responsibleParty),
+      responsibilityTypes: claim.verification.responsibilityTypes,
+      subjectLabel: claim.verification.subjectLabel,
+      valid: claim.verification.valid,
+      reasons: claim.verification.reasons,
+    }))
 
   return {
     artifactDid,
@@ -271,12 +480,140 @@ async function buildArtifactVerification(
     certifications,
     otherAttestations,
     allAttestations: [
-      ...responsibilityClaims.map(claim => claim.attestation),
+      ...responsibilityClaims.map((claim) => claim.attestation),
       ...securityAssessments,
       ...certifications,
       ...otherAttestations,
     ],
+    websiteClaims,
   }
+}
+
+function ScoreHero({ score, method }: { score: TrustScore; method: DidMethod }) {
+  return (
+    <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-end sm:text-left">
+      <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
+        <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={`${(score.value / score.max) * 264} 264`}
+            className="transition-[stroke-dasharray] duration-700 ease-out"
+          />
+        </svg>
+        <div className="relative text-center">
+          <p className="text-3xl font-semibold tracking-tight text-foreground">{score.value}</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">/ {score.max}</p>
+        </div>
+      </div>
+      <div className="min-w-0 space-y-1">
+        <Badge variant="secondary">{getSubjectTypeLabel(method)}</Badge>
+        <p className="text-xl font-semibold tracking-tight text-foreground">{score.label}</p>
+        <p className="text-sm text-muted-foreground">{score.detail}</p>
+      </div>
+    </div>
+  )
+}
+
+function AuthorizedPartiesSection({ parties, error }: { parties: AuthorizedParty[]; error: string | null }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <p className="technical-label text-primary">Who authorized this</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Controllers and services that authorized this contract or key.
+        </p>
+      </div>
+
+      {error ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {parties.length > 0 ? (
+        <ul className="space-y-3">
+          {parties.map((party) => (
+            <li key={party.id} className="rounded-lg border border-border/70 bg-background/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="break-all font-mono text-sm text-foreground">{party.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {party.sources.length > 0 ? party.sources.join(", ") : "No verification methods"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {party.basic ? <Badge variant="success">Basic</Badge> : null}
+                  {party.intermediate ? <Badge variant="success">Intermediate</Badge> : null}
+                  {party.advanced ? <Badge variant="success">Advanced</Badge> : null}
+                  {!party.basic && !party.intermediate && !party.advanced ? (
+                    <Badge variant="secondary">Listed</Badge>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : !error ? (
+        <p className="text-sm text-muted-foreground">No authorizing parties found.</p>
+      ) : null}
+    </section>
+  )
+}
+
+function WebsiteClaimsSection({ claims }: { claims: WebsiteClaim[] }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <p className="technical-label text-primary">Websites that claim this</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Domains with responsibility claims for this artifact.
+        </p>
+      </div>
+
+      {claims.length > 0 ? (
+        <ul className="space-y-3">
+          {claims.map((claim) => (
+            <li key={`${claim.website}-${claim.responsibilityTypes.join(",")}`} className="rounded-lg border border-border/70 bg-background/70 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-2">
+                  <p className="text-lg font-medium text-foreground">{claim.domain}</p>
+                  <p className="break-all font-mono text-xs text-muted-foreground">{claim.website}</p>
+                  {claim.subjectLabel ? (
+                    <p className="text-sm text-muted-foreground">{claim.subjectLabel}</p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-1.5">
+                    {claim.responsibilityTypes.map((type) => (
+                      <Badge key={type} variant="secondary">{type}</Badge>
+                    ))}
+                  </div>
+                  {claim.reasons.length > 0 ? (
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {claim.reasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                <Badge variant={claim.valid ? "success" : "destructive"} className="gap-1">
+                  {claim.valid ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {claim.valid ? "Verified" : "Needs review"}
+                </Badge>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">No websites claim this artifact yet.</p>
+      )}
+    </section>
+  )
 }
 
 function ResponsibilityClaimCard({
@@ -340,50 +677,48 @@ function ResponsibilityClaimCard({
   )
 }
 
-function ArtifactVerificationResults({
+function ArtifactDetails({
   result,
   approvedIssuers,
 }: {
   result: EnrichedArtifactVerificationResult
   approvedIssuers: Map<string, Set<string>>
 }) {
-  const verifiedSecurityAssessments = result.securityAssessments.filter(att => att.verification?.valid).length
+  const verifiedSecurityAssessments = result.securityAssessments.filter((att) => att.verification?.valid).length
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <p className="technical-label text-primary">Security Assessments Summary</p>
-          <Badge variant={verifiedSecurityAssessments > 0 ? "success" : "secondary"}>
-            {verifiedSecurityAssessments} verified
-          </Badge>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-border/70 bg-background/60 p-4">
+    <div className="space-y-8">
+      <WebsiteClaimsSection claims={result.websiteClaims} />
+
+      <section className="space-y-3">
+        <p className="technical-label text-primary">Security Assessments</p>
+        <div className="flex flex-wrap gap-3">
+          <div className="rounded-lg border border-border/70 bg-background/60 px-4 py-3">
             <p className="text-2xl font-semibold tracking-tight">{result.securityAssessments.length}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Total security assessments</p>
+            <p className="text-sm text-muted-foreground">Total</p>
           </div>
-          <div className="rounded-lg border border-border/70 bg-background/60 p-4">
+          <div className="rounded-lg border border-border/70 bg-background/60 px-4 py-3">
             <p className="text-2xl font-semibold tracking-tight">{verifiedSecurityAssessments}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Trusted issuer assessments</p>
+            <p className="text-sm text-muted-foreground">
+              <span className="sr-only">{verifiedSecurityAssessments} </span>
+              verified
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-        <div className="mb-5">
-          <p className="technical-label text-primary">Responsibility Claims</p>
-        </div>
-        {result.responsibilityClaims.length > 0 ? (
+      {result.responsibilityClaims.some((claim) => !claim.verification.responsibleParty.startsWith("did:web:")) ? (
+        <section className="space-y-3">
+          <p className="technical-label text-primary">Other responsibility claims</p>
           <div className="space-y-3">
-            {result.responsibilityClaims.map((claim) => (
-              <ResponsibilityClaimCard key={claim.attestation.uid} claim={claim} />
-            ))}
+            {result.responsibilityClaims
+              .filter((claim) => !claim.verification.responsibleParty.startsWith("did:web:"))
+              .map((claim) => (
+                <ResponsibilityClaimCard key={claim.attestation.uid} claim={claim} />
+              ))}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No responsibility claims found for this artifact.</p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
         <div className="mb-3 pt-4">
@@ -412,95 +747,62 @@ function ArtifactVerificationResults({
   )
 }
 
-/**
- * Build key authorization info from the backend controller-confirm response
- * and the attestation list — same logic as the dashboard's buildServiceKeys.
- */
-function buildKeyAuthorization(
-  controllerDid: string,
-  subjectDid: string,
-  confirmation: ControllerConfirmResponse,
-  attestations: EnrichedAttestationResult[]
-): KeyAuthorizationInfo {
-  const sources: string[] = []
-  let basic = false
-  let intermediate = false
-  let hasKeyBinding = false
-
-  // Check if the controller is found in the backend's live evidence
-  for (const key of confirmation.controllerKeys) {
-    if (isSameControllerId(key.canonicalId, controllerDid)) {
-      for (const source of key.sources) {
-        const label = source === "dns-txt" ? "DNS TXT"
-          : source === "did-json" ? "DID document"
-          : source === "account-wallet" ? "Account wallet"
-          : source
-        if (!sources.includes(label)) sources.push(label)
-      }
-      basic = key.basic
-      break
-    }
-  }
-
-  // Check attestations for controller witnesses and key bindings
-  for (const att of attestations) {
-    if (att.schemaId === "controller-witness") {
-      const witnessController = att.decodedData?.controller
-      if (typeof witnessController === "string" && isSameControllerId(witnessController, controllerDid)) {
-        intermediate = true
-        if (!sources.includes("Controller witness")) sources.push("Controller witness")
-      }
-    }
-    if (att.schemaId === "key-binding") {
-      const keyId = att.decodedData?.keyId
-      if (typeof keyId === "string" && isSameControllerId(keyId, controllerDid)) {
-        hasKeyBinding = true
-        if (!sources.includes("Key binding")) sources.push("Key binding")
-      }
-    }
-  }
-
-  const advanced = intermediate && hasKeyBinding
-
-  return {
-    subjectDid,
-    controllerDid,
-    sources,
-    basic,
-    intermediate,
-    advanced,
-  }
-}
-
 export default function VerifyPage() {
-  const [subjectDid, setSubjectDid] = useState("")
-  const [controllerDid, setControllerDid] = useState("")
-  const [isArtifactMode, setIsArtifactMode] = useState(false)
+  const [query, setQuery] = useState("")
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [isProcessingFile, setIsProcessingFile] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<VerifyResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const trustProfile = useMemo(() => {
-    const attestations = result?.attestations ?? []
-    const schemas = result?.artifact
-      ? TRUST_PROFILE_SCHEMAS.filter(schema => schema.id !== "responsibility-claim")
-      : TRUST_PROFILE_SCHEMAS
+  const detectedMethod = useMemo(() => {
+    const resolved = resolveQueryToDid(query, getActiveChain().id)
+    return resolved ? detectDidMethod(resolved) : null
+  }, [query])
 
-    return schemas.map((schema) => ({
-      ...schema,
-      count: attestations.filter((attestation) => attestation.schemaId === schema.id).length,
-    }))
-  }, [result?.attestations, result?.artifact])
-  const effectiveArtifactMode = isArtifactMode || subjectDid.trim().startsWith("did:artifact:")
+  const handleFileSelect = async (file: File) => {
+    setFileName(file.name)
+    setIsProcessingFile(true)
+    setError(null)
 
-  const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+    try {
+      const buffer = await file.arrayBuffer()
+      const bytes = new Uint8Array(buffer)
+      const textExtensions = [".json", ".md", ".txt", ".yaml", ".yml", ".toml", ".xml", ".csv", ".html", ".css", ".js", ".ts"]
+      const isTextFile = textExtensions.some((ext) => file.name.toLowerCase().endsWith(ext)) || file.type.startsWith("text/")
 
-    const subject = subjectDid.trim()
-    const controller = controllerDid.trim()
+      let did: string
+      if (isTextFile) {
+        const text = new TextDecoder().decode(bytes)
+        try {
+          JSON.parse(text)
+          did = await artifactDidFromJson(text)
+        } catch {
+          did = await artifactDidFromBytes(bytes)
+        }
+      } else {
+        did = await artifactDidFromBytes(bytes)
+      }
 
-    if (!subject) {
-      setError("Select a service ID to verify.")
+      setQuery(did)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to process file")
+      setFileName(null)
+    } finally {
+      setIsProcessingFile(false)
+    }
+  }
+
+  const clearFile = () => {
+    setFileName(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const runVerify = async (rawQuery: string) => {
+    const resolved = resolveQueryToDid(rawQuery, getActiveChain().id)
+    if (!resolved) {
+      setError("Enter a DID, address, domain, or upload a file.")
       return
     }
 
@@ -508,13 +810,15 @@ export default function VerifyPage() {
     setError(null)
 
     try {
-      const artifactMode = subject.startsWith("did:artifact:")
-      const [attestationsRaw, trustAnchorsResult] = await Promise.allSettled([
-        getVerifiedAttestationsForDIDWithMetadata(subject),
+      const method = detectDidMethod(resolved)
+      const artifactMode = method === "artifact"
+
+      const [attestationsRaw, trustAnchorsResult, confirmationResult] = await Promise.allSettled([
+        getVerifiedAttestationsForDIDWithMetadata(resolved),
         getPublicTrustAnchors(),
+        getControllerConfirmation({ subjectDid: resolved }),
       ])
 
-      // If the main attestation query failed, surface the error
       if (attestationsRaw.status === "rejected") {
         throw attestationsRaw.reason instanceof Error
           ? attestationsRaw.reason
@@ -523,7 +827,6 @@ export default function VerifyPage() {
 
       const baseAttestations = sortByCategoryPriority(attestationsRaw.value)
 
-      // Build approved issuers map from trust anchors
       const approvedIssuers = new Map<string, Set<string>>()
       if (trustAnchorsResult.status === "fulfilled") {
         for (const registry of trustAnchorsResult.value.registries) {
@@ -539,31 +842,40 @@ export default function VerifyPage() {
         }
       }
 
-      let keyAuthorization: KeyAuthorizationInfo | null = null
-      let keyAuthorizationError: string | null = null
-      const artifact = artifactMode
-        ? await buildArtifactVerification(subject, baseAttestations, approvedIssuers)
-        : null
-      const attestations = artifact ? sortByCategoryPriority(artifact.allAttestations) : baseAttestations
-
-      if (controller && !artifactMode) {
-        try {
-          const confirmation = await getControllerConfirmation({ subjectDid: subject })
-          keyAuthorization = buildKeyAuthorization(controller, subject, confirmation, attestations)
-        } catch (err) {
-          keyAuthorizationError = err instanceof Error
-            ? err.message
-            : "Controller authorization check failed."
-        }
+      let authorizationError: string | null = null
+      let confirmation: ControllerConfirmResponse | null = null
+      if (confirmationResult.status === "fulfilled") {
+        confirmation = confirmationResult.value
+      } else if (method === "pkh" || method === "web") {
+        authorizationError = confirmationResult.reason instanceof Error
+          ? confirmationResult.reason.message
+          : "Controller authorization check failed."
       }
 
-      setResult({
-        subjectDid: subject,
-        canonicalDid: subject,
+      const artifact = artifactMode
+        ? await buildArtifactVerification(resolved, baseAttestations, approvedIssuers)
+        : null
+      const attestations = artifact ? sortByCategoryPriority(artifact.allAttestations) : baseAttestations
+      const authorizedParties = artifactMode
+        ? []
+        : buildAuthorizedParties(resolved, confirmation, attestations)
+
+      const score = computeScore({
+        method,
         attestations,
-        keyAuthorization,
-        keyAuthorizationError,
+        authorizedParties,
+        artifact,
+      })
+
+      setResult({
+        query: rawQuery.trim(),
+        subjectDid: resolved,
+        method,
+        score,
+        attestations,
         approvedIssuers,
+        authorizedParties,
+        authorizationError,
         artifact,
       })
     } catch (err) {
@@ -574,154 +886,183 @@ export default function VerifyPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <ShieldCheck className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Trust Verifier</h1>
-        </div>
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await runVerify(query)
+  }
+
+  const hasResult = !!result
+  const searchForm = (
+    <form onSubmit={handleSubmit} className="w-full max-w-2xl">
+      <div className="flex items-center gap-1 rounded-full border border-border/80 bg-card px-3 py-2 shadow-sm shadow-slate-950/5 transition focus-within:border-primary/40 focus-within:shadow-md">
+        <Search className="ml-2 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+        <input
+          aria-label="Search DID"
+          type="text"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            if (fileName && !event.target.value.startsWith("did:artifact:")) clearFile()
+          }}
+          placeholder="Paste a DID, address, or domain"
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-base text-foreground outline-none placeholder:text-muted-foreground"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {query ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => {
+              setQuery("")
+              clearFile()
+              setResult(null)
+              setError(null)
+            }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label="Upload file"
+          className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isProcessingFile}
+        >
+          <Upload className="h-4 w-4" />
+        </button>
+        <Button
+          type="submit"
+          size="sm"
+          className="ml-1 rounded-full px-4"
+          disabled={isVerifying || isProcessingFile || !query.trim()}
+        >
+          {isVerifying ? "Verifying..." : "Verify"}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          aria-label="Upload artifact file"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void handleFileSelect(file)
+          }}
+        />
       </div>
 
-      <form onSubmit={handleVerify} className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="text-sm font-medium text-foreground">Service ID</label>
-              <Badge variant="secondary">Required</Badge>
-            </div>
-            <SubjectIdInput
-              value={subjectDid}
-              onChange={(did) => setSubjectDid(did ?? "")}
-              onMethodChange={(method) => setIsArtifactMode(method === "artifact")}
-              allowedMethods={["web", "pkh", "jwk", "artifact"]}
-              className="ml-0"
-            />
-          </div>
-
-          {!effectiveArtifactMode && (
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="text-sm font-medium text-foreground">Signing Key</label>
-              <Badge variant="outline">Optional</Badge>
-            </div>
-            <SubjectIdInput
-              value={controllerDid}
-              onChange={(did) => setControllerDid(did ?? "")}
-              allowedMethods={["jwk", "pkh"]}
-              className="ml-0"
-            />
-          </div>
-          )}
-        </div>
-
-        {error ? (
-          <div className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {fileName ? (
+          <span className="inline-flex items-center gap-1.5">
+            <Upload className="h-3 w-3" />
+            {fileName}
+            {isProcessingFile ? " · hashing…" : ""}
+          </span>
+        ) : (
+          <span>
+            <button
+              type="button"
+              className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessingFile}
+            >
+              Upload a file
+            </button>
+            {" "}to verify its artifact DID
+          </span>
+        )}
+        {detectedMethod ? (
+          <span className="text-foreground/70">Detected: {getSubjectTypeLabel(detectedMethod)}</span>
         ) : null}
+      </div>
+    </form>
+  )
 
-        <div className="mt-6 flex justify-end">
-          <Button type="submit" disabled={isVerifying || !subjectDid.trim()}>
-            <Search className="h-4 w-4" />
-            {isVerifying ? "Verifying..." : "Verify"}
-          </Button>
+  return (
+    <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      {!hasResult ? (
+        <div className="flex min-h-[70vh] flex-col items-center justify-center pb-24">
+          <div className="mb-10 text-center">
+            <p className="text-5xl font-semibold tracking-tight text-foreground sm:text-6xl">
+              OMATrust
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Verify a service, key, contract, or artifact
+            </p>
+          </div>
+          {searchForm}
+          {error ? (
+            <div className="mt-6 w-full max-w-2xl rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          ) : null}
         </div>
-      </form>
+      ) : (
+        <div className="pb-16 pt-8">
+          <div className="mb-8 flex justify-center">{searchForm}</div>
 
-      {result ? (
-        <div className="mt-8 space-y-8">
-          {controllerDid.trim() ? (
-            <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="technical-label text-primary">Signing Key Authorization</p>
-                </div>
-                {result.keyAuthorization ? (
-                  <StatusBadge
-                    ok={result.keyAuthorization.basic || result.keyAuthorization.intermediate || result.keyAuthorization.advanced}
-                    label={result.keyAuthorization.basic || result.keyAuthorization.intermediate || result.keyAuthorization.advanced ? "Authorized" : "Not authorized"}
-                  />
-                ) : null}
-              </div>
-
-              {result.keyAuthorizationError ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {result.keyAuthorizationError}
-                </div>
-              ) : result.keyAuthorization ? (
-                <div className="rounded-xl border border-border/70 bg-background p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-sm text-foreground break-all">
-                        <span className="font-bold">Service ID:</span>{' '}
-                        <span className="font-mono text-xs">{result.keyAuthorization.subjectDid}</span>
-                      </p>
-                      <p className="text-sm text-foreground break-all">
-                        <span className="font-bold">Key ID:</span>{' '}
-                        <span className="font-mono text-xs">{result.keyAuthorization.controllerDid}</span>
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-foreground/70">
-                        Verification Methods: {result.keyAuthorization.sources.length > 0 ? result.keyAuthorization.sources.join(", ") : "None"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <Signal active={result.keyAuthorization.basic} label="Basic" />
-                      <Signal active={result.keyAuthorization.intermediate} label="Intermediate" />
-                      <Signal active={result.keyAuthorization.advanced} label="Advanced" />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </section>
+          {error ? (
+            <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
           ) : null}
 
-          <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="technical-label text-primary">Service Summary</p>
-              </div>
-              <Badge variant="secondary">{getSubjectType(result.subjectDid)}</Badge>
-            </div>
+          <div className="space-y-8">
+            <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
+              <ScoreHero score={result.score} method={result.method} />
+              <p className="mt-5 break-all font-mono text-xs text-muted-foreground">{result.subjectDid}</p>
+            </section>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="min-w-0 rounded-lg border border-border/70 bg-muted/30 p-4">
-                <p className="text-xs font-medium uppercase text-muted-foreground">Service ID</p>
-                <p className="mt-2 break-all font-mono text-sm">{result.subjectDid}</p>
+            {result.method === "pkh" ? (
+              <div className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
+                <AuthorizedPartiesSection
+                  parties={result.authorizedParties}
+                  error={result.authorizationError}
+                />
               </div>
-            </div>
+            ) : null}
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              {trustProfile.map((item) => (
-                <div key={item.id} className="rounded-lg border border-border/70 bg-background/60 p-4">
-                  <p className="text-2xl font-semibold tracking-tight">{item.count}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{item.label}</p>
+            {result.method === "web" && result.authorizedParties.length > 0 ? (
+              <div className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
+                <AuthorizedPartiesSection
+                  parties={result.authorizedParties}
+                  error={result.authorizationError}
+                />
+              </div>
+            ) : null}
+
+            {result.artifact ? (
+              <ArtifactDetails result={result.artifact} approvedIssuers={result.approvedIssuers} />
+            ) : result.method !== "pkh" ? (
+              <section className="rounded-xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
+                <div className="mb-3 pt-4">
+                  <p className="technical-label text-primary">Attestations</p>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          {result.artifact ? (
-            <ArtifactVerificationResults result={result.artifact} approvedIssuers={result.approvedIssuers} />
-          ) : (
-          <section>
-            <div className="rounded-xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
-              <div className="mb-3 pt-4">
-                <p className="technical-label text-primary">Attestations</p>
-              </div>
-              <LatestAttestations
-                showHeading={false}
-                data={result.attestations}
-                approvedIssuers={result.approvedIssuers}
-                emptyMessage="No attestations found for this service."
-              />
-            </div>
-          </section>
-          )}
+                <LatestAttestations
+                  showHeading={false}
+                  data={result.attestations}
+                  approvedIssuers={result.approvedIssuers}
+                  emptyMessage="No attestations found for this service."
+                />
+              </section>
+            ) : (
+              <section className="rounded-xl border border-border/70 bg-card/70 px-4 py-2 shadow-sm shadow-slate-950/5 sm:px-8">
+                <div className="mb-3 pt-4">
+                  <p className="technical-label text-primary">Related attestations</p>
+                </div>
+                <LatestAttestations
+                  showHeading={false}
+                  data={result.attestations}
+                  approvedIssuers={result.approvedIssuers}
+                  emptyMessage="No attestations found for this contract or key."
+                />
+              </section>
+            )}
+          </div>
         </div>
-      ) : null}
+      )}
     </div>
   )
 }
