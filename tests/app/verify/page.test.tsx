@@ -152,6 +152,10 @@ describe('Verify page', () => {
     })
     expect(screen.getByText('Blockchain Address')).toBeInTheDocument()
     expect(screen.getByText('Who authorized this')).toBeInTheDocument()
+    expect(screen.getByLabelText('Check key authorizations')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^check$/i })).toBeInTheDocument()
+    expect(mockGetControllerConfirmation).not.toHaveBeenCalled()
+    expect(screen.getByText('did:pkh:eip155:66238:0x1234567890123456789012345678901234567890')).toBeInTheDocument()
   })
 
   it('verifies a web subject and shows a score', async () => {
@@ -166,35 +170,17 @@ describe('Verify page', () => {
     expect(screen.getByText('1 attestations')).toBeInTheDocument()
   })
 
-  it('shows authorizing parties for did:pkh', async () => {
-    mockGetVerifiedAttestations.mockResolvedValueOnce([
-      {
-        ...attestation,
-        schemaId: 'controller-witness',
-        decodedData: {
-          subject: 'did:pkh:eip155:66238:0xabc',
-          controller: 'did:web:authorizer.example',
-        },
-      },
-      {
-        ...attestation,
-        uid: `0x${'6'.repeat(64)}`,
-        schemaId: 'key-binding',
-        decodedData: {
-          subject: 'did:pkh:eip155:66238:0xabc',
-          keyId: 'did:web:authorizer.example',
-        },
-      },
-    ])
+  it('shows Authorized keys copy for a domain, not Who authorized this', async () => {
+    mockGetVerifiedAttestations.mockResolvedValueOnce([])
     mockGetControllerConfirmation.mockResolvedValueOnce({
-      subject: { did: 'did:pkh:eip155:66238:0xabc', label: '0xabc' },
-      domain: null,
+      subject: { did: 'did:web:oma3.org', label: 'oma3.org' },
+      domain: 'oma3.org',
       controllerKeys: [
         {
-          id: 'did:pkh:eip155:66238:0xowner',
-          canonicalId: 'did:pkh:eip155:66238:0xowner',
-          label: '0xowner',
-          sources: ['did-json'],
+          id: 'did:pkh:eip155:66238:0x96fa5ab5e519641bd8a840a6b26d17db7497618b',
+          canonicalId: 'did:pkh:eip155:66238:0x96fa5ab5e519641bd8a840a6b26d17db7497618b',
+          label: '0x96fa',
+          sources: ['dns-txt'],
           basic: true,
         },
       ],
@@ -204,14 +190,88 @@ describe('Verify page', () => {
     })
 
     render(<VerifyPage />)
-    searchAndVerify('did:pkh:eip155:66238:0xabc')
+    searchAndVerify('did:web:oma3.org')
 
     await waitFor(() => {
-      expect(screen.getByText('Who authorized this')).toBeInTheDocument()
+      expect(screen.getByText('Authorized keys')).toBeInTheDocument()
     })
-    expect(screen.getByText('0xowner')).toBeInTheDocument()
-    expect(screen.getByText(/DID document/)).toBeInTheDocument()
-    expect(screen.getByText('did:web:authorizer.example')).toBeInTheDocument()
+    expect(screen.queryByText('Who authorized this')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('did:pkh:eip155:66238:0x96fa5ab5e519641bd8a840a6b26d17db7497618b')
+    ).toBeInTheDocument()
+    expect(screen.queryByText('0x96fa', { exact: true })).not.toBeInTheDocument()
+  })
+
+  it('checks whether a domain authorized a previously verified key', async () => {
+    const keyDid = 'did:pkh:eip155:66238:0x96fa5ab5e519641bd8a840a6b26d17db7497618b'
+    mockGetVerifiedAttestations.mockResolvedValue([])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:oma3.org', label: 'oma3.org' },
+      domain: 'oma3.org',
+      controllerKeys: [
+        {
+          id: keyDid,
+          canonicalId: keyDid,
+          label: '0x96fa',
+          sources: ['dns-txt', 'did-json'],
+          basic: true,
+        },
+      ],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify(keyDid)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Check key authorizations')).toBeInTheDocument()
+    })
+    expect(mockGetControllerConfirmation).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Check key authorizations'), {
+      target: { value: 'oma3.org' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Authorized')).toBeInTheDocument()
+    })
+    expect(mockGetControllerConfirmation).toHaveBeenCalledWith({ subjectDid: 'did:web:oma3.org' })
+    expect(screen.getByText(/Verification Methods: DNS TXT, DID document/)).toBeInTheDocument()
+    expect(screen.getAllByText(keyDid).length).toBeGreaterThan(0)
+    expect(screen.getByText('did:web:oma3.org')).toBeInTheDocument()
+    expect(screen.getByText(/Basic:/)).toHaveTextContent('Basic: Yes')
+  })
+
+  it('shows Not authorized when the domain did not authorize the key', async () => {
+    mockGetVerifiedAttestations.mockResolvedValue([])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:example.com', label: 'example.com' },
+      domain: 'example.com',
+      controllerKeys: [],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify('did:pkh:eip155:66238:0x437c80895a46d2162301d145428f5f3a849eb212')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Check key authorizations')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByLabelText('Check key authorizations'), {
+      target: { value: 'example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Not authorized')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Basic:/)).toHaveTextContent('Basic: No')
   })
 
   it('shows websites that claim an artifact', async () => {
@@ -411,12 +471,21 @@ describe('Verify page', () => {
     })
   })
 
-  it('shows authorization error for pkh when controller confirmation fails', async () => {
-    mockGetVerifiedAttestations.mockResolvedValueOnce([])
+  it('shows authorization check error when the domain lookup fails', async () => {
+    mockGetVerifiedAttestations.mockResolvedValue([])
     mockGetControllerConfirmation.mockRejectedValueOnce(new Error('Controller lookup failed'))
 
     render(<VerifyPage />)
     searchAndVerify('did:pkh:eip155:66238:0x1234567890123456789012345678901234567890')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Check key authorizations')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByLabelText('Check key authorizations'), {
+      target: { value: 'oma3.org' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Controller lookup failed')).toBeInTheDocument()
