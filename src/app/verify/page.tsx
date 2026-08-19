@@ -47,6 +47,16 @@ type AuthorizedParty = {
   advanced: boolean
 }
 
+/** Derived key authorization info — same logic as the previous verify page. */
+type KeyAuthorizationInfo = {
+  subjectDid: string
+  controllerDid: string
+  sources: string[]
+  basic: boolean
+  intermediate: boolean
+  advanced: boolean
+}
+
 type WebsiteClaim = {
   website: string
   domain: string
@@ -118,6 +128,33 @@ function getSubjectTypeLabel(method: DidMethod) {
     case "artifact": return "Artifact"
     case "key": return "Key"
     default: return "ID"
+  }
+}
+
+function isControllerMethod(method: DidMethod) {
+  return method === "pkh" || method === "jwk" || method === "key"
+}
+
+function getAuthorizationCopy(method: DidMethod) {
+  switch (method) {
+    case "web":
+      return {
+        title: "Authorized keys",
+        subtitle: "Keys and controllers this domain has authorized.",
+        empty: "No authorized keys found for this domain.",
+      }
+    case "artifact":
+      return {
+        title: "Websites that claim this",
+        subtitle: "Domains with responsibility claims for this artifact.",
+        empty: "No websites claim this artifact yet.",
+      }
+    default:
+      return {
+        title: "Who authorized this",
+        subtitle: "Domains and services that authorized this contract or key.",
+        empty: "No authorizing parties found.",
+      }
   }
 }
 
@@ -245,7 +282,7 @@ function computeScore(params: {
 }): TrustScore {
   const { method, attestations, authorizedParties, artifact } = params
 
-  if (method === "pkh") {
+  if (isControllerMethod(method)) {
     const hasBasic = authorizedParties.some((party) => party.basic)
     const hasIntermediate = authorizedParties.some((party) => party.intermediate)
     const hasAdvanced = authorizedParties.some((party) => party.advanced)
@@ -260,7 +297,7 @@ function computeScore(params: {
       label: hasAdvanced ? "Strong authorization" : hasIntermediate ? "Witnessed" : hasBasic ? "Basic authorization" : authorizedParties.length ? "Partial" : "No authorization",
       detail: authorizedParties.length
         ? `${authorizedParties.length} authorizing part${authorizedParties.length === 1 ? "y" : "ies"} found`
-        : "No authorizing party found for this contract or key",
+        : "Check a domain to see if it authorized this key",
     }
   }
 
@@ -327,9 +364,10 @@ function buildAuthorizedParties(
 
   if (confirmation) {
     for (const key of confirmation.controllerKeys) {
-      upsert(key.canonicalId || key.id, {
-        id: key.canonicalId || key.id,
-        label: key.label || key.canonicalId || key.id,
+      const id = key.canonicalId || key.id
+      upsert(id, {
+        id,
+        label: id,
         sources: key.sources.map(sourceLabel),
         basic: key.basic,
       })
@@ -386,6 +424,82 @@ function buildAuthorizedParties(
   }
 
   return Array.from(parties.values())
+}
+
+/**
+ * Build key authorization info from the backend controller-confirm response
+ * and the attestation list — same logic as the previous verify page.
+ */
+function buildKeyAuthorization(
+  controllerDid: string,
+  subjectDid: string,
+  confirmation: ControllerConfirmResponse,
+  attestations: EnrichedAttestationResult[]
+): KeyAuthorizationInfo {
+  const sources: string[] = []
+  let basic = false
+  let intermediate = false
+  let hasKeyBinding = false
+
+  for (const key of confirmation.controllerKeys) {
+    if (isSameControllerId(key.canonicalId, controllerDid) || isSameControllerId(key.id, controllerDid)) {
+      for (const source of key.sources) {
+        const label = sourceLabel(source)
+        if (!sources.includes(label)) sources.push(label)
+      }
+      basic = key.basic
+      break
+    }
+  }
+
+  for (const att of attestations) {
+    if (att.schemaId === "controller-witness") {
+      const witnessController = att.decodedData?.controller
+      if (typeof witnessController === "string" && isSameControllerId(witnessController, controllerDid)) {
+        intermediate = true
+        if (!sources.includes("Controller witness")) sources.push("Controller witness")
+      }
+    }
+    if (att.schemaId === "key-binding") {
+      const keyId = att.decodedData?.keyId
+      if (typeof keyId === "string" && isSameControllerId(keyId, controllerDid)) {
+        hasKeyBinding = true
+        if (!sources.includes("Key binding")) sources.push("Key binding")
+      }
+    }
+  }
+
+  const advanced = intermediate && hasKeyBinding
+
+  return {
+    subjectDid,
+    controllerDid,
+    sources,
+    basic,
+    intermediate,
+    advanced,
+  }
+}
+
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <Badge variant={ok ? "success" : "destructive"} className="gap-1">
+      {ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+      {label}
+    </Badge>
+  )
+}
+
+function Signal({ active, label }: { active: boolean; label: string }) {
+  return (
+    <span className={`inline-block rounded-full border px-2.5 py-1 text-xs font-medium ${
+      active
+        ? "border-primary/25 bg-primary/10 text-primary"
+        : "border-border bg-background text-muted-foreground"
+    }`}>
+      {label}: {active ? "Yes" : "No"}
+    </span>
+  )
 }
 
 async function verifyResponsibilityClaimForArtifact(
@@ -521,14 +635,22 @@ function ScoreHero({ score, method }: { score: TrustScore; method: DidMethod }) 
   )
 }
 
-function AuthorizedPartiesSection({ parties, error }: { parties: AuthorizedParty[]; error: string | null }) {
+function AuthorizedPartiesSection({
+  method,
+  parties,
+  error,
+}: {
+  method: DidMethod
+  parties: AuthorizedParty[]
+  error: string | null
+}) {
+  const copy = getAuthorizationCopy(method)
+
   return (
     <section className="space-y-4">
       <div>
-        <p className="technical-label text-primary">Who authorized this</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Controllers and services that authorized this contract or key.
-        </p>
+        <p className="technical-label text-primary">{copy.title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
       </div>
 
       {error ? (
@@ -542,8 +664,8 @@ function AuthorizedPartiesSection({ parties, error }: { parties: AuthorizedParty
           {parties.map((party) => (
             <li key={party.id} className="rounded-lg border border-border/70 bg-background/70 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="break-all font-mono text-sm text-foreground">{party.label}</p>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="break-all font-mono text-sm text-foreground">{party.id}</p>
                   <p className="text-xs text-muted-foreground">
                     {party.sources.length > 0 ? party.sources.join(", ") : "No verification methods"}
                   </p>
@@ -561,7 +683,7 @@ function AuthorizedPartiesSection({ parties, error }: { parties: AuthorizedParty
           ))}
         </ul>
       ) : !error ? (
-        <p className="text-sm text-muted-foreground">No authorizing parties found.</p>
+        <p className="text-sm text-muted-foreground">{copy.empty}</p>
       ) : null}
     </section>
   )
@@ -754,6 +876,10 @@ export default function VerifyPage() {
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<VerifyResult | null>(null)
+  const [authorizationDomain, setAuthorizationDomain] = useState("")
+  const [isCheckingAuthorization, setIsCheckingAuthorization] = useState(false)
+  const [authorizationCheck, setAuthorizationCheck] = useState<KeyAuthorizationInfo | null>(null)
+  const [authorizationCheckError, setAuthorizationCheckError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const detectedMethod = useMemo(() => {
@@ -812,11 +938,16 @@ export default function VerifyPage() {
     try {
       const method = detectDidMethod(resolved)
       const artifactMode = method === "artifact"
+      const controllerSubject = isControllerMethod(method)
+
+      const confirmationPromise = controllerSubject
+        ? Promise.resolve(null)
+        : getControllerConfirmation({ subjectDid: resolved })
 
       const [attestationsRaw, trustAnchorsResult, confirmationResult] = await Promise.allSettled([
         getVerifiedAttestationsForDIDWithMetadata(resolved),
         getPublicTrustAnchors(),
-        getControllerConfirmation({ subjectDid: resolved }),
+        confirmationPromise,
       ])
 
       if (attestationsRaw.status === "rejected") {
@@ -846,7 +977,7 @@ export default function VerifyPage() {
       let confirmation: ControllerConfirmResponse | null = null
       if (confirmationResult.status === "fulfilled") {
         confirmation = confirmationResult.value
-      } else if (method === "pkh" || method === "web") {
+      } else if (method === "web") {
         authorizationError = confirmationResult.reason instanceof Error
           ? confirmationResult.reason.message
           : "Controller authorization check failed."
@@ -856,9 +987,9 @@ export default function VerifyPage() {
         ? await buildArtifactVerification(resolved, baseAttestations, approvedIssuers)
         : null
       const attestations = artifact ? sortByCategoryPriority(artifact.allAttestations) : baseAttestations
-      const authorizedParties = artifactMode
-        ? []
-        : buildAuthorizedParties(resolved, confirmation, attestations)
+      const authorizedParties = method === "web"
+        ? buildAuthorizedParties(resolved, confirmation, attestations)
+        : []
 
       const score = computeScore({
         method,
@@ -878,8 +1009,12 @@ export default function VerifyPage() {
         authorizationError,
         artifact,
       })
+      setAuthorizationDomain("")
+      setAuthorizationCheck(null)
+      setAuthorizationCheckError(null)
     } catch (err) {
       setResult(null)
+      setAuthorizationCheck(null)
       setError(err instanceof Error ? err.message : "Verification failed.")
     } finally {
       setIsVerifying(false)
@@ -889,6 +1024,67 @@ export default function VerifyPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await runVerify(query)
+  }
+
+  const handleCheckAuthorization = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!result || !isControllerMethod(result.method)) return
+
+    const domainDid = resolveQueryToDid(authorizationDomain, getActiveChain().id)
+    if (!domainDid || detectDidMethod(domainDid) !== "web") {
+      setAuthorizationCheck(null)
+      setAuthorizationCheckError("Enter a domain or URL to check.")
+      return
+    }
+
+    setIsCheckingAuthorization(true)
+    setAuthorizationCheckError(null)
+
+    try {
+      const [confirmation, domainAttestations] = await Promise.all([
+        getControllerConfirmation({ subjectDid: domainDid }),
+        getVerifiedAttestationsForDIDWithMetadata(domainDid),
+      ])
+      const checked = buildKeyAuthorization(
+        result.subjectDid,
+        domainDid,
+        confirmation,
+        domainAttestations
+      )
+      setAuthorizationCheck(checked)
+
+      const authorized = checked.basic || checked.intermediate || checked.advanced
+      setResult((current) => {
+        if (!current) return current
+        const authorizedParties: AuthorizedParty[] = authorized
+          ? [{
+              id: domainDid,
+              label: domainDid,
+              sources: checked.sources,
+              basic: checked.basic,
+              intermediate: checked.intermediate,
+              advanced: checked.advanced,
+            }]
+          : []
+        return {
+          ...current,
+          authorizedParties,
+          score: computeScore({
+            method: current.method,
+            attestations: current.attestations,
+            authorizedParties,
+            artifact: current.artifact,
+          }),
+        }
+      })
+    } catch (err) {
+      setAuthorizationCheck(null)
+      setAuthorizationCheckError(
+        err instanceof Error ? err.message : "Controller authorization check failed."
+      )
+    } finally {
+      setIsCheckingAuthorization(false)
+    }
   }
 
   const hasResult = !!result
@@ -919,6 +1115,9 @@ export default function VerifyPage() {
               clearFile()
               setResult(null)
               setError(null)
+              setAuthorizationDomain("")
+              setAuthorizationCheck(null)
+              setAuthorizationCheckError(null)
             }}
           >
             <X className="h-4 w-4" />
@@ -1012,21 +1211,88 @@ export default function VerifyPage() {
           <div className="space-y-8">
             <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
               <ScoreHero score={result.score} method={result.method} />
-              <p className="mt-5 break-all font-mono text-xs text-muted-foreground">{result.subjectDid}</p>
+              <p className="mt-5 break-all font-mono text-sm text-foreground">{result.subjectDid}</p>
             </section>
 
-            {result.method === "pkh" ? (
+            {isControllerMethod(result.method) ? (
               <div className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-                <AuthorizedPartiesSection
-                  parties={result.authorizedParties}
-                  error={result.authorizationError}
-                />
+                <section className="space-y-4">
+                  <div>
+                    <p className="technical-label text-primary">
+                      {getAuthorizationCopy(result.method).title}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {getAuthorizationCopy(result.method).subtitle}
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleCheckAuthorization} className="space-y-2">
+                    <label htmlFor="check-key-authorizations" className="text-sm font-medium text-foreground">
+                      Check key authorizations
+                    </label>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        id="check-key-authorizations"
+                        aria-label="Check key authorizations"
+                        type="text"
+                        value={authorizationDomain}
+                        onChange={(event) => setAuthorizationDomain(event.target.value)}
+                        placeholder="oma3.org"
+                        className="min-w-0 flex-1 rounded-full border border-border/80 bg-background px-4 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/40"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <Button type="submit" size="sm" className="rounded-full px-4" disabled={isCheckingAuthorization}>
+                        {isCheckingAuthorization ? "Checking..." : "Check"}
+                      </Button>
+                    </div>
+                  </form>
+
+                  {authorizationCheckError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {authorizationCheckError}
+                    </div>
+                  ) : null}
+
+                  {authorizationCheck ? (
+                    <div className="rounded-xl border border-border/70 bg-background p-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">Authorization result</p>
+                        <StatusBadge
+                          ok={authorizationCheck.basic || authorizationCheck.intermediate || authorizationCheck.advanced}
+                          label={authorizationCheck.basic || authorizationCheck.intermediate || authorizationCheck.advanced ? "Authorized" : "Not authorized"}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <p className="text-sm text-foreground">
+                            <span className="font-bold">Service ID:</span>{" "}
+                            <span className="break-all font-mono text-sm">{authorizationCheck.subjectDid}</span>
+                          </p>
+                          <p className="text-sm text-foreground">
+                            <span className="font-bold">Key ID:</span>{" "}
+                            <span className="break-all font-mono text-sm">{authorizationCheck.controllerDid}</span>
+                          </p>
+                          <p className="text-sm font-medium text-foreground/70">
+                            Verification Methods: {authorizationCheck.sources.length > 0 ? authorizationCheck.sources.join(", ") : "None"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <Signal active={authorizationCheck.basic} label="Basic" />
+                          <Signal active={authorizationCheck.intermediate} label="Intermediate" />
+                          <Signal active={authorizationCheck.advanced} label="Advanced" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
               </div>
             ) : null}
 
-            {result.method === "web" && result.authorizedParties.length > 0 ? (
+            {result.method === "web" ? (
               <div className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
                 <AuthorizedPartiesSection
+                  method={result.method}
                   parties={result.authorizedParties}
                   error={result.authorizationError}
                 />
