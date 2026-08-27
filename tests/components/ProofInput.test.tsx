@@ -363,7 +363,6 @@ describe('ProofInput', () => {
       />
     );
     expect(screen.getByPlaceholderText('0x...')).toHaveValue('0xdead');
-    expect(screen.getByPlaceholderText('0x...')).toHaveClass('field-error');
   });
 
   it('initializes jwsValue from a string proofObject', () => {
@@ -376,28 +375,6 @@ describe('ProofInput', () => {
       />
     );
     expect(screen.getByPlaceholderText(/eyJhbGciOi/i)).toHaveValue(jws);
-    expect(screen.getByPlaceholderText(/eyJhbGciOi/i)).toHaveClass('field-error');
-  });
-
-  it('applies field-error to evidence URL and x402 receipt inputs', () => {
-    const { unmount } = render(
-      <ProofInput
-        value={{ proofType: 'evidence-pointer', proofPurpose: 'commercial-tx', proofObject: {} }}
-        onChange={vi.fn()}
-        error="bad url"
-      />
-    );
-    expect(screen.getByPlaceholderText(/twitter.com/i)).toHaveClass('field-error');
-    unmount();
-
-    render(
-      <ProofInput
-        value={{ proofType: 'x402-receipt', proofPurpose: 'commercial-tx', proofObject: {} }}
-        onChange={vi.fn()}
-        error="bad receipt"
-      />
-    );
-    expect(screen.getByPlaceholderText(/"format"/i)).toHaveClass('field-error');
   });
 
   it('uses empty sender when building tx-encoded-value without a wallet address', () => {

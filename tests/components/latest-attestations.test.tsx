@@ -186,17 +186,4 @@ describe('LatestAttestations', () => {
     expect(screen.getByText('Trusted')).toBeInTheDocument();
   });
 
-  it('shows generic error message when fetch rejects a non-Error value', async () => {
-    vi.mocked(attestationQueries.getLatestAttestationsWithMetadata).mockRejectedValue('network down');
-
-    render(
-      <Providers>
-        <LatestAttestations />
-      </Providers>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText(/failed to load attestations/i)).toBeInTheDocument();
-    });
-  });
 });

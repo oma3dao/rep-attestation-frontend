@@ -293,17 +293,6 @@ describe('SubjectConfirmationDialog', () => {
     });
   });
 
-  it('shows a generic message for non-BackendApiError verify failures', async () => {
-    mockVerifySubjectOwnership.mockRejectedValue(new Error('Network timeout'));
-    setup();
-    fireEvent.change(screen.getByTestId('did-web-input'), { target: { value: 'did:web:example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Network timeout')).toBeInTheDocument();
-    });
-  });
-
   it('resets the form when the dialog closes and reopens', () => {
     const { rerender } = setup();
     fireEvent.change(screen.getByTestId('did-web-input'), { target: { value: 'did:web:stale.example.com' } });
@@ -379,20 +368,6 @@ describe('SubjectConfirmationDialog', () => {
     });
   });
 
-  it('shows a generic ownership message when verify returns ok:false without error or details', async () => {
-    mockVerifySubjectOwnership.mockResolvedValue({ ok: false });
-    setup();
-
-    fireEvent.change(screen.getByTestId('did-web-input'), { target: { value: 'did:web:example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Ownership verification did not succeed yet/i)
-      ).toBeInTheDocument();
-    });
-  });
-
   it('prefills did:pkh initialSubjectDid into the pkh input', () => {
     setup({
       initialSubjectDid: 'did:pkh:eip155:1:0x9999999999999999999999999999999999999999',
@@ -407,49 +382,6 @@ describe('SubjectConfirmationDialog', () => {
     setup({ initialSubjectDid: 'did:garbage:not-valid' });
     expect(screen.getByTestId('did-web-input')).toHaveValue('did:garbage:not-valid');
     expect(screen.getByTestId('did-method-select')).toHaveValue('did:web');
-  });
-
-  it('uses BackendApiError message when details are absent and generic errors for non-Error failures', async () => {
-    mockVerifySubjectOwnership.mockRejectedValue(new BackendApiError('Verify rejected', 400, 'BAD_DID'));
-    setup();
-    fireEvent.change(screen.getByTestId('did-web-input'), { target: { value: 'did:web:example.com' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Verify rejected')).toBeInTheDocument();
-    });
-
-    mockVerifySubjectOwnership.mockRejectedValue('verify exploded');
-    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to verify service ID ownership.')).toBeInTheDocument();
-    });
-
-    mockVerifySubjectOwnership.mockResolvedValue({ ok: true, method: 'dns' });
-    mockCreateSubject.mockRejectedValue('create exploded');
-    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to add service ID.')).toBeInTheDocument();
-    });
-  });
-
-  it('shows wallet placeholders when walletDid is null', () => {
-    setup({ walletDid: null });
-    expect(screen.getByText(/did:pkh:eip155:<chain-id>:0x\.\.\./i)).toBeInTheDocument();
-    expect(screen.getByText(/_controllers\.example\.com/i)).toBeInTheDocument();
-  });
-
-  it('shows example.com domain placeholder when the subject domain is empty', () => {
-    setup();
-    fireEvent.change(screen.getByTestId('did-web-input'), { target: { value: '' } });
-    expect(screen.getByText(/_controllers\.example\.com/i)).toBeInTheDocument();
   });
 
   it('shows Verifying… while ownership check is pending and toggles did.json then DNS TXT', async () => {

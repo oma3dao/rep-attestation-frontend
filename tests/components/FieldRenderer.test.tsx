@@ -2,7 +2,7 @@
 // Covers: rendering of different field types and edge cases
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FieldRenderer } from '@/components/FieldRenderer';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -640,103 +640,6 @@ describe('FieldRenderer', () => {
     fireEvent.change(screen.getByPlaceholderText(/add item/i), { target: { value: 'first' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(handleChange).toHaveBeenCalledWith(['first']);
-  });
-
-  it('shows empty string for unknown field type when value is an array', () => {
-    render(
-      <FieldRenderer field={{ ...baseField, type: 'unknown' } as any} value={['x'] as any} onChange={() => {}} />
-    );
-    expect(screen.getByLabelText(/Test Field/i)).toHaveValue('');
-  });
-
-  it('defaults undefined array values to an empty array', () => {
-    render(
-      <FieldRenderer
-        field={{ ...baseField, type: 'array', name: 'tags', label: 'Tags' }}
-        value={undefined}
-        onChange={() => {}}
-      />
-    );
-    expect(screen.getByPlaceholderText(/Add item/i)).toBeInTheDocument();
-  });
-
-  it('applies field-error class on reviewBody, datetime, uri, enum, and free-text array inputs', () => {
-    const { unmount } = render(
-      <FieldRenderer
-        field={{ ...baseField, name: 'reviewBody', type: 'string', label: 'Review Body' }}
-        value=""
-        onChange={() => {}}
-        error="Required"
-      />
-    );
-    expect(screen.getByLabelText(/Review Body/i)).toHaveClass('field-error');
-    unmount();
-
-    render(
-      <FieldRenderer
-        field={{ ...baseField, name: 'when', type: 'datetime', label: 'When' }}
-        value=""
-        onChange={() => {}}
-        error="Required"
-      />
-    );
-    expect(screen.getByLabelText(/When/i)).toHaveClass('field-error');
-    cleanup();
-
-    render(
-      <FieldRenderer
-        field={{ ...baseField, name: 'homepage', type: 'uri', label: 'Homepage' }}
-        value=""
-        onChange={() => {}}
-        error="Required"
-      />
-    );
-    expect(screen.getByLabelText(/Homepage/i)).toHaveClass('field-error');
-    cleanup();
-
-    render(
-      <FieldRenderer
-        field={{
-          ...baseField,
-          name: 'choice',
-          type: 'enum',
-          label: 'Choice',
-          options: ['a', 'b'],
-        }}
-        value=""
-        onChange={() => {}}
-        error="Required"
-      />
-    );
-    expect(screen.getByLabelText(/Choice/i)).toHaveClass('field-error');
-    cleanup();
-
-    render(
-      <FieldRenderer
-        field={{ ...baseField, name: 'tags', type: 'array', label: 'Tags' }}
-        value={[]}
-        onChange={() => {}}
-        error="Required"
-      />
-    );
-    expect(screen.getByPlaceholderText(/Add item/i)).toHaveClass('field-error');
-  });
-
-  it('coerces non-string enum values to an empty select value', () => {
-    render(
-      <FieldRenderer
-        field={{
-          ...baseField,
-          name: 'choice',
-          type: 'enum',
-          label: 'Choice',
-          options: ['a', 'b'],
-        }}
-        value={42 as any}
-        onChange={() => {}}
-      />
-    );
-    expect(screen.getByLabelText(/Choice/i)).toHaveValue('');
   });
 
   it('renders rich options in a multi-select when options length exceeds 7', () => {

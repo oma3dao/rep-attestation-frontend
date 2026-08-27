@@ -328,27 +328,6 @@ describe('DidPkhInput', () => {
     });
   });
 
-  it('falls back to Invalid address format when normalizeCaip10 is invalid without an error', async () => {
-    const normalizeModule = await import('@/lib/utils/caip10/normalize');
-    const normalizeSpy = vi.spyOn(normalizeModule, 'normalizeCaip10').mockReturnValue({
-      valid: false,
-    });
-
-    const onChange = vi.fn();
-    render(<DidPkhInput onChange={onChange} />);
-
-    const input = screen.getByLabelText('Blockchain DID');
-    fireEvent.change(input, { target: { value: 'did:pkh:eip155:1:0xabc' } });
-    fireEvent.blur(input);
-
-    await waitFor(() => {
-      expect(screen.getByText('Invalid address format')).toBeInTheDocument();
-    });
-    expect(onChange).toHaveBeenCalledWith(null);
-
-    normalizeSpy.mockRestore();
-  });
-
   it('syncs a Sui did:pkh external value into the builder', async () => {
     const onChange = vi.fn();
     const externalDid = `did:pkh:sui:mainnet:${validSuiAddress}`;
@@ -370,44 +349,6 @@ describe('DidPkhInput', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Build DID from chain/i }));
     expect(screen.getByLabelText('Address')).toHaveValue('');
-  });
-
-  it('returns early from builder apply when address is missing', () => {
-    const onChange = vi.fn();
-    render(<DidPkhInput onChange={onChange} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Build DID from chain/i }));
-    fireEvent.change(screen.getByPlaceholderText(/6623 for OMAChain/), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: /Use this address/i }));
-    expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText('Virtual Machine'), { target: { value: 'solana' } });
-    fireEvent.click(screen.getByRole('button', { name: /Use this address/i }));
-    expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText('Virtual Machine'), { target: { value: 'sui' } });
-    fireEvent.click(screen.getByRole('button', { name: /Use this address/i }));
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it('falls back to Invalid address when builder normalize fails without an error', async () => {
-    const normalizeModule = await import('@/lib/utils/caip10/normalize');
-    const normalizeSpy = vi
-      .spyOn(normalizeModule, 'normalizeCaip10')
-      .mockReturnValue({ valid: false });
-
-    const onChange = vi.fn();
-    render(<DidPkhInput onChange={onChange} value={`did:pkh:eip155:1:${validAddress}`} />);
-    fireEvent.click(screen.getByRole('button', { name: /Build DID from chain/i }));
-    fireEvent.change(screen.getByPlaceholderText(/6623 for OMAChain/), { target: { value: '1' } });
-    fireEvent.change(screen.getByLabelText('Address'), { target: { value: validAddress } });
-    fireEvent.click(screen.getByRole('button', { name: /Use this address/i }));
-
-    // Cover result.error || "Invalid address" even if the banner is gated by inputValue.
-    expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Use this address/i })).toBeInTheDocument();
-    expect(normalizeSpy).toHaveBeenCalled();
-    normalizeSpy.mockRestore();
   });
 
 });

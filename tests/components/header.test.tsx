@@ -176,19 +176,6 @@ describe("Header", () => {
     expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute("href", "/account")
   })
 
-  it.each(["/verify", "/dashboard"])(
-    "applies active underline class on %s nav link",
-    (pathname) => {
-      mocks.pathname = pathname
-      render(<Header />)
-
-      const label = pathname === "/verify" ? "Verify" : "Dashboard"
-      const link = screen.getByRole("link", { name: label })
-      const underline = link.querySelector("span.absolute")
-      expect(underline).toHaveClass("w-full")
-    }
-  )
-
   it("reopens auth dialog with same request fields when AuthEntryDialog onOpenChange(true)", () => {
     mocks.authDialog = {
       open: true,

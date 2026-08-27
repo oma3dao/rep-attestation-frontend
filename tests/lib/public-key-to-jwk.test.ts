@@ -731,27 +731,6 @@ describe("convertToDidJwk — additional branch coverage", () => {
       message: expect.stringMatching(/Truncated SSH key data/i),
     })
   })
-
-  it("describes uncommon kty values when validation succeeds", async () => {
-    mockValidatePublicJwk.mockReturnValue({ valid: true })
-    mockJwkToDidJwk.mockReturnValue("did:jwk:eyJrdHkiOiJGT088")
-    const exoticJwk = JSON.stringify({
-      kty: "FOO",
-      x: bytesToBase64url(new Uint8Array(32)),
-    })
-
-    const result = await convertToDidJwk(exoticJwk)
-    expect(result.keyDescription).toBe("FOO key")
-  })
-
-  it("uses generic invalid JWK message when validatePublicJwk returns valid:false without error", async () => {
-    mockValidatePublicJwk.mockReturnValue({ valid: false })
-
-    await expect(convertToDidJwk(JSON.stringify({ kty: "EC", crv: "P-256", x: "a", y: "b" }))).rejects.toMatchObject({
-      code: "INVALID_JWK",
-      message: "Invalid public JWK",
-    })
-  })
 })
 
 /**

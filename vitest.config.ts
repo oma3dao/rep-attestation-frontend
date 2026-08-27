@@ -41,10 +41,13 @@ export default defineConfig({
         'src/lib/eas.ts', // EAS SDK usage, requires heavy ethers/EAS mocking
         'src/lib/attestation-queries.ts', // Placeholder / not-yet-implemented EAS query paths
       ],
-      // Generate coverage even when tests fail
       all: true,
-      // Force coverage collection
-      enabled: true,
+      // Floors, not goals — see oma3-ops github-governance/testing-guidelines.md
+      thresholds: {
+        lines: 80,
+        branches: 70,
+        functions: 80,
+      },
     },
   },
   resolve: {
