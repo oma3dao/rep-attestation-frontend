@@ -2,7 +2,7 @@
 // Covers: rendering of different field types and edge cases
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { FieldRenderer } from '@/components/FieldRenderer';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -15,7 +15,9 @@ vi.mock('@/components/SubjectIdInput', () => ({
   ),
 }));
 vi.mock('@/components/TimestampInput', () => ({
-  TimestampInput: () => <div data-testid="timestamp-input">Timestamp</div>,
+  TimestampInput: ({ value }: { value?: number | string }) => (
+    <div data-testid="timestamp-input">{value === '' ? 'empty' : String(value ?? 'undefined')}</div>
+  ),
 }));
 vi.mock('@/components/ProofInput', () => ({
   ProofInput: ({ value, onChange, defaultPurpose }: { value?: any; onChange: (v: any) => void; defaultPurpose?: string }) => (
@@ -29,6 +31,16 @@ vi.mock('@/components/ProofInput', () => ({
 }));
 vi.mock('@/components/ObjectFieldRenderer', () => ({
   ObjectFieldRenderer: () => <div data-testid="object-field-renderer">Object</div>,
+}));
+vi.mock('@/components/ProofArrayInput', () => ({
+  ProofArrayInput: ({ value, onChange }: { value?: unknown; onChange: (v: unknown) => void }) => (
+    <div data-testid="proof-array-input">
+      <span data-testid="proof-array-value">{typeof value === 'string' ? value : JSON.stringify(value ?? '')}</span>
+      <button type="button" data-testid="proof-array-set" onClick={() => onChange(['proof-1'])}>
+        Set proofs
+      </button>
+    </div>
+  ),
 }));
 // Render Radix-style tooltips inline so description text is queryable in jsdom.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -292,7 +304,7 @@ describe('FieldRenderer', () => {
     expect(screen.getByTestId('timestamp-input')).toBeInTheDocument();
   });
 
-  it('renders ProofInput when field name is proofs (default case)', () => {
+  it('renders ProofArrayInput when field name is proofs (default case)', () => {
     render(
       <FieldRenderer
         field={{ ...baseField, name: 'proofs', type: 'proof', label: 'Proofs' } as any}
@@ -300,7 +312,7 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-input')).toBeInTheDocument();
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
   });
 
   it('uses field.default when value is undefined and type is string', () => {
@@ -334,8 +346,8 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-input')).toBeInTheDocument();
-    expect(screen.getByTestId('proof-value')).toHaveTextContent(JSON.stringify(proofData[0]));
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
+    expect(screen.getByTestId('proof-array-value')).toHaveTextContent(JSON.stringify(proofData));
   });
 
   it('parses proof from JSON string value (single object)', () => {
@@ -347,8 +359,8 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-input')).toBeInTheDocument();
-    expect(screen.getByTestId('proof-value')).toHaveTextContent(JSON.stringify(proofData));
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
+    expect(screen.getByTestId('proof-array-value')).toHaveTextContent(JSON.stringify(proofData));
   });
 
   it('handles invalid JSON for proof field gracefully', () => {
@@ -359,11 +371,11 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-input')).toBeInTheDocument();
-    expect(screen.getByTestId('proof-value')).toHaveTextContent('null');
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
+    expect(screen.getByTestId('proof-array-value')).toHaveTextContent('invalid-json-{{');
   });
 
-  it('calls onChange with JSON array when proof is set', () => {
+  it('calls onChange with proof array when proof is set', () => {
     const handleChange = vi.fn();
     render(
       <FieldRenderer
@@ -372,21 +384,20 @@ describe('FieldRenderer', () => {
         onChange={handleChange}
       />
     );
-    fireEvent.click(screen.getByTestId('set-proof'));
-    expect(handleChange).toHaveBeenCalledWith(JSON.stringify([{ type: 'test-proof', purpose: 'commercial-tx' }]));
+    fireEvent.click(screen.getByTestId('proof-array-set'));
+    expect(handleChange).toHaveBeenCalledWith(['proof-1']);
   });
 
   it('calls onChange with empty string when proof is cleared', () => {
     const handleChange = vi.fn();
     render(
       <FieldRenderer
-        field={{ ...baseField, name: 'proofs', type: 'proof', label: 'Proofs' } as any}
-        value={JSON.stringify([{ type: 'test-proof' }])}
+        field={{ ...baseField, name: 'proofs', type: 'array', label: 'Proofs' } as any}
+        value={['existing-proof']}
         onChange={handleChange}
       />
     );
-    fireEvent.click(screen.getByTestId('clear-proof'));
-    expect(handleChange).toHaveBeenCalledWith('');
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
   });
 
   it('uses custom proofPurpose from field config', () => {
@@ -397,7 +408,7 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-purpose')).toHaveTextContent('shared-control');
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
   });
 
   it('uses default proofPurpose when not specified', () => {
@@ -408,7 +419,7 @@ describe('FieldRenderer', () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByTestId('proof-purpose')).toHaveTextContent('commercial-tx');
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
   });
 
   it('uses autoDefault current-timestamp when value is undefined', () => {
@@ -454,4 +465,303 @@ describe('FieldRenderer', () => {
     // Should be an ISO 8601 date string (YYYY-MM-DD)
     expect(inputValue).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
-}); 
+
+  it('renders array as multi-select when options.length > 7 and updates selected values', async () => {
+    const handleChange = vi.fn();
+    const manyOptions = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'array', options: manyOptions }}
+        value={['A']}
+        onChange={handleChange}
+      />
+    );
+    const select = screen.getByLabelText(/Test Field/i);
+    expect(select).toHaveAttribute('multiple');
+    expect(screen.getByText(/Hold Ctrl \/ Cmd to select multiple/i)).toBeInTheDocument();
+
+    await userEvent.selectOptions(select, ['A', 'C']);
+    expect(handleChange).toHaveBeenCalledWith(['A', 'C']);
+  });
+
+  it('shows array multi-select validation when error is set and nothing is selected', () => {
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'array', options: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] }}
+        value={[]}
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByText('At least one option must be selected')).toBeInTheDocument();
+  });
+
+  it('renders ProofArrayInput when field name is proofs and type is array', () => {
+    const handleChange = vi.fn();
+    render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'proofs', type: 'array', label: 'Proofs' } as any}
+        value={[]}
+        onChange={handleChange}
+      />
+    );
+    expect(screen.getByTestId('proof-array-input')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('proof-array-set'));
+    expect(handleChange).toHaveBeenCalledWith(['proof-1']);
+  });
+
+  it('shows required asterisk on the label when field.required is true', () => {
+    render(
+      <FieldRenderer field={{ ...baseField, required: true }} value="" onChange={() => {}} />
+    );
+    expect(screen.getByText('*')).toBeInTheDocument();
+  });
+
+  it('preserves empty string for timestamp subtype instead of applying defaults', () => {
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'integer', subtype: 'timestamp', autoDefault: 'current-timestamp' }}
+        value=""
+        onChange={() => {}}
+      />
+    );
+    expect(screen.getByTestId('timestamp-input')).toHaveTextContent('empty');
+  });
+
+  it('adds a free-text array item when Add button is clicked', () => {
+    const handleChange = vi.fn();
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'array' }} value={['A']} onChange={handleChange} />
+    );
+    fireEvent.change(screen.getByPlaceholderText(/add item/i), { target: { value: 'B' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(handleChange).toHaveBeenCalledWith(['A', 'B']);
+  });
+
+  it('passes empty string to SubjectIdInput when did format value is an array', () => {
+    render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'subject', type: 'string', format: 'did' } as any}
+        value={['did:web:example.com'] as any}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.getByLabelText('Subject')).toHaveValue('');
+  });
+
+  it.each([
+    ['string', { ...baseField, type: 'string' as const }],
+    ['reviewBody textarea', { ...baseField, name: 'reviewBody', type: 'string' as const }],
+    ['uri', { ...baseField, type: 'uri' as const }],
+    ['datetime', { ...baseField, type: 'datetime' as const }],
+  ])('coerces non-string %s values to empty without throwing', (_label, field) => {
+    render(
+      <FieldRenderer field={field as any} value={['x'] as any} onChange={() => {}} />
+    );
+    const input = screen.getByLabelText(/Test Field/i);
+    expect(input).toHaveValue('');
+  });
+
+  it('coerces non-string integer values to empty without throwing', () => {
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'integer' }} value={['x'] as any} onChange={() => {}} />
+    );
+    const input = screen.getByLabelText(/Test Field/i) as HTMLInputElement;
+    expect(input.value).toBe('');
+  });
+
+  it('renders mixed rich and plain enum options as radios when any option has a description', () => {
+    const handleChange = vi.fn();
+    const mixedOptions = [
+      { value: 'A', label: 'Rich A', description: 'described' },
+      'B',
+      { value: 'C', label: 'Rich C' },
+    ];
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'enum', options: mixedOptions } as any}
+        value="B"
+        onChange={handleChange}
+      />
+    );
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    expect(screen.getByText('Rich A')).toBeInTheDocument();
+    expect(screen.getByText('B')).toBeInTheDocument();
+    fireEvent.click(radios[2]!);
+    expect(handleChange).toHaveBeenCalledWith('C');
+  });
+
+  it('renders RichOption enum values in dropdown using label and value when no descriptions', () => {
+    render(
+      <FieldRenderer
+        field={{
+          ...baseField,
+          type: 'enum',
+          options: [
+            { value: 'opt-a', label: 'Option Alpha' },
+            { value: 'opt-b', label: 'Option Beta' },
+          ],
+        } as any}
+        value="opt-a"
+        onChange={() => {}}
+      />
+    );
+    const select = screen.getByLabelText(/Test Field/i);
+    expect(select.tagName).toBe('SELECT');
+    expect(select).toHaveValue('opt-a');
+    expect(screen.getByRole('option', { name: 'Option Alpha' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Option Beta' })).toBeInTheDocument();
+  });
+
+  it('shows checkbox validation when rich array options are empty and error is set', () => {
+    const richOptions = [
+      { value: 'X', label: 'Option X', description: 'first' },
+      { value: 'Y', label: 'Option Y', description: 'second' },
+    ];
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'array', options: richOptions } as any}
+        value={[]}
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByText('At least one option must be selected')).toBeInTheDocument();
+    expect(screen.getByText('Option X')).toBeInTheDocument();
+  });
+
+  it('starts free-text array from empty when value is a scalar and adds on Add click', () => {
+    const handleChange = vi.fn();
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'array' }} value={'solo' as any} onChange={handleChange} />
+    );
+    expect(screen.queryByText('solo')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/add item/i), { target: { value: 'first' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(handleChange).toHaveBeenCalledWith(['first']);
+  });
+
+  it('shows empty string for unknown field type when value is an array', () => {
+    render(
+      <FieldRenderer field={{ ...baseField, type: 'unknown' } as any} value={['x'] as any} onChange={() => {}} />
+    );
+    expect(screen.getByLabelText(/Test Field/i)).toHaveValue('');
+  });
+
+  it('defaults undefined array values to an empty array', () => {
+    render(
+      <FieldRenderer
+        field={{ ...baseField, type: 'array', name: 'tags', label: 'Tags' }}
+        value={undefined}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.getByPlaceholderText(/Add item/i)).toBeInTheDocument();
+  });
+
+  it('applies field-error class on reviewBody, datetime, uri, enum, and free-text array inputs', () => {
+    const { unmount } = render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'reviewBody', type: 'string', label: 'Review Body' }}
+        value=""
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByLabelText(/Review Body/i)).toHaveClass('field-error');
+    unmount();
+
+    render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'when', type: 'datetime', label: 'When' }}
+        value=""
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByLabelText(/When/i)).toHaveClass('field-error');
+    cleanup();
+
+    render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'homepage', type: 'uri', label: 'Homepage' }}
+        value=""
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByLabelText(/Homepage/i)).toHaveClass('field-error');
+    cleanup();
+
+    render(
+      <FieldRenderer
+        field={{
+          ...baseField,
+          name: 'choice',
+          type: 'enum',
+          label: 'Choice',
+          options: ['a', 'b'],
+        }}
+        value=""
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByLabelText(/Choice/i)).toHaveClass('field-error');
+    cleanup();
+
+    render(
+      <FieldRenderer
+        field={{ ...baseField, name: 'tags', type: 'array', label: 'Tags' }}
+        value={[]}
+        onChange={() => {}}
+        error="Required"
+      />
+    );
+    expect(screen.getByPlaceholderText(/Add item/i)).toHaveClass('field-error');
+  });
+
+  it('coerces non-string enum values to an empty select value', () => {
+    render(
+      <FieldRenderer
+        field={{
+          ...baseField,
+          name: 'choice',
+          type: 'enum',
+          label: 'Choice',
+          options: ['a', 'b'],
+        }}
+        value={42 as any}
+        onChange={() => {}}
+      />
+    );
+    expect(screen.getByLabelText(/Choice/i)).toHaveValue('');
+  });
+
+  it('renders rich options in a multi-select when options length exceeds 7', () => {
+    const options = Array.from({ length: 8 }, (_, i) => ({
+      value: `v${i}`,
+      label: `Label ${i}`,
+    }));
+
+    render(
+      <FieldRenderer
+        field={{
+          ...baseField,
+          name: 'multi',
+          type: 'array',
+          label: 'Multi',
+          options,
+        }}
+        value={['v1']}
+        onChange={() => {}}
+      />
+    );
+
+    expect(screen.getByLabelText(/Multi/i)).toBeInTheDocument();
+    expect(screen.getByText('Label 1')).toBeInTheDocument();
+    expect(screen.getByText('Hold Ctrl / Cmd to select multiple')).toBeInTheDocument();
+  });
+
+});

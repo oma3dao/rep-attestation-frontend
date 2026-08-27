@@ -200,4 +200,28 @@ describe('SubjectIdInput', () => {
     // onChange should be called with null when switching methods
     expect(onChange).toHaveBeenCalledWith(null);
   });
+
+  it('shows ArtifactDidInput when did:artifact is selected', () => {
+    const onChange = vi.fn();
+    render(<SubjectIdInput onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('subject-method-select'), { target: { value: 'did:artifact' } });
+    expect(screen.getByTestId('artifact-did-input')).toBeInTheDocument();
+  });
+
+  it('passes did:artifact values through to onChange', () => {
+    const onChange = vi.fn();
+    render(<SubjectIdInput onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('subject-method-select'), { target: { value: 'did:artifact' } });
+    fireEvent.change(screen.getByLabelText('did:artifact'), {
+      target: { value: 'did:artifact:bafkreiexample' },
+    });
+    expect(onChange).toHaveBeenCalledWith('did:artifact:bafkreiexample');
+  });
+
+  it('derives the artifact method from an existing did:artifact value', () => {
+    const onChange = vi.fn();
+    render(<SubjectIdInput value="did:artifact:bafkreiexample" onChange={onChange} />);
+    expect(screen.getByTestId('artifact-did-input')).toBeInTheDocument();
+    expect(screen.getByLabelText('did:artifact')).toHaveValue('did:artifact:bafkreiexample');
+  });
 });

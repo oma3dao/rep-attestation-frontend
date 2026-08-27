@@ -12,6 +12,18 @@ import {
   getControllerConfirmation,
   getRelayEasNonce,
   postRelayEasDelegatedAttest,
+  getAccountMe,
+  getCurrentSubscription,
+  patchAccountMe,
+  createWalletChallenge,
+  verifyWalletSession,
+  registerWalletSession,
+  listSubjects,
+  createSubject,
+  verifySubjectOwnership,
+  createSubscriptionCheckoutSession,
+  listSigningKeys,
+  upsertSigningKey,
 } from '@/lib/omatrust-backend';
 
 vi.mock('@/lib/service-urls', () => ({
@@ -237,5 +249,144 @@ describe('omatrust-backend fetch wrapper', () => {
     const [, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(options.body);
     expect(body.prepared.nonce).toBe('5');
+  });
+
+  it('loads account and subscription endpoints', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(okResponse({ account: { id: 'a1' } }))
+      .mockResolvedValueOnce(okResponse({ subscription: { plan: 'free' } }));
+
+    await expect(getAccountMe()).resolves.toEqual({ account: { id: 'a1' } });
+    await expect(getCurrentSubscription()).resolves.toEqual({ subscription: { plan: 'free' } });
+
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
+      'https://backend.test/api/private/accounts/me'
+    );
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[1][0]).toBe(
+      'https://backend.test/api/private/subscriptions/current'
+    );
+  });
+
+  it('patches account display name', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      okResponse({ account: { id: 'a1', displayName: 'Jane' } })
+    );
+
+    await patchAccountMe({ displayName: 'Jane' });
+
+    const [url, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('https://backend.test/api/private/accounts/me');
+    expect(options.method).toBe('PATCH');
+    expect(JSON.parse(options.body)).toEqual({ displayName: 'Jane' });
+  });
+
+  it('posts wallet challenge, verify, and register payloads', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(okResponse({ challengeId: 'c1' }))
+      .mockResolvedValueOnce(okResponse({ success: true }))
+      .mockResolvedValueOnce(okResponse({ success: true }));
+
+    await createWalletChallenge({
+      walletDid: 'did:pkh:eip155:1:0xabc',
+      chainId: 1,
+      domain: 'localhost',
+      uri: 'http://localhost',
+    });
+    await verifyWalletSession({
+      challengeId: 'c1',
+      walletDid: 'did:pkh:eip155:1:0xabc',
+      signature: '0xsig',
+      siweMessage: 'msg',
+    });
+    await registerWalletSession({
+      challengeId: 'c1',
+      walletDid: 'did:pkh:eip155:1:0xabc',
+      signature: '0xsig',
+      siweMessage: 'msg',
+      executionMode: 'subscription',
+    });
+
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0]).toBe('https://backend.test/api/private/session/wallet/challenge');
+    expect(calls[1][0]).toBe('https://backend.test/api/private/session/wallet/verify');
+    expect(calls[2][0]).toBe('https://backend.test/api/private/session/wallet/register');
+    expect(JSON.parse(calls[2][1].body).executionMode).toBe('subscription');
+  });
+
+  it('lists and creates subjects, and verifies ownership', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(okResponse({ subjects: [] }))
+      .mockResolvedValueOnce(okResponse({ subject: { did: 'did:web:example.com' } }))
+      .mockResolvedValueOnce(okResponse({ verified: true }));
+
+    await listSubjects();
+    await createSubject({ did: 'did:web:example.com', displayName: 'Example' });
+    await verifySubjectOwnership({
+      subjectDid: 'did:web:example.com',
+      connectedWalletDid: 'did:pkh:eip155:1:0xabc',
+    });
+
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0]).toBe('https://backend.test/api/private/subjects');
+    expect(calls[1][1].method).toBe('POST');
+    expect(calls[2][0]).toBe('https://backend.test/api/verify/subject-ownership');
+  });
+
+  it('creates a subscription checkout session', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      okResponse({ checkoutUrl: 'https://checkout.test' })
+    );
+
+    await createSubscriptionCheckoutSession({
+      plan: 'paid',
+      successUrl: 'https://app.test/account',
+      cancelUrl: 'https://app.test/account',
+    });
+
+    const [url, options] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('https://backend.test/api/private/subscriptions/checkout-session');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body)).toEqual({
+      plan: 'paid',
+      successUrl: 'https://app.test/account',
+      cancelUrl: 'https://app.test/account',
+    });
+  });
+
+  it('lists signing keys with query params and upserts a key', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(okResponse({ keys: [] }))
+      .mockResolvedValueOnce(
+        okResponse({
+          id: 'k1',
+          keyDid: 'did:jwk:abc',
+          keyType: 'service-signing',
+          displayName: 'Prod key',
+          tags: ['x402'],
+          notes: null,
+          created: true,
+        })
+      );
+
+    await listSigningKeys({ keyType: 'service-signing', tag: 'x402' });
+    await upsertSigningKey({
+      keyDid: 'did:jwk:abc',
+      keyType: 'service-signing',
+      displayName: 'Prod key',
+      tags: ['x402'],
+      notes: null,
+    });
+
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0]).toBe(
+      'https://backend.test/api/private/signing-keys?keyType=service-signing&tag=x402'
+    );
+    expect(calls[1][0]).toBe('https://backend.test/api/private/signing-keys');
+    expect(calls[1][1].method).toBe('POST');
+    expect(JSON.parse(calls[1][1].body)).toMatchObject({
+      keyDid: 'did:jwk:abc',
+      keyType: 'service-signing',
+      displayName: 'Prod key',
+    });
   });
 });
