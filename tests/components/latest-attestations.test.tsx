@@ -129,4 +129,61 @@ describe('LatestAttestations', () => {
       expect(screen.queryByText(/UID:/i)).not.toBeInTheDocument();
     });
   });
+
+  it('renders pre-fetched data without heading when showHeading is false', () => {
+    const attestation = {
+      uid: '0x' + '1'.repeat(64),
+      attester: '0x' + 'ab'.repeat(20),
+      recipient: '0x' + 'cd'.repeat(20),
+      data: '0x',
+      time: Math.floor(Date.now() / 1000),
+      expirationTime: 0,
+      revocationTime: 0,
+      refUID: '0x' + '0'.repeat(64),
+      revocable: false,
+      schemaId: 'certification',
+      schemaTitle: 'Certification',
+    };
+
+    render(
+      <Providers>
+        <LatestAttestations showHeading={false} data={[attestation]} />
+      </Providers>
+    );
+
+    expect(screen.queryByText(/latest attestations/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Certification')).toBeInTheDocument();
+  });
+
+  it('shows trusted badge when approvedIssuers includes the attester and schema', () => {
+    const attestation = {
+      uid: '0x' + '2'.repeat(64),
+      attester: '0x' + 'ee'.repeat(20),
+      recipient: '0x' + 'cd'.repeat(20),
+      data: '0x',
+      time: Math.floor(Date.now() / 1000),
+      expirationTime: 0,
+      revocationTime: 0,
+      refUID: '0x' + '0'.repeat(64),
+      revocable: false,
+      schemaId: 'security-assessment',
+      schemaTitle: 'Security Assessment',
+    };
+    const approvedIssuers = new Map<string, Set<string>>([
+      [attestation.attester.toLowerCase(), new Set(['security-assessment'])],
+    ]);
+
+    render(
+      <Providers>
+        <LatestAttestations
+          showHeading={false}
+          data={[attestation]}
+          approvedIssuers={approvedIssuers}
+        />
+      </Providers>
+    );
+
+    expect(screen.getByText('Trusted')).toBeInTheDocument();
+  });
+
 });

@@ -19,8 +19,45 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }));
 
+const subjectDialogMock = vi.hoisted(() => ({
+  lastProps: null as null | Record<string, unknown>,
+}));
+
+const omatrustBackendMock = vi.hoisted(() => ({
+  shouldRouteBackendErrorToAccount: vi.fn(() => false),
+}));
+
 vi.mock('@/components/subject-confirmation-dialog', () => ({
-  SubjectConfirmationDialog: () => null,
+  SubjectConfirmationDialog: (props: {
+    open: boolean;
+    initialMessage?: string | null;
+    onOpenChange?: (open: boolean) => void;
+    onSubjectCreated: (subject: { id: string; canonicalDid: string }) => void;
+  }) => {
+    subjectDialogMock.lastProps = props as Record<string, unknown>;
+    if (!props.open) return null;
+    return (
+      <div data-testid="subject-confirmation-dialog">
+        {props.initialMessage ? <p>{props.initialMessage}</p> : null}
+        <button
+          type="button"
+          data-testid="stub-subject-created"
+          onClick={() =>
+            props.onSubjectCreated({ id: 'subject-1', canonicalDid: 'did:web:example.com' })
+          }
+        >
+          Stub subject created
+        </button>
+        <button
+          type="button"
+          data-testid="stub-subject-cancel"
+          onClick={() => props.onOpenChange?.(false)}
+        >
+          Stub cancel
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/lib/omatrust-backend', () => {
@@ -41,7 +78,8 @@ vi.mock('@/lib/omatrust-backend', () => {
     getBackendErrorMessage: (err: unknown) =>
       err instanceof Error ? err.message : String(err ?? 'Unknown error'),
     logoutSession: vi.fn().mockResolvedValue(undefined),
-    shouldRouteBackendErrorToAccount: () => false,
+    shouldRouteBackendErrorToAccount: (...args: unknown[]) =>
+      omatrustBackendMock.shouldRouteBackendErrorToAccount(...args),
   };
 });
 
@@ -76,6 +114,7 @@ import { AttestationForm, validateField } from '@/components/AttestationForm';
 import type { AttestationSchema, FieldType } from '@/config/schemas';
 import * as schemasModule from '@/config/schemas';
 import { useWallet } from '@/lib/blockchain';
+import { BackendApiError, logoutSession } from '@/lib/omatrust-backend';
 
 const backendSessionMock = vi.hoisted(() => ({
   session: null as any,
@@ -147,6 +186,24 @@ vi.mock('@/lib/blockchain', () => ({
   getActiveChain: () => ({ id: 1 }),
 }));
 
+vi.mock('@/components/SubjectIdInput', () => ({
+  SubjectIdInput: ({
+    value,
+    onChange,
+    label,
+  }: {
+    value?: string;
+    onChange: (v: string) => void;
+    label?: string;
+  }) => (
+    <input
+      aria-label={label ?? 'Subject'}
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  ),
+}));
+
 // Define test schema at the top for reuse
 const testSchema: AttestationSchema = {
   id: 'test-schema',
@@ -175,6 +232,8 @@ beforeEach(() => {
   backendSessionMock.setSession.mockClear();
   thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
   nextNavMock.push.mockClear();
+  subjectDialogMock.lastProps = null;
+  omatrustBackendMock.shouldRouteBackendErrorToAccount.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -943,4 +1002,394 @@ describe('AttestationForm URL query pre-fill', () => {
   });
 });
 
- 
+describe('AttestationForm ownership and backend errors', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendSessionMock.session = createMockBackendSession();
+    thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
+    omatrustBackendMock.shouldRouteBackendErrorToAccount.mockReturnValue(false);
+    mockSubmitAttestation.mockResolvedValue({
+      transactionHash: '0xabc',
+      attestationId: 'attest123',
+      blockNumber: 12345,
+    });
+  });
+
+  async function submitValidRecipient() {
+    fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: 'did:web:example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
+    });
+  }
+
+  it('opens ownership dialog when backend returns SUBJECT_OWNERSHIP_REQUIRED', async () => {
+    mockSubmitAttestation.mockRejectedValueOnce(
+      new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED')
+    );
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('subject-confirmation-dialog')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Service ID ownership verification is required/i)).toBeInTheDocument();
+    expect(subjectDialogMock.lastProps?.open).toBe(true);
+    expect(mockSubmitAttestation).toHaveBeenCalledTimes(1);
+    expect(nextNavMock.push).not.toHaveBeenCalled();
+  });
+
+  it('auto-resubmits and navigates after ownership is resolved', async () => {
+    mockSubmitAttestation
+      .mockRejectedValueOnce(new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED'))
+      .mockResolvedValueOnce({
+        transactionHash: '0xdef',
+        attestationId: 'attest-resubmit',
+        blockNumber: 999,
+      });
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stub-subject-created')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('stub-subject-created'));
+    });
+
+    await waitFor(() => {
+      expect(mockSubmitAttestation).toHaveBeenCalledTimes(2);
+      expect(nextNavMock.push).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  it('shows form error and does not navigate when resubmit after verify fails', async () => {
+    mockSubmitAttestation
+      .mockRejectedValueOnce(new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED'))
+      .mockRejectedValueOnce(new BackendApiError('Relay failed'));
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stub-subject-created')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('stub-subject-created'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('form-error')).toHaveTextContent('Relay failed');
+    });
+    expect(mockSubmitAttestation).toHaveBeenCalledTimes(2);
+    expect(nextNavMock.push).not.toHaveBeenCalled();
+  });
+
+  it('shows Manage account link when shouldRouteBackendErrorToAccount returns true', async () => {
+    omatrustBackendMock.shouldRouteBackendErrorToAccount.mockReturnValue(true);
+    mockSubmitAttestation.mockRejectedValueOnce(
+      new BackendApiError('Subscription inactive', 'SUBSCRIPTION_INACTIVE')
+    );
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('form-error')).toHaveTextContent('Subscription inactive');
+    });
+    expect(screen.getByRole('link', { name: /manage account/i })).toHaveAttribute('href', '/account');
+  });
+
+  it('shows managed-wallet submitting copy for subscription managed wallets', async () => {
+    backendSessionMock.session = {
+      ...createMockBackendSession(),
+      wallet: {
+        ...createMockBackendSession().wallet,
+        executionMode: 'subscription',
+        isManagedWallet: true,
+      },
+    };
+
+    vi.doMock('@/lib/service', () => ({
+      useAttestation: () => ({
+        submitAttestation: mockSubmitAttestation,
+        isSubmitting: true,
+        isConnected: true,
+        isNetworkSupported: true,
+        lastError: null,
+        clearError: vi.fn(),
+      }),
+    }));
+
+    vi.resetModules();
+    const { AttestationForm: AttestationFormMocked } = await import('@/components/AttestationForm');
+    render(<AttestationFormMocked schema={testSchema} />);
+
+    expect(screen.getByText(/Submitting with your OMATrust subscription/i)).toBeInTheDocument();
+  });
+
+  it('clears pending submit and does not auto-resubmit when ownership dialog is cancelled', async () => {
+    mockSubmitAttestation.mockRejectedValueOnce(
+      new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED')
+    );
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('subject-confirmation-dialog')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('stub-subject-cancel'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('subject-confirmation-dialog')).not.toBeInTheDocument();
+    });
+    expect(mockSubmitAttestation).toHaveBeenCalledTimes(1);
+    expect(nextNavMock.push).not.toHaveBeenCalled();
+  });
+
+  it('can reopen the ownership dialog after cancel and submit again', async () => {
+    mockSubmitAttestation
+      .mockRejectedValueOnce(new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED'))
+      .mockRejectedValueOnce(new BackendApiError('Ownership required', 'SUBJECT_OWNERSHIP_REQUIRED'));
+
+    render(<AttestationForm schema={testSchema} />);
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stub-subject-cancel')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('stub-subject-cancel'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('subject-confirmation-dialog')).not.toBeInTheDocument();
+    });
+
+    await submitValidRecipient();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('subject-confirmation-dialog')).toBeInTheDocument();
+    });
+    expect(mockSubmitAttestation).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('AttestationForm key-binding and conditional field visibility', () => {
+  const keyBindingFixture: AttestationSchema = {
+    id: 'key-binding',
+    title: 'Key Binding',
+    description: 'Bind a key',
+    fields: [
+      {
+        name: 'subject',
+        type: 'string' as FieldType,
+        label: 'Service ID',
+        required: true,
+        format: 'did',
+      },
+      {
+        name: 'keyId',
+        type: 'string' as FieldType,
+        label: 'Key ID',
+        required: true,
+        format: 'did',
+      },
+      {
+        name: 'publicKeyJwk',
+        type: 'json' as FieldType,
+        label: 'Public Key (JWK)',
+        required: false,
+      },
+      {
+        name: 'keyPurpose',
+        type: 'array' as FieldType,
+        label: 'Authorized Use',
+        required: true,
+        options: [{ value: 'assertionMethod', label: 'Signatures' }],
+      },
+      {
+        name: 'proofs',
+        type: 'array' as FieldType,
+        label: 'Proofs',
+        required: false,
+      },
+      {
+        name: 'issuedAt',
+        type: 'integer' as FieldType,
+        label: 'Issued Date',
+        required: true,
+        autoDefault: 'current-timestamp',
+      },
+    ],
+  };
+
+  const proofMethodFixture: AttestationSchema = {
+    id: 'custom-linked',
+    title: 'Custom Linked',
+    description: 'desc',
+    fields: [
+      { name: 'subject', type: 'string' as FieldType, label: 'Subject', required: true },
+      {
+        name: 'method',
+        type: 'enum' as FieldType,
+        label: 'Verification Method',
+        required: true,
+        options: ['proof', 'witness'],
+      },
+      { name: 'proofs', type: 'array' as FieldType, label: 'Proofs', required: false },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    backendSessionMock.session = createMockBackendSession();
+    thirdwebMock.account = { address: '0x1234567890abcdef1234567890abcdef12345678' };
+    nextNavMock.searchParams = new URLSearchParams();
+    mockSubmitAttestation.mockResolvedValue({
+      transactionHash: '0xabc',
+      attestationId: 'attest123',
+      blockNumber: 12345,
+    });
+  });
+
+  it('shows collapsible proofs for did:web subject on key-binding', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:jwk:abc')}`
+    );
+    render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add proof manually')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/^Proofs/i)).not.toBeInTheDocument();
+  });
+
+  it('expands Add proof manually to reveal the proofs field', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:jwk:abc')}`
+    );
+    render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add proof manually')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Add proof manually'));
+
+    expect(await screen.findByText(/^Proofs$/i)).toBeInTheDocument();
+  });
+
+  it('shows collapsible proofs for did:pkh subject on key-binding', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      [
+        `subject=${encodeURIComponent('did:pkh:eip155:1:0x1234567890abcdef1234567890abcdef12345678')}`,
+        `keyId=${encodeURIComponent('did:jwk:eyJrdHkiOiJPS1AifQ')}`,
+      ].join('&')
+    );
+    render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add proof manually')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/^Proofs/i)).not.toBeInTheDocument();
+  });
+
+  it('hides proofs when method is not proof and shows them when method is proof', async () => {
+    nextNavMock.searchParams = new URLSearchParams('subject=did:web:example.com&method=witness');
+    render(<AttestationForm schema={proofMethodFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/^Subject/i)).toHaveValue('did:web:example.com');
+    });
+    expect(screen.queryByText('Add proof manually')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Proofs/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/^Verification Method/i), { target: { value: 'proof' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Proofs$/i)).toBeInTheDocument();
+    });
+  });
+
+  it('hides publicKeyJwk for did:jwk and did:pkh:solana keyIds', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:jwk:eyJrdHkiOiJPS1AifQ')}`
+    );
+    const { rerender } = render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Add optional public key')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Public Key \(JWK\)/i)).not.toBeInTheDocument();
+    });
+
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:pkh:solana:abc123')}`
+    );
+    rerender(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Add optional public key')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Public Key \(JWK\)/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows optional collapsible public key section for did:pkh:eip155 keyId', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:pkh:eip155:1:0x1234567890abcdef1234567890abcdef12345678')}`
+    );
+    render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add optional public key')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText(/Public Key \(JWK\)/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Add optional public key'));
+
+    expect(await screen.findByLabelText(/Public Key \(JWK\)/i)).toBeInTheDocument();
+  });
+
+  it('requires publicKeyJwk for other keyIds such as did:pkh:sui', async () => {
+    nextNavMock.searchParams = new URLSearchParams(
+      `subject=${encodeURIComponent('did:web:example.com')}&keyId=${encodeURIComponent('did:pkh:sui:0xabc')}`
+    );
+    render(<AttestationForm schema={keyBindingFixture} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Public Key \(JWK\)/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /submit attestation/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Public Key \(JWK\) is required/i)).toBeInTheDocument();
+    });
+  });
+
+  it('pre-fills fields from schema defaults when no query param is present', async () => {
+    const schemaWithDefault: AttestationSchema = {
+      id: 'default-schema',
+      title: 'Default Schema',
+      description: 'desc',
+      fields: [
+        { name: 'recipient', type: 'string' as FieldType, required: true, label: 'Recipient' },
+        { name: 'note', type: 'string' as FieldType, required: false, label: 'Note', default: 'prefilled note' },
+      ],
+    }
+
+    render(<AttestationForm schema={schemaWithDefault} />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Note')).toHaveValue('prefilled note')
+    })
+  })
+})

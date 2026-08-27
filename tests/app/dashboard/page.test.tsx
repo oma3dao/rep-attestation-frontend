@@ -7,8 +7,13 @@ import type { EnrichedAttestationResult } from '@/lib/attestation-queries'
 const mockUseWallet = vi.fn()
 const mockUseActiveAccount = vi.fn()
 const mockGetAttestationsByAttesterWithMetadata = vi.fn()
+const mockGetAllAttestationsForDIDWithMetadata = vi.fn()
 const mockRevokeAttestation = vi.fn()
 const mockUseBackendSession = vi.fn()
+const mockListSigningKeys = vi.fn()
+const mockUpsertSigningKey = vi.fn()
+const mockGetControllerConfirmation = vi.fn()
+const mockCallControllerWitness = vi.fn()
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: unknown; children: React.ReactNode }) => (
@@ -16,8 +21,12 @@ vi.mock('next/link', () => ({
   ),
 }))
 
+const mockUseSearchParams = vi.fn(() => new URLSearchParams())
+const mockNormalizeDid = vi.fn((d: string) => d)
+const mockToEthers = vi.fn().mockResolvedValue({ provider: {} })
+
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockUseSearchParams(),
 }))
 
 vi.mock('thirdweb/react', () => ({
@@ -27,7 +36,7 @@ vi.mock('thirdweb/react', () => ({
 vi.mock('thirdweb/adapters/ethers6', () => ({
   ethers6Adapter: {
     signer: {
-      toEthers: vi.fn().mockResolvedValue({ provider: {} }),
+      toEthers: (...args: unknown[]) => mockToEthers(...args),
     },
   },
 }))
@@ -40,7 +49,7 @@ vi.mock('@/lib/blockchain', () => ({
 
 vi.mock('@/lib/attestation-queries', () => ({
   getAttestationsByAttesterWithMetadata: (...args: unknown[]) => mockGetAttestationsByAttesterWithMetadata(...args),
-  getAllAttestationsForDIDWithMetadata: vi.fn().mockResolvedValue([]),
+  getAllAttestationsForDIDWithMetadata: (...args: unknown[]) => mockGetAllAttestationsForDIDWithMetadata(...args),
 }))
 
 vi.mock('@oma3/omatrust/reputation', () => ({
@@ -48,34 +57,63 @@ vi.mock('@oma3/omatrust/reputation', () => ({
 }))
 
 vi.mock('@oma3/omatrust/identity', () => ({
-  normalizeDid: (d: string) => d,
-  isSameControllerId: () => false,
+  normalizeDid: (d: string) => mockNormalizeDid(d),
+  isSameControllerId: (a: string, b: string) => a === b,
 }))
 
 vi.mock('@/lib/omatrust-backend', () => ({
   // Schema-accurate ControllerConfirmResponse shape (notably `warnings: []`,
   // which ServiceTrustWorkspace iterates over).
-  getControllerConfirmation: vi.fn().mockResolvedValue({
-    subject: { input: 'did:web:example.com', canonical: 'did:web:example.com', label: 'example.com', type: 'web', source: 'input' },
-    domain: 'example.com',
-    controllerKeys: [],
-    evidence: [],
-    approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
-    warnings: [],
-  }),
-  resolvePublicIdentities: vi.fn().mockResolvedValue({ identities: [] }),
-  getPublicTrustAnchors: vi.fn().mockResolvedValue({
-    version: 1,
-    updatedAt: '2024-01-01T00:00:00.000Z',
-    widgetOrigins: [],
-    chains: {},
-    registries: [],
-  }),
-  listSubjects: vi.fn().mockResolvedValue({ subjects: [] }),
+  getControllerConfirmation: (...args: unknown[]) => mockGetControllerConfirmation(...args),
+  resolvePublicIdentities: (...args: unknown[]) => mockResolvePublicIdentities(...args),
+  getPublicTrustAnchors: (...args: unknown[]) => mockGetPublicTrustAnchors(...args),
+  listSubjects: (...args: unknown[]) => mockListSubjects(...args),
+  listSigningKeys: (...args: unknown[]) => mockListSigningKeys(...args),
+  upsertSigningKey: (...args: unknown[]) => mockUpsertSigningKey(...args),
+}))
+
+vi.mock('@/components/public-key-input', () => ({
+  PublicKeyInput: ({
+    value,
+    onChange,
+    label = 'Public key',
+  }: {
+    value?: string
+    onChange: (v: string | null) => void
+    label?: string
+  }) => (
+    <div data-testid="public-key-input">
+      <label htmlFor="mock-public-key">{label}</label>
+      <input
+        id="mock-public-key"
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </div>
+  ),
+}))
+
+vi.mock('@/components/did-pkh-input', () => ({
+  DidPkhInput: ({
+    value,
+    onChange,
+  }: {
+    value?: string
+    onChange: (v: string | null) => void
+  }) => (
+    <div data-testid="did-pkh-input">
+      <input
+        aria-label="did:pkh"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+      />
+    </div>
+  ),
 }))
 
 vi.mock('@/lib/controller-witness-client', () => ({
-  callControllerWitness: vi.fn().mockResolvedValue(undefined),
+  callControllerWitness: (...args: unknown[]) => mockCallControllerWitness(...args),
 }))
 
 vi.mock('@/components/backend-session-provider', () => ({
@@ -86,9 +124,38 @@ vi.mock('@/components/dashboard/PublishButton', () => ({
   PublishButton: () => <button type="button">Publish</button>,
 }))
 
-vi.mock('@/components/subject-confirmation-dialog', () => ({
-  SubjectConfirmationDialog: () => null,
+const subjectDialogMock = vi.hoisted(() => ({
+  lastProps: null as null | Record<string, unknown>,
+  lastOpenProps: null as null | Record<string, unknown>,
 }))
+
+vi.mock('@/components/subject-confirmation-dialog', () => ({
+  SubjectConfirmationDialog: (props: {
+    open: boolean
+    onOpenChange?: (open: boolean) => void
+    initialSubjectDid?: string | null
+    walletDid?: string | null
+    existingSubjectDids?: string[]
+  }) => {
+    subjectDialogMock.lastProps = props as Record<string, unknown>
+    if (props.open) {
+      subjectDialogMock.lastOpenProps = props as Record<string, unknown>
+    }
+    if (!props.open) return null
+    return (
+      <div data-testid="subject-confirmation-dialog-stub">
+        Subject dialog open
+        {props.initialSubjectDid ? (
+          <span data-testid="stub-initial-subject">{props.initialSubjectDid}</span>
+        ) : null}
+      </div>
+    )
+  },
+}))
+
+const mockListSubjects = vi.fn()
+const mockGetPublicTrustAnchors = vi.fn()
+const mockResolvePublicIdentities = vi.fn()
 
 const mockGetChainById = vi.fn()
 const mockGetContractAddress = vi.fn()
@@ -111,6 +178,65 @@ vi.mock('@/config/attestation-services', async (importOriginal) => {
 
 const WALLET_ADDRESS = '0x1111111111111111111111111111111111111111'
 const OTHER_ADDRESS = '0x2222222222222222222222222222222222222222'
+const KEY_DID = 'did:jwk:eyJrdHkiOiJPS1AifQ'
+const ACCOUNT_CONTROLLER_DID = 'did:jwk:eyJrdHkiOiJFQyJ9'
+const SERVICE_DID = 'did:web:example.com'
+const ACCOUNT_WALLET_DID = `did:pkh:eip155:66238:${WALLET_ADDRESS}`
+const REVIEW_UID = '0x' + 'a'.repeat(64)
+const APPROVED_ISSUER = '0x3333333333333333333333333333333333333333'
+
+function makeControllerConfirmation(overrides: Record<string, unknown> = {}) {
+  return {
+    subject: { input: SERVICE_DID, canonical: SERVICE_DID, label: 'example.com', type: 'web', source: 'input' },
+    domain: 'example.com',
+    controllerKeys: [],
+    evidence: [],
+    approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+    warnings: [],
+    ...overrides,
+  }
+}
+
+function makeRegisteredSigningKey(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'k1',
+    accountId: 'a1',
+    keyDid: KEY_DID,
+    keyType: 'service-signing',
+    displayName: 'Prod signer',
+    tags: ['x402'],
+    notes: 'AWS KMS',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function setupServiceTrustWorkspace(overrides: {
+  attesterAttestations?: EnrichedAttestationResult[]
+  serviceAttestations?: EnrichedAttestationResult[]
+  trustAnchors?: Record<string, unknown>
+} = {}) {
+  setupConnected()
+  mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+    makeAttestation({
+      schemaId: 'linked-identifier',
+      decodedData: { subject: SERVICE_DID },
+    }),
+    ...(overrides.attesterAttestations ?? []),
+  ])
+  mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue(overrides.serviceAttestations ?? [])
+  mockGetPublicTrustAnchors.mockResolvedValue(
+    overrides.trustAnchors ?? {
+      version: 1,
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      widgetOrigins: [],
+      chains: {},
+      registries: [],
+    }
+  )
+  mockResolvePublicIdentities.mockResolvedValue({ identities: [] })
+}
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
@@ -153,6 +279,9 @@ function setupConnected() {
 describe('Dashboard Page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseSearchParams.mockReturnValue(new URLSearchParams())
+    mockNormalizeDid.mockImplementation((d: string) => d)
+    mockToEthers.mockResolvedValue({ provider: {} })
     mockUseActiveAccount.mockReturnValue({ address: WALLET_ADDRESS })
     mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([])
     mockUseWallet.mockReturnValue({
@@ -172,6 +301,33 @@ describe('Dashboard Page', () => {
       blockExplorers: [{ name: 'Explorer', url: 'https://explorer.testnet.chain.oma3.org' }],
     })
     mockGetContractAddress.mockReturnValue('0x' + 'e'.repeat(40))
+    mockListSigningKeys.mockResolvedValue({ keys: [] })
+    mockGetControllerConfirmation.mockResolvedValue(makeControllerConfirmation())
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([])
+    mockGetPublicTrustAnchors.mockResolvedValue({
+      version: 1,
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      widgetOrigins: [],
+      chains: {},
+      registries: [],
+    })
+    mockResolvePublicIdentities.mockResolvedValue({ identities: [] })
+    mockListSubjects.mockResolvedValue({ subjects: [] })
+    subjectDialogMock.lastProps = null
+    subjectDialogMock.lastOpenProps = null
+    mockCallControllerWitness.mockResolvedValue({ uid: '0x' + 'w'.repeat(64) })
+    mockUpsertSigningKey.mockResolvedValue({
+      id: 'k1',
+      accountId: 'a1',
+      keyDid: 'did:jwk:eyJrdHkiOiJPS1AifQ',
+      keyType: 'service-signing',
+      displayName: 'Prod signer',
+      tags: ['x402'],
+      notes: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      created: true,
+    })
   })
 
   // ── Signed-out state ────────────────────────────────────────────────
@@ -589,8 +745,9 @@ describe('Dashboard Page', () => {
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke' }))
 
+    // App currently surfaces a placeholder until SDK revocation is fully wired.
     await waitFor(() => {
-      expect(screen.getByText('User rejected transaction')).toBeInTheDocument()
+      expect(screen.getByText('Attestation revocation is not available yet.')).toBeInTheDocument()
     })
   })
 
@@ -727,5 +884,880 @@ describe('Dashboard Page', () => {
       expect(screen.getByText('Account')).toBeInTheDocument()
     })
     expect(screen.queryByText('Service Management')).not.toBeInTheDocument()
+  })
+
+  it('shows the empty signing-keys state and opens the register dialog', async () => {
+    setupConnected()
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'linked-identifier',
+        decodedData: { subject: 'did:web:example.com' },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/No signing keys registered yet/i)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Signing Key' }))
+
+    expect(await screen.findByText('Register a Service Signing Key')).toBeInTheDocument()
+    expect(screen.getByText(/OMATrust will not ask for your private key/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument()
+  })
+
+  it('registers a signing key through the dialog and refreshes the list', async () => {
+    setupConnected()
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'linked-identifier',
+        decodedData: { subject: 'did:web:example.com' },
+      }),
+    ])
+    mockListSigningKeys
+      .mockResolvedValueOnce({ keys: [] })
+      .mockResolvedValueOnce({
+        keys: [
+          {
+            id: 'k1',
+            accountId: 'a1',
+            keyDid: 'did:jwk:eyJrdHkiOiJPS1AifQ',
+            keyType: 'service-signing',
+            displayName: 'Prod signer',
+            tags: ['x402'],
+            notes: null,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '+ Add Signing Key' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Signing Key' }))
+    await screen.findByText('Register a Service Signing Key')
+
+    fireEvent.click(screen.getByRole('button', { name: 'x402 Offers & Receipts' }))
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'Prod signer' },
+    })
+    fireEvent.change(screen.getByLabelText('Public key'), {
+      target: { value: 'did:jwk:eyJrdHkiOiJPS1AifQ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Register key' }))
+
+    await waitFor(() => {
+      expect(mockUpsertSigningKey).toHaveBeenCalledWith({
+        keyDid: 'did:jwk:eyJrdHkiOiJPS1AifQ',
+        keyType: 'service-signing',
+        displayName: 'Prod signer',
+        tags: ['x402'],
+        notes: null,
+      })
+    })
+
+    await waitFor(() => {
+      expect(mockListSigningKeys).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('renders registered signing-key cards for each service subject', async () => {
+    setupConnected()
+    mockListSigningKeys.mockResolvedValue({
+      keys: [
+        {
+          id: 'k1',
+          accountId: 'a1',
+          keyDid: 'did:jwk:eyJrdHkiOiJPS1AifQ',
+          keyType: 'service-signing',
+          displayName: 'Prod signer',
+          tags: ['x402'],
+          notes: 'AWS KMS',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'linked-identifier',
+        decodedData: { subject: 'did:web:example.com' },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Prod signer')).toBeInTheDocument()
+    })
+    expect(screen.getByText('x402 Offers & Receipts')).toBeInTheDocument()
+    expect(screen.getByText('AWS KMS')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  })
+
+  // ── Signing-key authorization signals ───────────────────────────────
+
+  it('shows Not authorized when a signing key has no basic or intermediate signals', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(makeControllerConfirmation())
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Prod signer')).toBeInTheDocument()
+    })
+
+    const externalSection = screen.getByText('External Key Authorizations').closest('section')
+    expect(externalSection).toBeTruthy()
+    expect(within(externalSection!).getByText('Not authorized')).toBeInTheDocument()
+  })
+
+  it('shows Basic, Intermediate, and Advanced signals when fully authorized', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'controller-witness',
+        uid: '0x' + 'w'.repeat(64),
+        decodedData: { controller: KEY_DID, subject: SERVICE_DID },
+      }),
+      makeAttestation({
+        schemaId: 'key-binding',
+        uid: '0x' + 'k'.repeat(64),
+        decodedData: { keyId: KEY_DID, subject: SERVICE_DID },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    const externalSection = () => screen.getByText('External Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(externalSection()).getByText('Basic: Yes')).toBeInTheDocument()
+    })
+    expect(within(externalSection()).getByText('Intermediate: Yes')).toBeInTheDocument()
+    expect(within(externalSection()).getByText('Advanced: Yes')).toBeInTheDocument()
+  })
+
+  it('submits a controller witness when basic ownership is proven but no witness exists', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([])
+
+    render(<DashboardPage />)
+
+    const externalSection = () => screen.getByText('External Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(externalSection()).getByRole('button', { name: 'Add controller witness' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(externalSection()).getByRole('button', { name: 'Add controller witness' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() => {
+      expect(mockCallControllerWitness).toHaveBeenCalledWith({
+        subject: SERVICE_DID,
+        controller: KEY_DID,
+      })
+    })
+  })
+
+  it('edits a registered signing key and saves metadata changes', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(await screen.findByText('Edit Signing Key')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('Key identifier (immutable):')).toBeInTheDocument()
+    expect(within(dialog).getByText(KEY_DID)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'Staging signer' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(mockUpsertSigningKey).toHaveBeenCalledWith({
+        keyDid: KEY_DID,
+        keyType: 'service-signing',
+        displayName: 'Staging signer',
+        tags: ['x402'],
+        notes: 'AWS KMS',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Edit Signing Key')).not.toBeInTheDocument()
+    })
+  })
+
+  it('filters registered signing keys out of Account Key Authorizations', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Account Key Authorizations')).toBeInTheDocument()
+    })
+
+    const accountSection = screen.getByText('Account Key Authorizations').closest('section')
+    expect(accountSection).toBeTruthy()
+    expect(within(accountSection!).queryByText(KEY_DID)).not.toBeInTheDocument()
+    expect(within(accountSection!).getByText(ACCOUNT_WALLET_DID)).toBeInTheDocument()
+  })
+
+  // ── Controller witness error handling ───────────────────────────────
+
+  async function submitControllerWitnessFromAccountSection() {
+    const accountSection = () => screen.getByText('Account Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(accountSection()).getAllByRole('button', { name: 'Add controller witness' }).length).toBeGreaterThan(0)
+    })
+
+    fireEvent.click(within(accountSection()).getAllByRole('button', { name: 'Add controller witness' })[0]!)
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
+  }
+
+  function setupAccountKeyWitnessFlow() {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [
+          { canonicalId: ACCOUNT_CONTROLLER_DID, label: 'Account ctrl', sources: ['dns-txt'], basic: true },
+        ],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([])
+  }
+
+  it('shows endpoint evidence error when controller witness API returns null (Account Key Authorizations)', async () => {
+    setupAccountKeyWitnessFlow()
+    mockCallControllerWitness.mockResolvedValue(null)
+
+    render(<DashboardPage />)
+    await submitControllerWitnessFromAccountSection()
+
+    await waitFor(() => {
+      expect(screen.getByText(/could not confirm endpoint evidence/i)).toBeInTheDocument()
+    })
+  })
+
+  it('shows witness error message when controller witness API throws (SigningKeyCard path)', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([])
+    mockCallControllerWitness.mockRejectedValue(new Error('Witness API unavailable'))
+
+    render(<DashboardPage />)
+
+    const externalSection = () => screen.getByText('External Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(externalSection()).getByRole('button', { name: 'Add controller witness' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(externalSection()).getByRole('button', { name: 'Add controller witness' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Witness API unavailable')).toBeInTheDocument()
+    })
+  })
+
+  // ── Issuer Tools ────────────────────────────────────────────────────
+
+  it('shows Issuer Tools with publish links when user has a security-assessment attestation', async () => {
+    setupConnected()
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'security-assessment',
+        schemaTitle: 'Security Assessment',
+        decodedData: { subject: SERVICE_DID },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Issuer Tools')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Publish a security assessment')).toBeInTheDocument()
+    expect(screen.getByText('Issue a certification')).toBeInTheDocument()
+
+    const openLinks = screen.getAllByRole('link', { name: 'Open' })
+    expect(openLinks.some((link) => link.getAttribute('href') === '/publish/security-assessment')).toBe(true)
+    expect(openLinks.some((link) => link.getAttribute('href') === '/publish/certification')).toBe(true)
+  })
+
+  // ── Signing key upsert failure ──────────────────────────────────────
+
+  it('shows upsert error and keeps the dialog open when saving a signing key fails', async () => {
+    setupServiceTrustWorkspace()
+    mockUpsertSigningKey.mockRejectedValue(new Error('Failed to save signing key.'))
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '+ Add Signing Key' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Signing Key' }))
+    await screen.findByText('Register a Service Signing Key')
+
+    fireEvent.click(screen.getByRole('button', { name: 'x402 Offers & Receipts' }))
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Prod signer' } })
+    fireEvent.change(screen.getByLabelText('Public key'), {
+      target: { value: KEY_DID },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Register key' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to save signing key.')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Register a Service Signing Key')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  // ── Publish key binding CTA ─────────────────────────────────────────
+
+  it('shows Publish key binding link when intermediate is yes and no key-binding exists', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'controller-witness',
+        uid: '0x' + 'w'.repeat(64),
+        decodedData: { controller: KEY_DID, subject: SERVICE_DID },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    const externalSection = () => screen.getByText('External Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(externalSection()).getByText('Intermediate: Yes')).toBeInTheDocument()
+    })
+
+    const publishLink = within(externalSection()).getByRole('link', { name: 'Publish key binding' })
+    expect(publishLink).toHaveAttribute(
+      'href',
+      `/publish/key-binding?subject=${encodeURIComponent(SERVICE_DID)}&keyId=${encodeURIComponent(KEY_DID)}`
+    )
+  })
+
+  // ── Service reviews ─────────────────────────────────────────────────
+
+  it('shows unanswered service review with Respond link including refUID and subject', async () => {
+    setupServiceTrustWorkspace({
+      serviceAttestations: [
+        makeAttestation({
+          uid: REVIEW_UID,
+          schemaId: 'user-review',
+          schemaTitle: 'User Review',
+          attester: OTHER_ADDRESS,
+          decodedData: { subject: SERVICE_DID, reviewBody: 'Needs improvement', ratingValue: 2 },
+        }),
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Reviews of My Services')).toBeInTheDocument()
+      expect(screen.getByText('Needs improvement')).toBeInTheDocument()
+    })
+
+    const respondLink = await screen.findByRole('link', { name: 'Respond' })
+    expect(respondLink).toHaveAttribute(
+      'href',
+      `/publish/user-review-response?refUID=${encodeURIComponent(REVIEW_UID)}&subject=${encodeURIComponent(SERVICE_DID)}`
+    )
+    expect(screen.queryByText('Responded')).not.toBeInTheDocument()
+  })
+
+  it('shows Responded badge without Respond button for answered reviews', async () => {
+    setupServiceTrustWorkspace({
+      attesterAttestations: [
+        makeAttestation({
+          uid: '0x' + 's'.repeat(64),
+          schemaId: 'user-review-response',
+          decodedData: { refUID: REVIEW_UID, subject: SERVICE_DID },
+        }),
+      ],
+      serviceAttestations: [
+        makeAttestation({
+          uid: REVIEW_UID,
+          schemaId: 'user-review',
+          schemaTitle: 'User Review',
+          attester: OTHER_ADDRESS,
+          decodedData: { subject: SERVICE_DID, reviewBody: 'Already handled', ratingValue: 4 },
+        }),
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Responded')).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('link', { name: 'Respond' })).not.toBeInTheDocument()
+  })
+
+  // ── Trusted attestations ────────────────────────────────────────────
+
+  it('renders trusted attestation cards from approved issuers instead of empty state', async () => {
+    setupServiceTrustWorkspace({
+      trustAnchors: {
+        version: 1,
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        widgetOrigins: [],
+        chains: {},
+        registries: [
+          {
+            type: 'approved-issuers',
+            issuers: [
+              {
+                address: APPROVED_ISSUER,
+                label: 'Trusted auditor',
+                schemas: ['certification'],
+                status: 'active',
+                validFrom: '',
+              },
+            ],
+          },
+        ],
+      },
+      serviceAttestations: [
+        makeAttestation({
+          uid: '0x' + 't'.repeat(64),
+          schemaId: 'certification',
+          schemaTitle: 'Certification',
+          attester: APPROVED_ISSUER,
+          decodedData: { subject: SERVICE_DID },
+        }),
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Trusted Attestations of My Services')).toBeInTheDocument()
+      expect(screen.getByText('Certification')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/No trusted attestations found/i)).not.toBeInTheDocument()
+  })
+
+  it('shows controller warnings from controller confirmation summaries', async () => {
+    setupServiceTrustWorkspace()
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        warnings: ['DNS TXT record not found for _controllers.example.com'],
+      })
+    )
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('DNS TXT record not found for _controllers.example.com')).toBeInTheDocument()
+    })
+  })
+
+  it('shows Authorize-this-key DNS guidance for a signing key without basic ownership', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(makeControllerConfirmation())
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Authorize this key')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Add a DNS TXT record or host a did\.json/i)).toBeInTheDocument()
+    expect(screen.getByText(/_controllers\.example\.com/i)).toBeInTheDocument()
+  })
+
+  it('shows registered service DIDs from listSubjects and opens the subject dialog stub', async () => {
+    mockListSubjects.mockResolvedValue({
+      subjects: [
+        {
+          id: 'sub-1',
+          canonicalDid: 'did:web:service.example.com',
+          displayName: 'Service Example',
+          isDefault: false,
+        },
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(mockListSubjects).toHaveBeenCalled()
+    })
+
+    const accountCard = screen.getByText('Account').closest('[class*="mb-6"]')
+    expect(accountCard).toBeTruthy()
+    expect(within(accountCard!).getByText('did:web:service.example.com')).toBeInTheDocument()
+    expect(within(accountCard!).getByText('Service Example')).toBeInTheDocument()
+
+    fireEvent.click(within(accountCard!).getByRole('button', { name: '+ Add Service ID' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('subject-confirmation-dialog-stub')).toBeInTheDocument()
+    })
+    expect(subjectDialogMock.lastOpenProps?.open).toBe(true)
+    expect(subjectDialogMock.lastOpenProps?.walletDid).toBe(ACCOUNT_WALLET_DID)
+  })
+
+  it('registers a signing key via the did:pkh path', async () => {
+    const pkhDid = `did:pkh:eip155:66238:${OTHER_ADDRESS}`
+    setupConnected()
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'linked-identifier',
+        decodedData: { subject: SERVICE_DID },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '+ Add Signing Key' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Signing Key' }))
+    await screen.findByText('Register a Service Signing Key')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Blockchain wallet (did:pkh)' }))
+    fireEvent.change(screen.getByLabelText('did:pkh'), { target: { value: pkhDid } })
+    fireEvent.click(screen.getByRole('button', { name: 'x402 Offers & Receipts' }))
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Wallet signer' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register key' }))
+
+    await waitFor(() => {
+      expect(mockUpsertSigningKey).toHaveBeenCalledWith({
+        keyDid: pkhDid,
+        keyType: 'service-signing',
+        displayName: 'Wallet signer',
+        tags: ['x402'],
+        notes: null,
+      })
+    })
+  })
+
+  it('disables issuer mailto when all schema toggles are unchecked', async () => {
+    setupServiceTrustWorkspace({
+      attesterAttestations: [
+        makeAttestation({
+          schemaId: 'security-assessment',
+          decodedData: { subject: SERVICE_DID },
+        }),
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Request approved issuer status')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request' }))
+
+    const securityAudit = screen.getByRole('checkbox', { name: /security audit/i })
+    const certification = screen.getByRole('checkbox', { name: /certification/i })
+    fireEvent.click(securityAudit)
+    fireEvent.click(certification)
+
+    expect(securityAudit).not.toBeChecked()
+    expect(certification).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Open email request' })).toBeDisabled()
+
+    fireEvent.click(securityAudit)
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'issuer@example.com' } })
+    expect(screen.getByRole('button', { name: 'Open email request' })).toBeEnabled()
+  })
+
+  it('opens the subject dialog from ServiceKeyCard when the subject is not registered', async () => {
+    const unattachedDid = 'did:web:unattached.example.com'
+    setupServiceTrustWorkspace()
+    mockListSubjects.mockResolvedValue({ subjects: [] })
+    mockGetAttestationsByAttesterWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'linked-identifier',
+        decodedData: { subject: SERVICE_DID },
+      }),
+      makeAttestation({
+        schemaId: 'key-binding',
+        uid: '0x' + 'u'.repeat(64),
+        decodedData: { keyId: KEY_DID, subject: unattachedDid },
+      }),
+    ])
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        subject: { input: unattachedDid, canonical: unattachedDid, label: 'unattached.example.com', type: 'web', source: 'input' },
+        domain: 'unattached.example.com',
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Add subject to account' }).length).toBeGreaterThan(0)
+    })
+
+    const accountSection = screen.getByText('Account Key Authorizations').closest('section')
+    expect(accountSection).toBeTruthy()
+    const addButton = within(accountSection!)
+      .getAllByRole('button', { name: 'Add subject to account' })
+      .find((button) => button.closest('.rounded-xl')?.textContent?.includes(unattachedDid))
+    expect(addButton).toBeTruthy()
+    fireEvent.click(addButton!)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('subject-confirmation-dialog-stub')).toBeInTheDocument()
+    })
+    expect(subjectDialogMock.lastOpenProps?.initialSubjectDid).toBe(unattachedDid)
+    expect(subjectDialogMock.lastOpenProps?.open).toBe(true)
+  })
+
+  it('opens and closes the trusted attestation detail modal', async () => {
+    setupServiceTrustWorkspace({
+      trustAnchors: {
+        version: 1,
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        widgetOrigins: [],
+        chains: {},
+        registries: [
+          {
+            type: 'approved-issuers',
+            issuers: [
+              {
+                address: APPROVED_ISSUER,
+                label: 'Trusted auditor',
+                schemas: ['certification'],
+                status: 'active',
+                validFrom: '',
+              },
+            ],
+          },
+        ],
+      },
+      serviceAttestations: [
+        makeAttestation({
+          uid: '0x' + 't'.repeat(64),
+          schemaId: 'certification',
+          schemaTitle: 'Certification',
+          attester: APPROVED_ISSUER,
+          decodedData: { subject: SERVICE_DID },
+        }),
+      ],
+    })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Trusted Attestations of My Services')).toBeInTheDocument()
+      expect(screen.getByText('Certification')).toBeInTheDocument()
+    })
+
+    const trustedSection = screen.getByText('Trusted Attestations of My Services').closest('section')
+      ?? screen.getByText('Trusted Attestations of My Services').parentElement
+    expect(trustedSection).toBeTruthy()
+    fireEvent.click(within(trustedSection as HTMLElement).getByText('Certification'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Attestation UID:')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Attestation UID:')).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows the empty Account Key Authorizations message when all keys are signing keys', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({
+      keys: [
+        makeRegisteredSigningKey(),
+        makeRegisteredSigningKey({
+          id: 'k2',
+          keyDid: ACCOUNT_WALLET_DID,
+          displayName: 'Account wallet signer',
+        }),
+      ],
+    })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([
+      makeAttestation({
+        schemaId: 'key-binding',
+        uid: '0x' + 'k'.repeat(64),
+        decodedData: { keyId: KEY_DID, subject: SERVICE_DID },
+      }),
+    ])
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Account Key Authorizations')).toBeInTheDocument()
+    })
+
+    const accountSection = screen.getByText('Account Key Authorizations').closest('section')
+    expect(accountSection).toBeTruthy()
+    expect(
+      within(accountSection!).getByText(/No key authorizations found yet/i)
+    ).toBeInTheDocument()
+  })
+
+  it('opens approved issuer mailto request when issuer UI is reachable', async () => {
+    const hrefSetter = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        get href() {
+          return 'http://localhost/'
+        },
+        set href(value: string) {
+          hrefSetter(value)
+        },
+        host: 'localhost',
+        origin: 'http://localhost',
+      },
+    })
+
+    setupServiceTrustWorkspace({
+      attesterAttestations: [
+        makeAttestation({
+          uid: '0x' + 'b'.repeat(64),
+          schemaId: 'security-assessment',
+          schemaTitle: 'Security Assessment',
+          decodedData: { subject: SERVICE_DID },
+        }),
+      ],
+    })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      })
+    )
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Request approved issuer status')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request' }))
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'issuer@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open email request' }))
+
+    await waitFor(() => {
+      expect(hrefSetter).toHaveBeenCalled()
+    })
+    const mailtoHref = hrefSetter.mock.calls[0]![0] as string
+    expect(mailtoHref).toMatch(/^mailto:authorizations@oma3\.org\?/)
+    expect(mailtoHref).toContain(encodeURIComponent('OMA3 authorized issuer request'))
+    expect(mailtoHref).toContain(encodeURIComponent('issuer@example.com'))
+  })
+
+  it('warns about duplicate signing keys and disables Register for invalid key DIDs', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '+ Add Signing Key' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add Signing Key' }))
+    await screen.findByText('Register a Service Signing Key')
+
+    fireEvent.change(screen.getByLabelText('Public key'), { target: { value: KEY_DID } })
+    expect(
+      screen.getByText(/already registered on your account/i)
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Public key'), { target: { value: 'did:web:example.com' } })
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Invalid signer' } })
+    fireEvent.click(screen.getByRole('button', { name: 'x402 Offers & Receipts' }))
+
+    expect(screen.getByRole('button', { name: 'Register key' })).toBeDisabled()
+  })
+
+  it('cancels controller witness confirmation without calling the API', async () => {
+    setupServiceTrustWorkspace()
+    mockListSigningKeys.mockResolvedValue({ keys: [makeRegisteredSigningKey()] })
+    mockGetControllerConfirmation.mockResolvedValue(
+      makeControllerConfirmation({
+        controllerKeys: [{ canonicalId: KEY_DID, label: 'Prod', sources: ['dns-txt'], basic: true }],
+      })
+    )
+    mockGetAllAttestationsForDIDWithMetadata.mockResolvedValue([])
+
+    render(<DashboardPage />)
+
+    const externalSection = () => screen.getByText('External Key Authorizations').closest('section')!
+
+    await waitFor(() => {
+      expect(within(externalSection()).getByRole('button', { name: 'Add controller witness' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(within(externalSection()).getByRole('button', { name: 'Add controller witness' }))
+    expect(await screen.findByText('Confirm controller witness')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('Confirm controller witness')).not.toBeInTheDocument()
+    expect(mockCallControllerWitness).not.toHaveBeenCalled()
   })
 })

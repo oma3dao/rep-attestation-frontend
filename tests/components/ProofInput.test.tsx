@@ -14,21 +14,44 @@ vi.mock('@/lib/blockchain', () => ({
 
 vi.mock('@/components/ui/select', () => {
   const React = require('react');
+
+  function collectSelectItems(children: React.ReactNode): Array<{ value: string; label: React.ReactNode }> {
+    const items: Array<{ value: string; label: React.ReactNode }> = [];
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child)) return;
+      React.Children.forEach(child.props.children, (item) => {
+        if (React.isValidElement(item) && typeof item.props.value === 'string') {
+          items.push({ value: item.props.value, label: item.props.children });
+        }
+      });
+    });
+    return items;
+  }
+
+  const SelectTrigger = ({ children }: { children: unknown }) => children;
+  const SelectContent = ({ children }: { children: unknown }) => children;
+  const SelectItem = ({ value, children }: { value: string; children: unknown }) =>
+    React.createElement('option', { value }, children);
+  const SelectValue = ({ placeholder }: { placeholder?: string }) => placeholder;
+
   return {
-    Select: ({ value, onValueChange }: { value: string; onValueChange: (v: string) => void }) =>
-      React.createElement('select', {
+    Select: ({ value, onValueChange, children }: { value: string; onValueChange: (v: string) => void; children: React.ReactNode }) => {
+      const items = collectSelectItems(children);
+      return React.createElement('select', {
         value,
         onChange: (e: React.ChangeEvent<HTMLSelectElement>) => onValueChange(e.currentTarget.value),
         'data-testid': 'proof-type-select',
       }, [
-        React.createElement('option', { key: '', value: '' }, 'Select proof type (optional)'),
-        React.createElement('option', { key: 'tx', value: 'tx-interaction' }, 'tx-interaction'),
-        React.createElement('option', { key: 'ev', value: 'evidence-pointer' }, 'evidence-pointer'),
-      ]),
-    SelectTrigger: ({ children }: { children: unknown }) => children,
-    SelectContent: ({ children }: { children: unknown }) => children,
-    SelectItem: ({ value, children }: { value: string; children: unknown }) => React.createElement('option', { value }, children),
-    SelectValue: ({ placeholder }: { placeholder?: string }) => placeholder,
+        React.createElement('option', { key: 'empty', value: '' }, 'Select proof type (optional)'),
+        ...items.map((item) =>
+          React.createElement('option', { key: item.value, value: item.value }, item.label)
+        ),
+      ]);
+    },
+    SelectTrigger,
+    SelectContent,
+    SelectItem,
+    SelectValue,
   };
 });
 
@@ -244,4 +267,147 @@ describe('ProofInput', () => {
     expect(screen.getByTitle('Copy to clipboard')).toBeInTheDocument();
     unmount();
   });
+
+  it('calls onChange with tx-encoded-value proof including sender from wallet', () => {
+    const onChange = vi.fn();
+    render(<ProofInput value={null} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'tx-encoded-value' } });
+    fireEvent.change(screen.getByLabelText('chain'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText(/0x/i), { target: { value: '0xdeadbeef' } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        proofType: 'tx-encoded-value',
+        proofPurpose: 'commercial-tx',
+        proofObject: expect.objectContaining({
+          proofPurpose: 'commercial-tx',
+          chainId: 'eip155:1',
+          txHash: '0xdeadbeef',
+          sender: '0xabc123',
+        }),
+      })
+    );
+  });
+
+  it('calls onChange with pop-jws string proofObject', () => {
+    const onChange = vi.fn();
+    render(<ProofInput value={null} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'pop-jws' } });
+    const jws = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    fireEvent.change(screen.getByPlaceholderText(/eyJhbGci/i), { target: { value: jws } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        proofType: 'pop-jws',
+        proofObject: jws,
+      })
+    );
+  });
+
+  it('parses x402-receipt JSON into proofObject object', () => {
+    const onChange = vi.fn();
+    render(<ProofInput value={null} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'x402-receipt' } });
+    const receipt = '{"format":"eip712","payload":{"amount":"1"},"signature":"0xabc"}';
+    fireEvent.change(screen.getByPlaceholderText(/\{"format"/i), { target: { value: receipt } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        proofType: 'x402-receipt',
+        proofObject: { format: 'eip712', payload: { amount: '1' }, signature: '0xabc' },
+      })
+    );
+  });
+
+  it('stores x402-offer JWS string as proofObject when JSON parse fails', () => {
+    const onChange = vi.fn();
+    render(<ProofInput value={null} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'x402-offer' } });
+    const jws = 'eyJhbGciOiJFUzI1NiJ9.eyJvZmZlciI6dHJ1ZX0.sig';
+    fireEvent.change(screen.getByPlaceholderText(/\{"format"/i), { target: { value: jws } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        proofType: 'x402-offer',
+        proofObject: jws,
+      })
+    );
+  });
+
+  it('shows pop-eip712 wallet-connected placeholder', () => {
+    render(<ProofInput value={null} onChange={vi.fn()} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'pop-eip712' } });
+    expect(screen.getByText(/Wallet connected:/i)).toBeInTheDocument();
+    expect(screen.getByText(/EIP-712 Wallet Signature/i)).toBeInTheDocument();
+  });
+
+  it('filters available proof types when allowedTypes is provided', () => {
+    render(
+      <ProofInput
+        value={null}
+        onChange={vi.fn()}
+        allowedTypes={['pop-jws', 'evidence-pointer']}
+      />
+    );
+    const select = screen.getByTestId('proof-type-select') as HTMLSelectElement;
+    const optionValues = Array.from(select.options).map((opt) => opt.value).filter(Boolean);
+    expect(optionValues).toEqual(['pop-jws', 'evidence-pointer']);
+  });
+
+  it('initializes chainId and txHash from a proofObject with chainId', () => {
+    render(
+      <ProofInput
+        value={{
+          proofType: 'tx-interaction',
+          proofPurpose: 'commercial-tx',
+          proofObject: { chainId: 'eip155:1', txHash: '0xdead' },
+        }}
+        onChange={vi.fn()}
+        error="bad tx"
+      />
+    );
+    expect(screen.getByPlaceholderText('0x...')).toHaveValue('0xdead');
+  });
+
+  it('initializes jwsValue from a string proofObject', () => {
+    const jws = 'eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    render(
+      <ProofInput
+        value={{ proofType: 'pop-jws', proofPurpose: 'commercial-tx', proofObject: jws }}
+        onChange={vi.fn()}
+        error="bad jws"
+      />
+    );
+    expect(screen.getByPlaceholderText(/eyJhbGciOi/i)).toHaveValue(jws);
+  });
+
+  it('uses empty sender when building tx-encoded-value without a wallet address', () => {
+    vi.mocked(blockchain.useWallet).mockReturnValue({
+      address: null,
+      chainId: 1,
+      isConnected: true,
+    } as any);
+    const onChange = vi.fn();
+    render(<ProofInput value={null} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'tx-encoded-value' } });
+    fireEvent.change(screen.getByLabelText('chain'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText(/0x/i), { target: { value: '0xdeadbeef' } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        proofType: 'tx-encoded-value',
+        proofObject: expect.objectContaining({
+          txHash: '0xdeadbeef',
+          sender: '',
+        }),
+      })
+    );
+  });
+
+  it('shows truncated wallet address for connected pop-eip712', () => {
+    vi.mocked(blockchain.useWallet).mockReturnValue({
+      address: '0xabcdef1234567890',
+      chainId: 1,
+      isConnected: true,
+    } as any);
+    render(<ProofInput value={null} onChange={vi.fn()} />);
+    fireEvent.change(screen.getByTestId('proof-type-select'), { target: { value: 'pop-eip712' } });
+    expect(screen.getByText(/Wallet connected: 0xabcd\.\.\.7890/i)).toBeInTheDocument();
+  });
+
 });

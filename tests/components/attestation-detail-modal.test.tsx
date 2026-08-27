@@ -1,8 +1,18 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AttestationDetailModal } from '@/components/attestation-detail-modal';
 import type { EnrichedAttestationResult } from '@/lib/attestation-queries';
+
+const EXPLORER_URL = 'https://explorer.testnet.chain.oma3.org';
+const TX_HASH = '0xdeadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678';
+
+vi.mock('@/lib/blockchain', () => ({
+  getActiveChain: () => ({
+    id: 66238,
+    blockExplorers: [{ name: 'Explorer', url: EXPLORER_URL }],
+  }),
+}));
 
 describe('AttestationDetailModal', () => {
   const baseAttestation: EnrichedAttestationResult = {
@@ -135,5 +145,128 @@ describe('AttestationDetailModal', () => {
       <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
     );
     expect(screen.getByText(/Attestation Data/i)).toBeInTheDocument();
+  });
+
+  it('renders View transaction onchain link with /tx/{txHash} when txHash is present', () => {
+    const att = {
+      ...baseAttestation,
+      txHash: TX_HASH,
+    } as EnrichedAttestationResult;
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    const link = screen.getByRole('link', { name: /view transaction onchain/i });
+    expect(link).toHaveAttribute('href', `${EXPLORER_URL}/tx/${TX_HASH}`);
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('renders Verification Passed with valid checks and status badges', () => {
+    const att = {
+      ...baseAttestation,
+      verification: {
+        valid: true,
+        checks: { revocation: true, expiration: true, proofs: true },
+        reasons: [],
+      },
+    } as EnrichedAttestationResult;
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText('Passed')).toBeInTheDocument();
+    expect(screen.getByText('Not revoked')).toBeInTheDocument();
+    expect(screen.getByText('Not expired')).toBeInTheDocument();
+    expect(screen.getAllByText('Verified').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders Verification failed with Not verified and reason list', () => {
+    const att = {
+      ...baseAttestation,
+      verification: {
+        valid: false,
+        checks: { revocation: false, expiration: true, proofs: false },
+        reasons: ['Attestation has been revoked', 'Proof verification failed'],
+      },
+    } as EnrichedAttestationResult;
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getAllByText('Not verified').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Revoked')).toBeInTheDocument();
+    expect(screen.getByText('Attestation has been revoked')).toBeInTheDocument();
+    expect(screen.getByText('Proof verification failed')).toBeInTheDocument();
+  });
+
+  it('formats camelCase check names as spaced labels', () => {
+    const att = {
+      ...baseAttestation,
+      verification: {
+        valid: true,
+        checks: { schemaMatch: true },
+        reasons: [],
+      },
+    } as EnrichedAttestationResult;
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText('schema Match')).toBeInTheDocument();
+  });
+
+  it('formats observedAt in seconds as a locale date string', () => {
+    const seconds = 1700000000;
+    const att = {
+      ...baseAttestation,
+      decodedData: { observedAt: seconds },
+    };
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText(new Date(seconds * 1000).toLocaleString())).toBeInTheDocument();
+  });
+
+  it('formats observedAt in milliseconds (>1e12) as a locale date string', () => {
+    const ms = 1700000000000;
+    const att = {
+      ...baseAttestation,
+      decodedData: { observedAt: ms },
+    };
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText(new Date(ms).toLocaleString())).toBeInTheDocument();
+  });
+
+  it('formats observedAt bigint values', () => {
+    const seconds = BigInt(1700000000);
+    const att = {
+      ...baseAttestation,
+      decodedData: { observedAt: seconds },
+    };
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText(new Date(Number(seconds) * 1000).toLocaleString())).toBeInTheDocument();
+  });
+
+  it('falls back to string value for invalid or zero observedAt', () => {
+    const att = {
+      ...baseAttestation,
+      decodedData: { observedAt: 0, observed_at: -1 },
+    };
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getByText('-1')).toBeInTheDocument();
+  });
+
+  it('serializes nested objects with BigInt values in decodedData', () => {
+    const att = {
+      ...baseAttestation,
+      decodedData: { nested: { count: BigInt(1) } },
+    };
+    render(
+      <AttestationDetailModal isOpen={true} onClose={() => {}} attestation={att} />
+    );
+    expect(screen.getByText(/"count": "1"/)).toBeInTheDocument();
   });
 });

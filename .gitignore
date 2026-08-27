@@ -9,6 +9,7 @@
 
 # testing
 /coverage
+.cov-tmp*
 
 # next.js
 /.next/
