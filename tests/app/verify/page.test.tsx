@@ -7,11 +7,16 @@ const mockGetControllerConfirmation = vi.fn()
 const mockGetPublicTrustAnchors = vi.fn()
 let mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] as unknown[] }
 
-vi.mock('@oma3/omatrust/identity', () => ({
-  isSameControllerId: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
-  artifactDidFromJson: vi.fn(async () => 'did:artifact:bafkreifromjson'),
-  artifactDidFromBytes: vi.fn(async () => 'did:artifact:bafkreifrombytes'),
-}))
+vi.mock('@oma3/omatrust/identity', async () => {
+  const actual = await vi.importActual<typeof import('@oma3/omatrust/identity')>(
+    '@oma3/omatrust/identity'
+  )
+  return {
+    ...actual,
+    artifactDidFromJson: vi.fn(async () => 'did:artifact:bafkreifromjson'),
+    artifactDidFromBytes: vi.fn(async () => 'did:artifact:bafkreifrombytes'),
+  }
+})
 
 vi.mock('@/lib/blockchain', () => ({
   getActiveChain: () => ({
@@ -202,6 +207,59 @@ describe('Verify page', () => {
     expect(screen.queryByText('0x96fa', { exact: true })).not.toBeInTheDocument()
   })
 
+  it('deduplicates the same wallet across chains and combines its authorization signals', async () => {
+    const wallet = `0x${'d'.repeat(40)}`
+    const dnsKey = `did:pkh:eip155:6623:${wallet}`
+    const witnessKey = `did:pkh:eip155:66238:${wallet}`
+    mockGetVerifiedAttestations.mockResolvedValueOnce([
+      {
+        ...attestation,
+        uid: `0x${'6'.repeat(64)}`,
+        schemaId: 'controller-witness',
+        decodedData: { subject: 'did:web:oma3.org', controller: witnessKey },
+      },
+      {
+        ...attestation,
+        uid: `0x${'7'.repeat(64)}`,
+        schemaId: 'key-binding',
+        decodedData: { subject: 'did:web:oma3.org', keyId: witnessKey },
+      },
+    ])
+    mockGetControllerConfirmation.mockResolvedValueOnce({
+      subject: { did: 'did:web:oma3.org', label: 'oma3.org' },
+      domain: 'oma3.org',
+      controllerKeys: [
+        {
+          id: dnsKey,
+          canonicalId: dnsKey,
+          label: wallet,
+          sources: ['dns-txt'],
+          basic: true,
+        },
+      ],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify('did:web:oma3.org')
+
+    const authorizedSection = await waitFor(() =>
+      screen.getByText('Authorized keys').closest('section')
+    )
+    expect(authorizedSection).not.toBeNull()
+    expect(within(authorizedSection!).getByText(dnsKey)).toBeInTheDocument()
+    expect(within(authorizedSection!).queryByText(witnessKey)).not.toBeInTheDocument()
+    expect(
+      within(authorizedSection!).getByText('DNS TXT, Controller witness, Key binding')
+    ).toBeInTheDocument()
+    expect(within(authorizedSection!).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(authorizedSection!).getByText('Basic')).toBeInTheDocument()
+    expect(within(authorizedSection!).getByText('Intermediate')).toBeInTheDocument()
+    expect(within(authorizedSection!).getByText('Advanced')).toBeInTheDocument()
+  })
+
   it('checks whether a domain authorized a previously verified key', async () => {
     const keyDid = 'did:pkh:eip155:66238:0x96fa5ab5e519641bd8a840a6b26d17db7497618b'
     mockGetVerifiedAttestations.mockResolvedValue([])
@@ -272,6 +330,53 @@ describe('Verify page', () => {
       expect(screen.getByText('Not authorized')).toBeInTheDocument()
     })
     expect(screen.getByText(/Basic:/)).toHaveTextContent('Basic: No')
+  })
+
+  it('does not count revoked attestations when checking key authorization', async () => {
+    const keyDid = `did:pkh:eip155:66238:0x${'4'.repeat(40)}`
+    mockGetVerifiedAttestations
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          ...attestation,
+          uid: `0x${'8'.repeat(64)}`,
+          schemaId: 'controller-witness',
+          revocationTime: 1700000000,
+          decodedData: { subject: 'did:web:example.com', controller: keyDid },
+        },
+        {
+          ...attestation,
+          uid: `0x${'9'.repeat(64)}`,
+          schemaId: 'key-binding',
+          revocationTime: 1700000000,
+          decodedData: { subject: 'did:web:example.com', keyId: keyDid },
+        },
+      ])
+    mockGetControllerConfirmation.mockResolvedValue({
+      subject: { did: 'did:web:example.com', label: 'example.com' },
+      domain: 'example.com',
+      controllerKeys: [],
+      evidence: [],
+      approvedIssuer: { status: 'not-configured', checkedIdentifiers: [], registryUrl: null },
+      warnings: [],
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify(keyDid)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Check key authorizations')).toBeInTheDocument()
+    })
+    fireEvent.change(screen.getByLabelText('Check key authorizations'), {
+      target: { value: 'example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^check$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Not authorized')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Intermediate:/)).toHaveTextContent('Intermediate: No')
+    expect(screen.getByText(/Advanced:/)).toHaveTextContent('Advanced: No')
   })
 
   it('shows websites that claim an artifact', async () => {
