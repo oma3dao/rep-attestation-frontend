@@ -108,6 +108,7 @@ function searchAndVerify(value: string) {
 describe('Verify page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.history.replaceState({}, '', '/verify')
     mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] }
     mockGetPublicTrustAnchors.mockResolvedValue(mockTrustAnchors)
     mockGetVerifiedAttestations.mockResolvedValue([attestation])
@@ -135,6 +136,43 @@ describe('Verify page', () => {
     expect(screen.getByLabelText('Search DID')).toBeInTheDocument()
     expect(screen.getByLabelText('Upload file')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /verify/i })).toBeDisabled()
+    expect(screen.queryByText(/to verify its artifact DID/i)).not.toBeInTheDocument()
+  })
+
+  it('loads and verifies the DID from the URL', async () => {
+    window.history.replaceState({}, '', '/verify?did=did%3Aweb%3Aexample.com')
+
+    render(<VerifyPage />)
+
+    await waitFor(() => {
+      expect(mockGetVerifiedAttestations).toHaveBeenCalledWith('did:web:example.com')
+    })
+    expect(screen.getByLabelText('Search DID')).toHaveValue('did:web:example.com')
+    expect(screen.getByText('1 attestations')).toBeInTheDocument()
+  })
+
+  it('updates the URL after verification and copies the report URL', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    render(<VerifyPage />)
+    searchAndVerify('did:web:example.com')
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Share this report' })).toBeInTheDocument()
+    })
+    expect(new URL(window.location.href).searchParams.get('did')).toBe('did:web:example.com')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share this report' }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledOnce()
+    })
+    expect(new URL(writeText.mock.calls[0][0]).searchParams.get('did')).toBe('did:web:example.com')
+    expect(screen.getByText('The report URL has been copied to the clipboard.')).toBeInTheDocument()
   })
 
   it('detects DID type while typing', () => {
@@ -163,7 +201,7 @@ describe('Verify page', () => {
     expect(screen.getByText('did:pkh:eip155:66238:0x1234567890123456789012345678901234567890')).toBeInTheDocument()
   })
 
-  it('verifies a web subject and shows a score', async () => {
+  it('shows the DID summary without a trust meter', async () => {
     render(<VerifyPage />)
     searchAndVerify('did:web:example.com')
 
@@ -171,8 +209,12 @@ describe('Verify page', () => {
       expect(mockGetVerifiedAttestations).toHaveBeenCalledWith('did:web:example.com')
     })
 
-    expect(screen.getByText('Web Domain / URL')).toBeInTheDocument()
-    expect(screen.getByText('1 attestations')).toBeInTheDocument()
+    const summary = screen.getByRole('region', { name: 'DID summary' })
+    expect(within(summary).getByText('Web Domain / URL')).toBeInTheDocument()
+    expect(within(summary).getByText('1 attestation')).toBeInTheDocument()
+    expect(within(summary).getByText('did:web:example.com')).toBeInTheDocument()
+    expect(within(summary).queryByText('Emerging')).not.toBeInTheDocument()
+    expect(within(summary).queryByText('/ 100')).not.toBeInTheDocument()
   })
 
   it('shows Authorized keys copy for a domain, not Who authorized this', async () => {
