@@ -331,43 +331,6 @@ function computeScore(params: {
   }
 }
 
-function isValidControllerDid(value: string) {
-  const did = value.trim()
-  const parts = did.split(":")
-  if (parts[0] !== "did" || !parts[1]) return false
-
-  if (parts[1] === "pkh") {
-    if (parts.length < 5 || !parts[2] || !parts[3]) return false
-    const account = parts.slice(4).join(":")
-    if (parts[2] === "eip155") {
-      return /^\d+$/.test(parts[3]) && /^0x[a-fA-F0-9]{40}$/.test(account)
-    }
-    return account.length >= 3
-  }
-
-  if (parts[1] === "ethr") {
-    return parts.length >= 4 && /^0x[a-fA-F0-9]{40}$/.test(parts[parts.length - 1])
-  }
-
-  if (parts[1] === "key" || parts[1] === "jwk") {
-    return parts.length >= 3 && parts.slice(2).join(":").length >= 3
-  }
-
-  return false
-}
-
-function controllerIdentityKey(did: string) {
-  const parts = did.trim().split(":")
-  const account = parts[parts.length - 1]
-  const isEvmController =
-    (parts[0] === "did" && parts[1] === "pkh" && parts[2] === "eip155") ||
-    (parts[0] === "did" && parts[1] === "ethr")
-
-  return isEvmController && /^0x[a-fA-F0-9]{40}$/.test(account)
-    ? `evm:${account.toLowerCase()}`
-    : did.trim().toLowerCase()
-}
-
 function buildAuthorizedParties(
   subjectDid: string,
   confirmation: ControllerConfirmResponse | null,
@@ -376,10 +339,11 @@ function buildAuthorizedParties(
   const parties = new Map<string, AuthorizedParty>()
 
   const upsert = (id: string, patch: Partial<AuthorizedParty>) => {
-    if (!isValidControllerDid(id) || isSameControllerId(id, subjectDid)) return
-
-    const identityKey = controllerIdentityKey(id)
-    const existing = parties.get(identityKey) ?? {
+    const matchingEntry = Array.from(parties.entries()).find(([, party]) =>
+      isSameControllerId(party.id, id)
+    )
+    const partyKey = matchingEntry?.[0] ?? id.toLowerCase()
+    const existing = matchingEntry?.[1] ?? {
       id,
       label: id,
       sources: [],
@@ -391,7 +355,7 @@ function buildAuthorizedParties(
     for (const source of patch.sources ?? []) {
       if (!sources.includes(source)) sources.push(source)
     }
-    parties.set(identityKey, {
+    parties.set(partyKey, {
       ...existing,
       ...patch,
       id: existing.id || id,
@@ -443,7 +407,9 @@ function buildAuthorizedParties(
         (isSameControllerId(subject, subjectDid) || isSameControllerId(keyId, subjectDid))
       ) {
         const partyId = isSameControllerId(keyId, subjectDid) ? subject || att.attester : keyId
-        const existing = parties.get(controllerIdentityKey(partyId))
+        const existing = Array.from(parties.values()).find((party) =>
+          isSameControllerId(party.id, partyId)
+        )
         upsert(partyId, {
           id: partyId,
           label: partyId,
@@ -572,8 +538,7 @@ async function verifyResponsibilityClaimForArtifact(
     try {
       const confirmation = await getControllerConfirmation({ subjectDid: responsibleParty })
       checks.controllerAuthorized = confirmation.controllerKeys.some((key) => (
-        isSameControllerId(key.canonicalId, controllerDid) ||
-        isSameControllerId(key.id, controllerDid)
+        isSameControllerId(key.canonicalId, controllerDid)
       ))
       if (!checks.controllerAuthorized) {
         reasons.push("Attester is not an authorized controller for the responsible party.")

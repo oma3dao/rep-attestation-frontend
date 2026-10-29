@@ -7,11 +7,16 @@ const mockGetControllerConfirmation = vi.fn()
 const mockGetPublicTrustAnchors = vi.fn()
 let mockTrustAnchors = { version: 1, updatedAt: '', widgetOrigins: [], chains: {}, registries: [] as unknown[] }
 
-vi.mock('@oma3/omatrust/identity', () => ({
-  isSameControllerId: (a: string, b: string) => a.toLowerCase() === b.toLowerCase(),
-  artifactDidFromJson: vi.fn(async () => 'did:artifact:bafkreifromjson'),
-  artifactDidFromBytes: vi.fn(async () => 'did:artifact:bafkreifrombytes'),
-}))
+vi.mock('@oma3/omatrust/identity', async () => {
+  const actual = await vi.importActual<typeof import('@oma3/omatrust/identity')>(
+    '@oma3/omatrust/identity'
+  )
+  return {
+    ...actual,
+    artifactDidFromJson: vi.fn(async () => 'did:artifact:bafkreifromjson'),
+    artifactDidFromBytes: vi.fn(async () => 'did:artifact:bafkreifrombytes'),
+  }
+})
 
 vi.mock('@/lib/blockchain', () => ({
   getActiveChain: () => ({
@@ -202,7 +207,7 @@ describe('Verify page', () => {
     expect(screen.queryByText('0x96fa', { exact: true })).not.toBeInTheDocument()
   })
 
-  it('filters invalid and self entries and deduplicates the same wallet across chains', async () => {
+  it('deduplicates the same wallet across chains and combines its authorization signals', async () => {
     const wallet = `0x${'d'.repeat(40)}`
     const dnsKey = `did:pkh:eip155:6623:${wallet}`
     const witnessKey = `did:pkh:eip155:66238:${wallet}`
@@ -217,7 +222,7 @@ describe('Verify page', () => {
         ...attestation,
         uid: `0x${'7'.repeat(64)}`,
         schemaId: 'key-binding',
-        decodedData: { subject: 'did:web:oma3.org', keyId: 'did:pkh:eip155' },
+        decodedData: { subject: 'did:web:oma3.org', keyId: witnessKey },
       },
     ])
     mockGetControllerConfirmation.mockResolvedValueOnce({
@@ -230,20 +235,6 @@ describe('Verify page', () => {
           label: wallet,
           sources: ['dns-txt'],
           basic: true,
-        },
-        {
-          id: 'did:pkh:eip155',
-          canonicalId: 'did:pkh:eip155',
-          label: 'incomplete',
-          sources: [],
-          basic: false,
-        },
-        {
-          id: 'did:web:oma3.org',
-          canonicalId: 'did:web:oma3.org',
-          label: 'oma3.org',
-          sources: [],
-          basic: false,
         },
       ],
       evidence: [],
@@ -260,9 +251,13 @@ describe('Verify page', () => {
     expect(authorizedSection).not.toBeNull()
     expect(within(authorizedSection!).getByText(dnsKey)).toBeInTheDocument()
     expect(within(authorizedSection!).queryByText(witnessKey)).not.toBeInTheDocument()
-    expect(within(authorizedSection!).queryByText('did:pkh:eip155')).not.toBeInTheDocument()
-    expect(within(authorizedSection!).queryByText('did:web:oma3.org')).not.toBeInTheDocument()
-    expect(within(authorizedSection!).getByText('DNS TXT, Controller witness')).toBeInTheDocument()
+    expect(
+      within(authorizedSection!).getByText('DNS TXT, Controller witness, Key binding')
+    ).toBeInTheDocument()
+    expect(within(authorizedSection!).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(authorizedSection!).getByText('Basic')).toBeInTheDocument()
+    expect(within(authorizedSection!).getByText('Intermediate')).toBeInTheDocument()
+    expect(within(authorizedSection!).getByText('Advanced')).toBeInTheDocument()
   })
 
   it('checks whether a domain authorized a previously verified key', async () => {
@@ -391,8 +386,8 @@ describe('Verify page', () => {
       domain: 'example.com',
       controllerKeys: [
         {
-          id: 'did:pkh:eip155:66238:0x123',
-          canonicalId: 'did:pkh:eip155:66238:0x456',
+          id: `did:pkh:eip155:66238:0x${'1'.repeat(40)}`,
+          canonicalId: 'did:pkh:eip155:66238:0x123',
           label: '0x123',
           sources: ['dns-txt'],
           basic: true,
