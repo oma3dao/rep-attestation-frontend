@@ -341,7 +341,11 @@ function buildAuthorizedParties(
   const parties = new Map<string, AuthorizedParty>()
 
   const upsert = (id: string, patch: Partial<AuthorizedParty>) => {
-    const existing = parties.get(id.toLowerCase()) ?? {
+    const matchingEntry = Array.from(parties.entries()).find(([, party]) =>
+      isSameControllerId(party.id, id)
+    )
+    const partyKey = matchingEntry?.[0] ?? id.toLowerCase()
+    const existing = matchingEntry?.[1] ?? {
       id,
       label: id,
       sources: [],
@@ -353,7 +357,7 @@ function buildAuthorizedParties(
     for (const source of patch.sources ?? []) {
       if (!sources.includes(source)) sources.push(source)
     }
-    parties.set(id.toLowerCase(), {
+    parties.set(partyKey, {
       ...existing,
       ...patch,
       id: existing.id || id,
@@ -405,7 +409,9 @@ function buildAuthorizedParties(
         (isSameControllerId(subject, subjectDid) || isSameControllerId(keyId, subjectDid))
       ) {
         const partyId = isSameControllerId(keyId, subjectDid) ? subject || att.attester : keyId
-        const existing = parties.get(partyId.toLowerCase())
+        const existing = Array.from(parties.values()).find((party) =>
+          isSameControllerId(party.id, partyId)
+        )
         upsert(partyId, {
           id: partyId,
           label: partyId,
@@ -455,6 +461,8 @@ function buildKeyAuthorization(
   }
 
   for (const att of attestations) {
+    if (att.revocationTime > 0) continue
+
     if (att.schemaId === "controller-witness") {
       const witnessController = att.decodedData?.controller
       if (typeof witnessController === "string" && isSameControllerId(witnessController, controllerDid)) {
