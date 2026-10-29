@@ -17,6 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://app.omatrust.org"),
   title: "OMATrust Portal",
   description: "Publish trust data on services or manage trust for your own with OMATrust.",
   keywords: ["OMATrust", "trust data", "reviews", "certifications", "security", "service trust", "web3"],
@@ -26,6 +27,20 @@ export const metadata: Metadata = {
     description: "Publish trust data on services or manage trust for your own with OMATrust.",
     type: "website",
     url: "https://app.omatrust.org",
+    images: [
+      {
+        url: "/oma3-logo.png",
+        width: 158,
+        height: 42,
+        alt: "OMA3",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "OMATrust Portal",
+    description: "Publish trust data on services or manage trust for your own with OMATrust.",
+    images: ["/oma3-logo.png"],
   },
 }
 

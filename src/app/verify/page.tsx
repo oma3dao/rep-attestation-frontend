@@ -1,8 +1,9 @@
 "use client"
 
-import { FormEvent, useMemo, useRef, useState } from "react"
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Search,
+  Share2,
   Upload,
   X,
   XCircle,
@@ -16,6 +17,7 @@ import {
 } from "@oma3/omatrust/identity"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/toast"
 import { LatestAttestations } from "@/components/latest-attestations"
 import {
   getVerifiedAttestationsForDIDWithMetadata,
@@ -603,34 +605,19 @@ async function buildArtifactVerification(
   }
 }
 
-function ScoreHero({ score, method }: { score: TrustScore; method: DidMethod }) {
+function VerifySummary({
+  method,
+  attestationCount,
+}: {
+  method: DidMethod
+  attestationCount: number
+}) {
   return (
-    <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-end sm:text-left">
-      <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
-        <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
-          <circle cx="50" cy="50" r="42" fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
-          <circle
-            cx="50"
-            cy="50"
-            r="42"
-            fill="none"
-            stroke="hsl(var(--primary))"
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeDasharray={`${(score.value / score.max) * 264} 264`}
-            className="transition-[stroke-dasharray] duration-700 ease-out"
-          />
-        </svg>
-        <div className="relative text-center">
-          <p className="text-3xl font-semibold tracking-tight text-foreground">{score.value}</p>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">/ {score.max}</p>
-        </div>
-      </div>
-      <div className="min-w-0 space-y-1">
-        <Badge variant="secondary">{getSubjectTypeLabel(method)}</Badge>
-        <p className="text-xl font-semibold tracking-tight text-foreground">{score.label}</p>
-        <p className="text-sm text-muted-foreground">{score.detail}</p>
-      </div>
+    <div className="space-y-2 pr-10">
+      <Badge variant="secondary">{getSubjectTypeLabel(method)}</Badge>
+      <p className="text-sm text-muted-foreground">
+        {attestationCount} attestation{attestationCount === 1 ? "" : "s"}
+      </p>
     </div>
   )
 }
@@ -881,6 +868,8 @@ export default function VerifyPage() {
   const [authorizationCheck, setAuthorizationCheck] = useState<KeyAuthorizationInfo | null>(null)
   const [authorizationCheckError, setAuthorizationCheckError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const initialDidHandledRef = useRef(false)
+  const { showToast, ToastContainer } = useToast()
 
   const detectedMethod = useMemo(() => {
     const resolved = resolveQueryToDid(query, getActiveChain().id)
@@ -925,7 +914,7 @@ export default function VerifyPage() {
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  const runVerify = async (rawQuery: string) => {
+  const runVerify = useCallback(async (rawQuery: string) => {
     const resolved = resolveQueryToDid(rawQuery, getActiveChain().id)
     if (!resolved) {
       setError("Enter a DID, address, domain, or upload a file.")
@@ -1012,6 +1001,10 @@ export default function VerifyPage() {
       setAuthorizationDomain("")
       setAuthorizationCheck(null)
       setAuthorizationCheckError(null)
+
+      const url = new URL(window.location.href)
+      url.searchParams.set("did", resolved)
+      window.history.replaceState({}, "", url)
     } catch (err) {
       setResult(null)
       setAuthorizationCheck(null)
@@ -1019,11 +1012,31 @@ export default function VerifyPage() {
     } finally {
       setIsVerifying(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (initialDidHandledRef.current) return
+    initialDidHandledRef.current = true
+
+    const did = new URLSearchParams(window.location.search).get("did")
+    if (!did) return
+
+    setQuery(did)
+    void runVerify(did)
+  }, [runVerify])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     await runVerify(query)
+  }
+
+  const handleShareReport = async () => {
+    if (!result) return
+
+    const url = new URL(window.location.href)
+    url.searchParams.set("did", result.subjectDid)
+    await navigator.clipboard.writeText(url.toString())
+    showToast("The report URL has been copied to the clipboard.", "success")
   }
 
   const handleCheckAuthorization = async (event: FormEvent<HTMLFormElement>) => {
@@ -1159,19 +1172,7 @@ export default function VerifyPage() {
             {fileName}
             {isProcessingFile ? " · hashing…" : ""}
           </span>
-        ) : (
-          <span>
-            <button
-              type="button"
-              className="font-medium text-primary underline underline-offset-2 hover:text-primary/80"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isProcessingFile}
-            >
-              Upload a file
-            </button>
-            {" "}to verify its artifact DID
-          </span>
-        )}
+        ) : null}
         {detectedMethod ? (
           <span className="text-foreground/70">Detected: {getSubjectTypeLabel(detectedMethod)}</span>
         ) : null}
@@ -1181,6 +1182,7 @@ export default function VerifyPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      <ToastContainer />
       {!hasResult ? (
         <div className="flex min-h-[70vh] flex-col items-center justify-center pb-24">
           <div className="mb-10 text-center">
@@ -1209,9 +1211,21 @@ export default function VerifyPage() {
           ) : null}
 
           <div className="space-y-8">
-            <section className="rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6">
-              <ScoreHero score={result.score} method={result.method} />
-              <p className="mt-5 break-all font-mono text-sm text-foreground">{result.subjectDid}</p>
+            <section
+              aria-label="DID summary"
+              className="relative rounded-xl border border-border/70 bg-card/70 p-5 shadow-sm shadow-slate-950/5 sm:p-6"
+            >
+              <button
+                type="button"
+                aria-label="Share this report"
+                title="Share this report"
+                onClick={() => void handleShareReport()}
+                className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Share2 className="h-5 w-5" />
+              </button>
+              <VerifySummary method={result.method} attestationCount={result.attestations.length} />
+              <p className="mt-4 break-all font-mono text-sm text-foreground">{result.subjectDid}</p>
             </section>
 
             {isControllerMethod(result.method) ? (
